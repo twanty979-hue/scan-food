@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, use } from "react";
 // ยังคง import supabase client จาก lib เดิม เพื่อใช้ Realtime (Subscribe)
 import { supabase } from "../../../../../lib/supabase"; 
 import { useRouter } from "next/navigation";
-import { fetchShopData, submitOrder } from "@/app/actions/shop"; // ✅ Import Server Actions ที่เพิ่งสร้าง
+import { fetchShopData, submitOrder } from "@/app/actions/shop";
 
 // Config
 const CDN_MENU_URL = "https://xvhibjejvbriotfpunvv.supabase.co/storage/v1/object/public/menus/";
@@ -12,6 +12,8 @@ const roundToQuarter = (value: number) => Math.round(value * 4) / 4;
 
 export const useShopLogic = (params: any) => {
   const router = useRouter();
+  
+  // ✅ แก้ไขการใช้ use() ให้รองรับทั้ง Next.js 14 และ 15 (เผื่อ params ไม่ใช่ Promise)
   const resolvedParams = params instanceof Promise ? use(params) : params;
   const { slug: currentSlug, brandId, tableId: combinedId } = resolvedParams || {};
 
@@ -95,42 +97,51 @@ export const useShopLogic = (params: any) => {
     
     async function init() {
       if (!brandId || !combinedId || !realTableId) {
-        window.location.href = "https://google.com";
+        // window.location.href = "https://google.com"; // ปิดไว้ก่อนตอน dev จะได้ไม่เด้งไป google
         return; 
       }
 
       setLoading(true);
       setError(null);
 
-      // เรียกใช้ Server Action
-      const res = await fetchShopData({ 
-        brandId, 
-        combinedId, 
-        slug: decodeURIComponent(currentSlug || '') 
-      });
+      try {
+        // เรียกใช้ Server Action
+        const res = await fetchShopData({ 
+          brandId, 
+          combinedId, 
+          slug: decodeURIComponent(currentSlug || '') 
+        });
 
-      if (!isMounted) return;
+        if (!isMounted) return;
 
-      if (!res.success) {
-        if (res.redirect) {
-            window.location.href = res.redirect;
-        } else {
-            kickOut(res.error || "Access Denied");
+        // ✅ แก้ไข: เช็ค !res.data เพิ่ม เพื่อกัน TypeScript โวยวาย
+        if (!res.success || !res.data) {
+          if (res.redirect) {
+             window.location.href = res.redirect;
+          } else {
+             kickOut(res.error || "Access Denied");
+          }
+          return;
         }
-        return;
-      }
 
-      // Set Data from Server
-      const d = res.data;
-      setBrand(d.brand);
-      setTableLabel(d.tableLabel);
-      setBanners(d.banners);
-      setCategories(d.categories);
-      setProducts(d.products);
-      setDiscounts(d.discounts);
-      setOrdersList(d.orders); // ได้ orders มาเลย ไม่ต้อง fetch แยก
-      setIsVerified(true);
-      setLoading(false);
+        // Set Data from Server
+        const d = res.data;
+        
+        // ✅ ปลอดภัยขึ้นด้วยการเช็คอีกรอบ หรือใช้ค่า default []
+        setBrand(d.brand);
+        setTableLabel(d.tableLabel);
+        setBanners(d.banners || []);
+        setCategories(d.categories || []);
+        setProducts(d.products || []);
+        setDiscounts(d.discounts || []);
+        setOrdersList(d.orders || []); 
+        
+        setIsVerified(true);
+        setLoading(false);
+      } catch (err) {
+        console.error("Init Error:", err);
+        kickOut("Connection Error");
+      }
     }
 
     init();
@@ -146,8 +157,7 @@ export const useShopLogic = (params: any) => {
     return () => clearInterval(interval);
   }, [banners]);
 
-  // --- Realtime / Security Watcher (ยังใช้ Client Supabase) ---
-  // Server Action ทำ Realtime (Websocket) ไม่ได้ ต้องใช้ Client ตัวเดิม
+  // --- Realtime / Security Watcher ---
   useEffect(() => {
     if (!realTableId) return;
     const channel = supabase.channel(`table_guard_${realTableId}`)
@@ -160,7 +170,7 @@ export const useShopLogic = (params: any) => {
     return () => { supabase.removeChannel(channel); };
   }, [realTableId, providedCode]);
 
-  // --- Cart Actions (ที่แก้บั๊กจำนวนแล้ว) ---
+  // --- Cart Actions ---
   const handleAddToCart = (product: any, variant: any, note: string = "") => {
     const pricing = calculatePrice(product, variant);
     const cleanNote = note ? note.trim() : "";
@@ -210,7 +220,7 @@ export const useShopLogic = (params: any) => {
     });
   };
 
-  // --- Checkout Action (✅ ใช้ Server Action) ---
+  // --- Checkout Action ---
   const handleCheckout = async () => {
     if (cart.length === 0) return;
     
@@ -219,7 +229,6 @@ export const useShopLogic = (params: any) => {
       
       const totalPrice = cart.reduce((s, i) => s + (i.price * i.quantity), 0);
 
-      // ส่งข้อมูลไป Server เพื่อบันทึก (Logic ย้ายไป actions/shop.ts แล้ว)
       const result = await submitOrder({
           brandId,
           combinedId,
@@ -232,7 +241,6 @@ export const useShopLogic = (params: any) => {
           throw new Error(result.error);
       }
 
-      // เคลียร์ตะกร้าและอัปเดตรายการ Order
       setCart([]);
       setActiveTab('status');
       setOrdersList(result.orders || []); 

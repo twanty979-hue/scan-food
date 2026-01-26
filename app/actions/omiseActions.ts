@@ -31,7 +31,8 @@ export async function createPromptPayQRCode(amount: number) {
     });
 
     // 3. ดึงลิงก์รูป QR Code
-    const qrImage = charge.source.scannable_code?.image?.download_uri;
+// ✅ ของใหม่
+const qrImage = charge.source?.scannable_code?.image?.download_uri;
 
     return { 
       success: true, 

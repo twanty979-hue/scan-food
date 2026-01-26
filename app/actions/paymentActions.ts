@@ -94,8 +94,8 @@ export async function processPaymentAction(payload: any) {
     const { brandId, userId, totalAmount, receivedAmount, changeAmount, paymentMethod, type, selectedOrder, cart } = payload;
 
     try {
-        let finalOrderId = null;
-        let receiptItems = [];
+        let finalOrderId: any = null;
+let receiptItems: any[] = [];
         let tableLabel = 'Walk-in';
 
         // Case A: จ่ายจากโต๊ะ (มี Order อยู่แล้ว)

@@ -55,7 +55,8 @@ export async function updateProfileAction(userId: string, payload: any) {
     };
 
     // Remove undefined keys
-    Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
+    // ✅ แก้เป็นแบบนี้
+Object.keys(updateData).forEach(key => (updateData as any)[key] === undefined && delete (updateData as any)[key]);
 
     const { error } = await supabase
       .from('profiles')

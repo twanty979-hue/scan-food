@@ -120,6 +120,9 @@ export async function upgradeBrandPlanAction(brandId: string, newPlan: string, t
 
        if (charge.status !== 'successful') throw new Error(`Payment Failed: ${charge.failure_message || 'Declined'}`);
     }
+    // ✅ เพิ่ม 2 บรรทัดนี้ลงไปก่อนถึงจุดที่ error ครับ
+const nextMonth = new Date();
+nextMonth.setMonth(nextMonth.getMonth() + 1);
 
     // อัปเดต DB
     const { error } = await supabase

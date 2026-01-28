@@ -116,13 +116,16 @@ export default function ProfileSetupPage() {
                         {formData.avatarUrl ? (
                             <img src={formData.avatarUrl} className="w-full h-full object-cover" />
                         ) : (
-                            <IconUser size={48} className="text-slate-300" />
+                            // ✅ เอา div มาครอบแล้วใส่ class ที่ div แทน
+<div className="text-slate-300">
+    <IconUser size={48} />
+</div>
                         )}
                         
                         {/* Overlay Icon */}
-                        <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                            <IconCamera className="text-white" />
-                        </div>
+                        <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-white">
+    <IconCamera />
+</div>
                         <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleUpload} />
                     </div>
                     <span className="text-xs font-bold text-slate-400 mt-3 uppercase tracking-wide">รูปโปรไฟล์ (ถ้ามี)</span>

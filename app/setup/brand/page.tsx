@@ -143,7 +143,12 @@ export default function BrandSetupPage() {
                         <input type="tel" value={shopPhone} onChange={(e) => setShopPhone(e.target.value)} className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all font-bold text-lg text-slate-800 placeholder-slate-300 mt-1" placeholder="08x-xxx-xxxx" />
                     </div>
                     <button type="submit" disabled={loading || !shopName} className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-lg shadow-xl hover:bg-blue-600 hover:shadow-blue-600/30 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 mt-6 group">
-                        {loading ? 'กำลังสร้าง...' : <>สร้างร้านเลย <IconArrowRight className="group-hover:translate-x-1 transition-transform"/></>}
+                        {loading ? 'กำลังสร้าง...' :<>
+  สร้างร้านเลย 
+  <span className="group-hover:translate-x-1 transition-transform">
+    <IconArrowRight />
+  </span>
+</>}
                     </button>
                 </form>
             )}

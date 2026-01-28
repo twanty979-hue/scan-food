@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 
 // --- 🛠️ Icons Wrapper (Raft Survival Style) ---
-const Icon = ({ name, size = 24, className = "" }) => {
+const Icon = ({ name, size = 24, className = "" }: any) => {
   const icons = {
     // Home -> Raft / Ship
     home: <path d="M2 20h20 M4 20v-4c0-2 2-4 4-4h8c2 0 4 2 4 4v4 M12 2v10 M12 2l-3 3 M12 2l3 3" />, 
@@ -29,7 +29,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
     lifeRing: <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c3.87 0 7 3.13 7 7s-3.13 7-7 7-7-3.13-7-7 3.13-7 7-7zm0 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10z" />
   };
 
-  const content = icons[name] || icons.home;
+  const content = (icons as any)[name] || icons.home;
   
   return (
     <svg 
@@ -52,7 +52,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
   );
 };
 
-export default function App({ state, actions, helpers }) {
+export default function App({ state, actions, helpers }: any) {
   const {
     loading, isVerified, activeTab, brand, tableLabel,
     banners, currentBannerIndex, categories, selectedCategoryId,
@@ -345,7 +345,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 gap-5 pb-10">
-                        {products?.filter(p => p.is_recommended).slice(0, 6).map((p, idx) => {
+                        {products?.filter((p: any) => p.is_recommended).slice(0, 6).map((p: any, idx: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card cursor-pointer" style={{animationDelay: `${idx * 0.1}s`}}>
@@ -393,7 +393,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="flex gap-4 mb-8 overflow-x-auto no-scrollbar py-2 px-1">
-                        {categories?.map((c) => (
+                        {categories?.map((c: any) => (
                             <button key={c.id} onClick={() => setSelectedCategoryId(c.id)} 
                                     className={`tab-btn shrink-0 px-8 py-3 text-lg font-bold survival-font ${selectedCategoryId === c.id ? 'tab-active' : ''}`}>
                                 <span>{c.name}</span>
@@ -402,7 +402,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 gap-6 pb-24">
-                        {filteredProducts?.map((p, idx) => {
+                        {filteredProducts?.map((p: any, idx: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card cursor-pointer" style={{animationDelay: `${idx * 0.1}s`}}>
@@ -445,7 +445,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="space-y-6">
-                        {ordersList?.map((o) => (
+                        {ordersList?.map((o: any) => (
                             <div key={o.id} className="bg-[#f8fafc] p-6 border-4 border-[#78350f] rounded-xl shadow-[4px_4px_0_#451a03] relative overflow-hidden">
                                 <div className="flex justify-between items-start mb-4">
                                      <span className="text-xs text-[#0369a1] font-bold uppercase tracking-widest flex items-center gap-1">
@@ -457,7 +457,7 @@ export default function App({ state, actions, helpers }) {
                                      </span>
                                 </div>
                                 <div className="mb-4 space-y-2 bg-[#e0f2fe] p-5 rounded-lg border-2 border-[#7dd3fc]">
-                                    {o.order_items.map((i, idx) => (
+                                    {o.order_items.map((i: any, idx: any) => (
                                         <div key={idx} className="flex justify-between text-sm text-[#0c4a6e] font-bold border-b-2 border-dashed border-sky-300 pb-2 last:border-0 survival-font">
                                             <div className="flex flex-col">
                                                 <span>{i.quantity}x {i.product_name}</span>
@@ -473,7 +473,7 @@ export default function App({ state, actions, helpers }) {
                                 <div className="flex justify-between items-center pt-2 border-t-4 border-[#78350f]">
                                      <span className="font-bold text-[#64748b] text-xs uppercase tracking-widest">TOTAL SCRAP</span>
                                      <span className="font-black text-[#451a03] text-3xl survival-font">
-                                         {o.order_items.reduce((acc, i) => acc + (i.price * i.quantity), 0)}.-
+                                         {o.order_items.reduce((acc: any, i: any) => acc + (i.price * i.quantity), 0)}.-
                                      </span>
                                 </div>
                             </div>
@@ -628,12 +628,12 @@ export default function App({ state, actions, helpers }) {
             <div className="flex justify-between items-center mb-6 px-8 pt-2">
                 <h2 className="text-4xl survival-font text-[#3E2723] drop-shadow-sm transform -rotate-2">Your Loot</h2>
                 <div className="w-14 h-14 bg-[#FFCC80] text-[#3E2723] border-4 border-[#E65100] rounded-xl flex items-center justify-center font-bold text-2xl survival-font shadow-[3px_3px_0_#3E2723]">
-                    <span>{cart.reduce((a, b) => a + b.quantity, 0)}</span>
+                    <span>{cart.reduce((a: any, b: any) => a + b.quantity, 0)}</span>
                 </div>
             </div>
             
             <div className="flex-1 overflow-y-auto space-y-4 px-6 pb-6 no-scrollbar">
-                {cart.map((item, idx) => (
+                {cart.map((item: any, idx: any) => (
                     <div key={idx} className="flex items-center gap-4 bg-white p-4 border-4 border-[#8D6E63] rounded-2xl relative overflow-hidden shadow-[4px_4px_0_#5D4037]">
                         <div className="w-20 h-20 bg-[#EFEBE9] rounded-xl overflow-hidden border-4 border-[#D7CCC8] shrink-0">
                             <img src={item.image_url} className="w-full h-full object-cover" />

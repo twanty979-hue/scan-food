@@ -252,7 +252,7 @@ export const useShopLogic = (params: any) => {
     }
   };
 
-  const filteredProducts = useMemo(() => selectedCategoryId === "all" ? products : products.filter(p => p.category_id === selectedCategoryId), [products, selectedCategoryId]);
+  const filteredProducts = useMemo(() => selectedCategoryId === "all" ? products : products.filter((p: any) => p.category_id === selectedCategoryId), [products, selectedCategoryId]);
   const cartTotal = useMemo(() => cart.reduce((sum, item) => sum + (item.price * item.quantity), 0), [cart]);
 
   return {

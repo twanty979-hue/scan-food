@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 
 // --- 🐕 Scooby-Doo Icons Wrapper ---
-const Icon = ({ name, size = 24, className = "" }) => {
+const Icon = ({ name, size = 24, className = "" }: any) => {
   const icons = {
     home: <path d="M2 22 L12 2 L22 22 L18 22 L18 14 L6 14 L6 22 Z M10 14 L10 10 L14 10 L14 14" />, 
     menu: <path d="M4 8a2 2 0 1 1 4 0 2 2 0 0 1-4 0m12 0a2 2 0 1 1 4 0 2 2 0 0 1-4 0M7 8h10M5 16h14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2" />,
@@ -19,7 +19,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
     pencil: <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
   };
 
-  const content = icons[name] || icons.home;
+  const content = (icons as any)[name] || icons.home;
   
   return (
     <svg 
@@ -42,7 +42,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
   );
 };
 
-export default function App({ state, actions, helpers }) {
+export default function App({ state, actions, helpers }: any) {
   const {
     loading, isVerified, activeTab, brand, tableLabel,
     banners, currentBannerIndex, categories, selectedCategoryId,
@@ -271,7 +271,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 pb-10">
-                        {products?.filter(p => p.is_recommended).slice(0, 6).map((p) => {
+                        {products?.filter((p: any) => p.is_recommended).slice(0, 6).map((p: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card overflow-hidden relative cursor-pointer group">
@@ -321,7 +321,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="flex gap-3 mb-8 overflow-x-auto no-scrollbar py-2 px-1">
-                        {categories?.map((c) => (
+                        {categories?.map((c: any) => (
                             <button key={c.id} onClick={() => setSelectedCategoryId(c.id)} 
                                     className={`tab-btn shrink-0 px-8 py-4 text-2xl font-bold rounded-2xl fun-font flex items-center gap-2 ${selectedCategoryId === c.id ? 'active' : ''}`}>
                                 <span>{c.name}</span>
@@ -330,7 +330,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 pb-24">
-                        {filteredProducts?.map((p) => {
+                        {filteredProducts?.map((p: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card overflow-hidden relative cursor-pointer group">
@@ -371,7 +371,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="space-y-4">
-                        {ordersList?.map((o) => (
+                        {ordersList?.map((o: any) => (
                             <div key={o.id} className="bg-white p-6 border-4 border-[#7452a3] rounded-3xl relative overflow-hidden shadow-lg">
                                 <div className="flex justify-between items-start mb-4">
                                      <span className="text-lg text-[#f28f1c] font-black uppercase tracking-widest flex items-center gap-2 font-bold">
@@ -383,7 +383,7 @@ export default function App({ state, actions, helpers }) {
                                      </span>
                                 </div>
                                 <div className="mb-4 space-y-2 bg-[#f0fdf4] p-5 border-2 border-[#99cc33] rounded-2xl border-dashed">
-                                    {o.order_items.map((i, idx) => {
+                                    {o.order_items.map((i: any, idx: any) => {
                                         const quantity = i.quantity || 1;
                                         const finalPriceTotal = i.price * quantity;
                                         return (
@@ -405,7 +405,7 @@ export default function App({ state, actions, helpers }) {
                                 <div className="flex justify-between items-center pt-2 border-t-4 border-[#7452a3]">
                                      <span className="font-bold text-[#2d1b4e] text-lg uppercase tracking-widest">TOTAL</span>
                                      <span className="font-black text-[#f28f1c] text-4xl fun-font">
-                                         {o.order_items.reduce((acc, i) => acc + (i.price * i.quantity), 0)}.-
+                                         {o.order_items.reduce((acc: any, i: any) => acc + (i.price * i.quantity), 0)}.-
                                      </span>
                                 </div>
                             </div>
@@ -558,12 +558,12 @@ export default function App({ state, actions, helpers }) {
                      <div className="flex justify-between items-center mb-6 px-8 pt-2">
                          <h2 className="text-5xl spooky-font text-[#2d1b4e] transform -rotate-1">Scooby Snacks</h2>
                          <div className="w-16 h-16 bg-[#f28f1c] text-white border-4 border-white rounded-full flex items-center justify-center font-black text-3xl fun-font shadow-md">
-                             <span>{cart.reduce((a, b) => a + b.quantity, 0)}</span>
+                             <span>{cart.reduce((a: any, b: any) => a + b.quantity, 0)}</span>
                          </div>
                      </div>
 
                      <div className="flex-1 overflow-y-auto space-y-4 px-6 pb-6 no-scrollbar">
-                         {cart.map((item, idx) => (
+                         {cart.map((item: any, idx: any) => (
                              <div key={idx} className="flex items-center gap-4 bg-white p-4 border-4 border-[#99cc33] rounded-3xl relative overflow-hidden shadow-sm">
                                  <img src={item.image_url} className="w-24 h-24 object-cover border-2 border-[#99cc33] rounded-2xl ml-2 bg-[#f0fdf4]" />
                                  <div className="flex-1">

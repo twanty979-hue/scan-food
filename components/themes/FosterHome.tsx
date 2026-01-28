@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 
 // --- 🛠️ Icons Wrapper (Foster's Home Style) ---
-const Icon = ({ name, size = 24, className = "" }) => {
+const Icon = ({ name, size = 24, className = "" }: any) => {
   const icons = {
     // Home -> Foster's Mansion
     home: <path d="M12 2L2 12h3v8h6v-6h2v6h6v-8h3L12 2z M12 4.5l6 6V18h-2v-6H8v6H6v-7.5l6-6z" />, 
@@ -28,7 +28,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
     cookie: <path d="M12 2C8 2 5 6 5 11c0 5.5 3 11 7 11s7-5.5 7-11c0-5-3-9-7-9zm0 18c-2.5 0-5-4-5-9 0-3.5 2-7 5-7s5 3.5 5 7c0 5-2.5 9-5 9z" />
   };
 
-  const content = icons[name] || icons.home;
+  const content = (icons as any)[name] || icons.home;
   
   return (
     <svg 
@@ -51,7 +51,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
   );
 };
 
-export default function App({ state, actions, helpers }) {
+export default function App({ state, actions, helpers }: any) {
   const {
     loading, isVerified, activeTab, brand, tableLabel,
     banners, currentBannerIndex, categories, selectedCategoryId,
@@ -313,7 +313,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pb-10">
-                        {products?.filter(p => p.is_recommended).slice(0, 6).map((p) => {
+                        {products?.filter((p: any) => p.is_recommended).slice(0, 6).map((p: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="friend-card group cursor-pointer">
@@ -362,7 +362,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="flex gap-3 mb-8 overflow-x-auto no-scrollbar py-2 px-1">
-                        {categories?.map((c) => (
+                        {categories?.map((c: any) => (
                             <button key={c.id} onClick={() => setSelectedCategoryId(c.id)} 
                                     className={`tab-btn shrink-0 px-6 py-3 text-lg font-bold rounded-2xl flex items-center gap-2 ${selectedCategoryId === c.id ? 'active' : ''}`}>
                                 <span>{c.name}</span>
@@ -371,7 +371,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pb-24">
-                        {filteredProducts?.map((p) => {
+                        {filteredProducts?.map((p: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="friend-card group cursor-pointer">
@@ -415,7 +415,7 @@ export default function App({ state, actions, helpers }) {
         </div>
 
         <div className="space-y-4">
-            {ordersList?.map((o) => (
+            {ordersList?.map((o: any) => (
                 <div key={o.id} className="bg-white p-5 border-4 border-[#1A237E] rounded-[2rem] relative overflow-hidden shadow-[6px_6px_0_#90CAF9]">
                     
                     {/* Header: Visit ID & Status */}
@@ -431,7 +431,7 @@ export default function App({ state, actions, helpers }) {
 
                     {/* Order Items List */}
                     <div className="mb-3 space-y-1 bg-[#E8EAF6] p-4 border-2 border-[#C5CAE9] rounded-xl">
-                        {o.order_items.map((i, idx) => {
+                        {o.order_items.map((i: any, idx: any) => {
                             // ✅ LOGIC: คำนวณราคาและส่วนลด
                             const quantity = i.quantity || 1;
                             const finalPriceTotal = i.price * quantity;
@@ -495,7 +495,7 @@ export default function App({ state, actions, helpers }) {
                     <div className="flex justify-between items-center pt-2 border-t-2 border-[#1A237E]">
                          <span className="font-bold text-[#D32F2F] text-sm uppercase tracking-widest foster-font">TOTAL FUN</span>
                          <span className="font-black text-[#1A237E] text-3xl fun-font">
-                             {o.order_items.reduce((acc, i) => acc + (i.price * i.quantity), 0)}.-
+                             {o.order_items.reduce((acc: any, i: any) => acc + (i.price * i.quantity), 0)}.-
                          </span>
                     </div>
                 </div>
@@ -660,12 +660,12 @@ export default function App({ state, actions, helpers }) {
                      <div className="flex justify-between items-center mb-6 px-8 pt-2">
                          <h2 className="text-4xl fun-font text-[#1A237E] drop-shadow-sm transform -rotate-2">Bloo's Stash</h2>
                          <div className="w-14 h-14 bg-[#FFD54F] text-[#3E2723] border-4 border-[#FFA000] rounded-xl flex items-center justify-center font-bold text-2xl foster-font shadow-sm">
-                             <span>{cart.reduce((a, b) => a + b.quantity, 0)}</span>
+                             <span>{cart.reduce((a: any, b: any) => a + b.quantity, 0)}</span>
                          </div>
                      </div>
 
                      <div className="flex-1 overflow-y-auto space-y-4 px-6 pb-6 no-scrollbar">
-                         {cart.map((item, idx) => (
+                         {cart.map((item: any, idx: any) => (
                              <div key={idx} className="flex items-center gap-4 bg-white p-4 border-4 border-[#E3F2FD] rounded-2xl relative overflow-hidden shadow-sm">
                                  <div className="w-4 h-full absolute left-0 top-0 bg-[#2979FF]" />
                                  <img src={item.image_url} className="w-20 h-20 object-cover border-4 border-[#90CAF9] rounded-xl ml-4 bg-[#FAFAFA]" />

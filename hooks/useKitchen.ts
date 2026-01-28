@@ -11,7 +11,7 @@ export function useKitchen() {
 
     const fetchOrders = async () => {
         const result = await getKitchenOrdersAction();
-        if (result.success) setOrders(result.data);
+        if (result.success) setOrders(result.data || []);
         setLoading(false);
     };
 

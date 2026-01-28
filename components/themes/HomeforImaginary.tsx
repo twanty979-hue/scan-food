@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 
 // --- 🛠️ Icons Wrapper (Foster's Home Style) ---
-const Icon = ({ name, size = 24, className = "" }) => {
+const Icon = ({ name, size = 24, className = "" }: any) => {
   const icons = {
     // Home -> Door / Entrance
     home: <path d="M20 20V8h-2V6h-2v2H8V6H6v2H4v12h16zM6 10h3v8H6v-8zm5 0h3v8h-3v-8zm5 0h3v8h-3v-8z M12 2l-6 4h12l-6-4z" />, 
@@ -32,7 +32,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
     paw: <path d="M12 2C9 2 7 4 7 6c0 1.5 1 3 2.5 3.5C8 10.5 6 12 6 15v4h12v-4c0-3-2-4.5-3.5-5.5C16 9 17 7.5 17 6c0-2-2-4-5-4z M4 6h2v2H4zm14 0h2v2h-2z" />
   };
 
-  const content = icons[name] || icons.home;
+  const content = (icons as any)[name] || icons.home;
   
   return (
     <svg 
@@ -54,7 +54,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
   );
 };
 
-export default function App({ state, actions, helpers }) {
+export default function App({ state, actions, helpers }: any) {
   const {
     loading, isVerified, activeTab, brand, tableLabel,
     banners, currentBannerIndex, categories, selectedCategoryId,
@@ -348,7 +348,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
                     
                     <div className="grid grid-cols-2 gap-5 pb-10">
-                        {products?.filter(p => p.is_recommended).slice(0, 6).map((p, idx) => {
+                        {products?.filter((p: any) => p.is_recommended).slice(0, 6).map((p: any, idx: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card cursor-pointer animate-fade-in" style={{animationDelay: `${idx * 0.1}s`}}>
@@ -396,7 +396,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="flex gap-4 mb-8 overflow-x-auto no-scrollbar py-2 px-1 animate-fade-in">
-                        {categories?.map((c) => (
+                        {categories?.map((c: any) => (
                             <button key={c.id} onClick={() => setSelectedCategoryId(c.id)} 
                                     className={`tab-btn shrink-0 px-8 py-3 text-lg font-bold imaginary-font ${selectedCategoryId === c.id ? 'tab-active' : ''}`}>
                                 <span>{c.name}</span>
@@ -405,7 +405,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 gap-6 pb-24">
-                        {filteredProducts?.map((p, idx) => {
+                        {filteredProducts?.map((p: any, idx: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card cursor-pointer animate-fade-in" style={{animationDelay: `${idx * 0.1}s`}}>
@@ -448,7 +448,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="space-y-6">
-                        {ordersList?.map((o) => (
+                        {ordersList?.map((o: any) => (
                             <div key={o.id} className="bg-white p-6 border-4 border-blue-200 rounded-3xl shadow-sm relative overflow-hidden animate-fade-in">
                                 <div className="flex justify-between items-start mb-4">
                                      <span className="text-xs text-purple-600 font-bold uppercase tracking-widest flex items-center gap-1">
@@ -460,7 +460,7 @@ export default function App({ state, actions, helpers }) {
                                      </span>
                                 </div>
                                 <div className="mb-4 space-y-2 bg-blue-50 p-5 rounded-2xl border-2 border-blue-100">
-                                    {o.order_items.map((i, idx) => (
+                                    {o.order_items.map((i: any, idx: any) => (
                                         <div key={idx} className="flex justify-between text-sm text-[#1e1b4b] font-bold border-b-2 border-dashed border-blue-200 pb-2 last:border-0 imaginary-font">
                                             <div className="flex flex-col">
                                                 <span>{i.quantity}x {i.product_name}</span>
@@ -476,7 +476,7 @@ export default function App({ state, actions, helpers }) {
                                 <div className="flex justify-between items-center pt-2 border-t-4 border-blue-100">
                                      <span className="font-bold text-gray-400 text-xs uppercase tracking-widest">TOTAL</span>
                                      <span className="font-black text-[#1e1b4b] text-3xl imaginary-font">
-                                         {o.order_items.reduce((acc, i) => acc + (i.price * i.quantity), 0)}.-
+                                         {o.order_items.reduce((acc: any, i: any) => acc + (i.price * i.quantity), 0)}.-
                                      </span>
                                 </div>
                             </div>
@@ -626,12 +626,12 @@ export default function App({ state, actions, helpers }) {
             <div className="flex justify-between items-center mb-6 px-10 pt-8">
                 <h2 className="text-4xl imaginary-font text-blue-600 transform -rotate-1">Adopt Bag</h2>
                 <div className="w-14 h-14 bg-red-100 text-red-500 border-4 border-white rounded-2xl flex items-center justify-center font-black text-2xl imaginary-font shadow-lg">
-                    <span>{cart.reduce((a, b) => a + b.quantity, 0)}</span>
+                    <span>{cart.reduce((a: any, b: any) => a + b.quantity, 0)}</span>
                 </div>
             </div>
             
             <div className="flex-1 overflow-y-auto space-y-6 px-8 pb-4 no-scrollbar">
-                {cart.map((item, idx) => (
+                {cart.map((item: any, idx: any) => (
                     <div key={idx} className="flex items-center gap-4 bg-white p-4 border-4 border-blue-100 rounded-[2rem] shadow-sm relative overflow-hidden hover:shadow-md hover:translate-x-[2px] hover:translate-y-[2px] transition-all">
                         <div className="w-20 h-20 bg-blue-50 rounded-2xl overflow-hidden border-2 border-white shrink-0">
                             <img src={item.image_url} className="w-full h-full object-cover" />

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 
 // --- 🧀 Tom & Jerry Icons Wrapper ---
-const Icon = ({ name, size = 24, className = "" }) => {
+const Icon = ({ name, size = 24, className = "" }: any) => {
   const icons = {
     // Home -> Mouse Hole
     home: <path d="M12 3L2 12h3v8h6v-6h2v6h6v-8h3L12 3zm5 15h-2v-6H9v6H7v-7.81l5-4.5 5 4.5V18z" />,
@@ -42,7 +42,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
       strokeLinejoin="round" 
       className={className}
     >
-      {icons[name] || icons.home}
+      {(icons as any)[name] || icons.home}
       {name === 'search' && <path d="m21 21-4.3-4.3" />}
       {name === 'basket' && <path d="M12 13h2" opacity="0.5"/>}
       {name === 'clock' && <path d="M12 6v6l4 2" />}
@@ -50,7 +50,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
   );
 };
 
-export default function TomAndJerryTheme({ state, actions, helpers }) {
+export default function TomAndJerryTheme({ state, actions, helpers }: any) {
   // --- 🛡️ Default Values ---
   const {
     loading, isVerified, activeTab, brand, tableLabel,
@@ -322,7 +322,7 @@ export default function TomAndJerryTheme({ state, actions, helpers }) {
                     </div>
                     
                     <div className="grid grid-cols-2 gap-4 pb-10">
-                        {products?.filter(p => p.is_recommended).slice(0, 6).map((p, idx) => {
+                        {products?.filter((p: any) => p.is_recommended).slice(0, 6).map((p: any, idx: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card cursor-pointer" style={{animationDelay: `${idx * 0.1}s`}}>
@@ -360,7 +360,7 @@ export default function TomAndJerryTheme({ state, actions, helpers }) {
                     </div>
 
                     <div className="flex gap-4 mb-8 overflow-x-auto no-scrollbar py-2 px-1">
-                        {categories?.map((c) => (
+                        {categories?.map((c: any) => (
                             <button key={c.id} onClick={() => setSelectedCategoryId(c.id)} className={`tab-btn shrink-0 px-8 py-3 text-lg font-bold cartoon-font ${selectedCategoryId === c.id ? 'tab-active' : ''}`}>
                                 <span>{c.name}</span>
                             </button>
@@ -368,7 +368,7 @@ export default function TomAndJerryTheme({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 gap-5 pb-24">
-                        {filteredProducts?.map((p, idx) => {
+                        {filteredProducts?.map((p: any, idx: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card cursor-pointer" style={{animationDelay: `${idx * 0.1}s`}}>
@@ -409,7 +409,7 @@ export default function TomAndJerryTheme({ state, actions, helpers }) {
                     </div>
 
                     <div className="space-y-6">
-                        {ordersList?.map((o) => (
+                        {ordersList?.map((o: any) => (
                             <div key={o.id} className="bg-white p-6 border-4 border-[#94a3b8] rounded-[2.5rem] shadow-sm relative overflow-hidden">
                                 <div className="flex justify-between items-start mb-4">
                                      <span className="text-xs text-[#d97706] font-bold uppercase tracking-widest flex items-center gap-1"><Icon name="menu" size={14} /> Ticket #{o.id.slice(-4)}</span>
@@ -418,7 +418,7 @@ export default function TomAndJerryTheme({ state, actions, helpers }) {
                                      </span>
                                 </div>
                                 <div className="mb-4 space-y-2 bg-[#f1f5f9] p-5 rounded-2xl border-2 border-slate-200">
-                                    {o.order_items.map((i, idx) => (
+                                    {o.order_items.map((i: any, idx: any) => (
                                         <div key={idx} className="flex justify-between text-sm text-slate-700 font-bold border-b-2 border-dashed border-slate-300 pb-2 last:border-0 cartoon-font">
                                             <div className="flex flex-col">
                                                 <span>{i.quantity}x {i.product_name}</span>
@@ -431,7 +431,7 @@ export default function TomAndJerryTheme({ state, actions, helpers }) {
                                 </div>
                                 <div className="flex justify-between items-center pt-2 border-t-4 border-slate-200">
                                      <span className="font-bold text-slate-400 text-xs uppercase tracking-widest">TOTAL</span>
-                                     <span className="font-black text-slate-800 text-3xl cartoon-font">{o.order_items.reduce((acc, i) => acc + (i.price * i.quantity), 0)}.-</span>
+                                     <span className="font-black text-slate-800 text-3xl cartoon-font">{o.order_items.reduce((acc: any, i: any) => acc + (i.price * i.quantity), 0)}.-</span>
                                 </div>
                             </div>
                         ))}
@@ -571,12 +571,12 @@ export default function TomAndJerryTheme({ state, actions, helpers }) {
                     <div className="flex justify-between items-center mb-6 px-10 pt-6">
                         <h2 className="text-4xl cartoon-font text-slate-800 transform -rotate-1">Mouse Hole Stash</h2>
                         <div className="w-14 h-14 bg-[#fbbf24] text-[#92400e] border-4 border-slate-800 rounded-2xl flex items-center justify-center font-black text-2xl cartoon-font shadow-[4px_4px_0_#92400e]">
-                            <span>{cart.reduce((a, b) => a + b.quantity, 0)}</span>
+                            <span>{cart.reduce((a: any, b: any) => a + b.quantity, 0)}</span>
                         </div>
                     </div>
                     
                     <div className="flex-1 overflow-y-auto space-y-5 px-8 pb-8 no-scrollbar">
-                        {cart.map((item, idx) => (
+                        {cart.map((item: any, idx: any) => (
                             <div key={idx} className="flex items-center gap-4 bg-white p-4 border-4 border-slate-200 rounded-[2rem] shadow-sm relative overflow-hidden hover:shadow-md hover:translate-x-[2px] hover:translate-y-[2px] transition-all">
                                 <div className="w-20 h-20 bg-slate-100 rounded-2xl overflow-hidden border-2 border-white shrink-0">
                                     <img src={item.image_url} className="w-full h-full object-cover" />

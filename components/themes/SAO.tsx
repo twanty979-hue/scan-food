@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 
 // --- 🛠️ Icons Wrapper (SAO / Aincrad Style) ---
-const Icon = ({ name, size = 24, className = "" }) => {
+const Icon = ({ name, size = 24, className = "" }: any) => {
   const icons = {
     // Home -> Aincrad / Floor 1
     home: <path d="M12 2L2 22h20L12 2zm0 4l6 12H6l6-12z" />, 
@@ -32,7 +32,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
     map: <path d="M3 5v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2zm12 4c0 1.66-1.34 3-3 3s-3-1.34-3-3 1.34-3 3-3 3 1.34 3 3zm-9 8c0-2 4-3.1 6-3.1s6 1.1 6 3.1v1H6v-1z" />
   };
 
-  const content = icons[name] || icons.home;
+  const content = (icons as any)[name] || icons.home;
   
   return (
     <svg 
@@ -54,7 +54,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
   );
 };
 
-export default function App({ state, actions, helpers }) {
+export default function App({ state, actions, helpers }: any) {
   const {
     loading, isVerified, activeTab, brand, tableLabel,
     banners, currentBannerIndex, categories, selectedCategoryId,
@@ -350,7 +350,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 pb-10">
-                        {products?.filter(p => p.is_recommended).slice(0, 6).map((p, idx) => {
+                        {products?.filter((p: any) => p.is_recommended).slice(0, 6).map((p: any, idx: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card cursor-pointer animate-digitize" style={{animationDelay: `${idx * 0.05}s`}}>
@@ -398,7 +398,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="flex gap-3 mb-6 overflow-x-auto no-scrollbar py-2">
-                        {categories?.map((c) => (
+                        {categories?.map((c: any) => (
                             <button key={c.id} onClick={() => setSelectedCategoryId(c.id)} 
                                     className={`tab-btn shrink-0 px-6 py-2 text-sm ${selectedCategoryId === c.id ? 'active' : ''}`}>
                                 <span>{c.name}</span>
@@ -407,7 +407,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 pb-24">
-                        {filteredProducts?.map((p, idx) => {
+                        {filteredProducts?.map((p: any, idx: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card cursor-pointer animate-digitize" style={{animationDelay: `${idx * 0.05}s`}}>
@@ -447,7 +447,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="space-y-4">
-                        {ordersList?.map((o) => (
+                        {ordersList?.map((o: any) => (
                             <div key={o.id} className="bg-gray-800/90 p-5 border border-gray-600 rounded-lg shadow-lg relative overflow-hidden">
                                 <div className="flex justify-between items-start mb-3">
                                      <span className="text-xs text-[#40c4ff] font-bold uppercase tracking-widest flex items-center gap-1 font-mono">
@@ -459,7 +459,7 @@ export default function App({ state, actions, helpers }) {
                                      </span>
                                 </div>
                                 <div className="mb-3 space-y-1 p-3 bg-black/40 rounded border border-gray-700">
-                                    {o.order_items.map((i, idx) => (
+                                    {o.order_items.map((i: any, idx: any) => (
                                         <div key={idx} className="flex justify-between text-sm text-gray-300 font-mono border-b border-gray-700/50 pb-1 last:border-0">
                                             <div className="flex flex-col">
                                                 <span>{i.quantity}x {i.product_name}</span>
@@ -473,7 +473,7 @@ export default function App({ state, actions, helpers }) {
                                 <div className="flex justify-between items-center pt-2 border-t border-gray-600">
                                      <span className="font-bold text-gray-500 text-xs uppercase tracking-widest">TOTAL COL</span>
                                      <span className="font-bold text-white text-2xl sao-font shadow-[0_0_10px_rgba(255,255,255,0.1)]">
-                                         {o.order_items.reduce((acc, i) => acc + (i.price * i.quantity), 0)}
+                                         {o.order_items.reduce((acc: any, i: any) => acc + (i.price * i.quantity), 0)}
                                      </span>
                                 </div>
                             </div>
@@ -631,12 +631,12 @@ export default function App({ state, actions, helpers }) {
                     <h2 className="text-lg font-bold text-gray-800 uppercase tracking-widest sao-font">Inventory</h2>
                 </div>
                 <div className="bg-[#40c4ff] text-white px-3 py-1 rounded-full text-xs font-bold shadow-sm">
-                    {cart.reduce((a, b) => a + b.quantity, 0)} Items
+                    {cart.reduce((a: any, b: any) => a + b.quantity, 0)} Items
                 </div>
             </div>
             
             <div className="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar">
-                {cart.map((item, idx) => (
+                {cart.map((item: any, idx: any) => (
                     <div key={idx} className="bg-white border border-gray-300 p-3 rounded flex items-center gap-3 shadow-sm relative overflow-hidden group">
                         <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#ccc] group-hover:bg-orange-400 transition-colors"></div>
                         <div className="w-14 h-14 bg-gray-200 rounded overflow-hidden shrink-0 border border-gray-300">

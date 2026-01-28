@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 
 // --- 🛠️ Icons Wrapper (Spring / Garden Style) ---
-const Icon = ({ name, size = 24, className = "" }) => {
+const Icon = ({ name, size = 24, className = "" }: any) => {
   const icons = {
     // Home -> Garden House
     home: <path d="M3 10L12 2l9 8v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V10z M12 12c-2 0-3 2-3 4s1 4 3 4 3-2 3-4-1-4-3-4z" />, 
@@ -29,7 +29,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
     sun: <circle cx="12" cy="12" r="5" strokeWidth="2" /> // Simplified sun
   };
 
-  const content = icons[name] || icons.home;
+  const content = (icons as any)[name] || icons.home;
   
   return (
     <svg 
@@ -53,7 +53,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
   );
 };
 
-export default function App({ state, actions, helpers }) {
+export default function App({ state, actions, helpers }: any) {
   const {
     loading, isVerified, activeTab, brand, tableLabel,
     banners, currentBannerIndex, categories, selectedCategoryId,
@@ -296,7 +296,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 gap-5 pb-10">
-                        {products?.filter(p => p.is_recommended).slice(0, 6).map((p, idx) => {
+                        {products?.filter((p: any) => p.is_recommended).slice(0, 6).map((p: any, idx: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card cursor-pointer animate-image-pop" style={{animationDelay: `${idx * 0.1}s`}}>
@@ -345,7 +345,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="flex gap-4 mb-8 overflow-x-auto no-scrollbar py-2 px-1 animate-image-pop">
-                        {categories?.map((c) => (
+                        {categories?.map((c: any) => (
                             <button key={c.id} onClick={() => setSelectedCategoryId(c.id)} 
                                     className={`tab-btn shrink-0 px-8 py-3 text-lg font-bold ${selectedCategoryId === c.id ? 'active' : ''}`}>
                                 <span>{c.name}</span>
@@ -354,7 +354,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 gap-6 pb-24">
-                        {filteredProducts?.map((p, idx) => {
+                        {filteredProducts?.map((p: any, idx: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card cursor-pointer animate-image-pop" style={{animationDelay: `${idx * 0.1}s`}}>
@@ -398,7 +398,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="space-y-6">
-                        {ordersList?.map((o) => (
+                        {ordersList?.map((o: any) => (
                             <div key={o.id} className="bg-white p-6 border-2 border-green-100 rounded-[2.5rem] shadow-sm relative overflow-hidden">
                                 
                                 {/* Header */}
@@ -414,7 +414,7 @@ export default function App({ state, actions, helpers }) {
 
                                 {/* Items */}
                                 <div className="mb-4 space-y-2 bg-[#f0fdf4] p-5 rounded-2xl border border-[#dcfce7]">
-                                    {o.order_items.map((i, idx) => {
+                                    {o.order_items.map((i: any, idx: any) => {
                                         // ✅ FIXED LOGIC FOR STATUS PAGE
                                         const quantity = i.quantity || 1;
                                         const finalPriceTotal = i.price * quantity;
@@ -468,7 +468,7 @@ export default function App({ state, actions, helpers }) {
                                 <div className="flex justify-between items-center pt-2">
                                      <span className="font-bold text-[#a3a3a3] text-xs uppercase tracking-widest">NECTAR</span>
                                      <span className="font-black text-[#15803d] text-3xl spring-title">
-                                         {o.order_items.reduce((acc, i) => acc + (i.price * i.quantity), 0)}.-
+                                         {o.order_items.reduce((acc: any, i: any) => acc + (i.price * i.quantity), 0)}.-
                                      </span>
                                 </div>
                             </div>
@@ -621,12 +621,12 @@ export default function App({ state, actions, helpers }) {
             <div className="flex justify-between items-center mb-6 px-10 pt-8">
                 <h2 className="text-4xl spring-title text-green-900 transform -rotate-1 tracking-widest italic">Harvest Bag</h2>
                 <div className="w-14 h-14 bg-green-100 text-green-600 border-4 border-white rounded-2xl flex items-center justify-center font-black text-2xl shadow-sm">
-                    <span>{cart.reduce((a, b) => a + b.quantity, 0)}</span>
+                    <span>{cart.reduce((a: any, b: any) => a + b.quantity, 0)}</span>
                 </div>
             </div>
             
             <div className="flex-1 overflow-y-auto space-y-6 px-8 pb-10 no-scrollbar">
-                {cart.map((item, idx) => (
+                {cart.map((item: any, idx: any) => (
                     <div key={idx} className="flex items-center gap-4 bg-white p-4 border-3 border-[#d9f99d] rounded-[2rem] shadow-sm relative overflow-hidden hover:shadow-md transition-shadow">
                         <div className="w-20 h-20 bg-green-50 rounded-2xl overflow-hidden border-2 border-white shrink-0">
                             <img src={item.image_url} className="w-full h-full object-cover" />

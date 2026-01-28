@@ -28,11 +28,11 @@ export function useThemes() {
             const res = await getThemesDataAction();
             
             if (res.success) {
-                setThemes(res.themes);
-                setCurrentConfig(res.currentConfig);
-                setBrandId(res.brandId);
-                setIsOwner(res.isOwner);
-            } else {
+    setThemes(res.themes || []);           // ถ้าไม่มีธีม ให้ส่งอาร์เรย์เปล่า
+    setCurrentConfig(res.currentConfig || null); // ถ้าไม่มี Config ให้ส่ง null
+    setBrandId(res.brandId || '');         // ถ้าไม่มี BrandId ให้ส่งสตริงว่าง
+    setIsOwner(res.isOwner || false);      // ถ้าไม่รู้สิทธิ์ ให้ถือว่าไม่ใช่เจ้าของ
+} else {
                 // Handle auth error (optional)
                 if (res.error === "Unauthorized") router.replace('/login');
             }

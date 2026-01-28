@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 
 // --- 🛠️ Icons Wrapper (Scooby-Doo Mystery Style) ---
-const Icon = ({ name, size = 24, className = "" }) => {
+const Icon = ({ name, size = 24, className = "" }: any) => {
   const icons = {
     // Home -> Haunted House / Van
     home: <path d="M2 22 12 2l10 20H2zM12 6v4M10 14h4" />, 
@@ -27,7 +27,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
     bone: <path d="M17 4c-1.66 0-3 1.34-3 3 0 .2.02.38.06.56C13.56 7.22 12.82 7 12 7c-.82 0-1.56.22-2.06.56.04-.18.06-.36.06-.56 0-1.66-1.34-3-3-3s-3 1.34-3 3c0 1.28.8 2.37 1.94 2.8C5.28 10.4 5 11.16 5 12c0 1.66 1.34 3 3 3 1.66 0 3-1.34 3-3 0-.2-.02-.38-.06-.56.5-.34 1.24-.56 2.06-.56.82 0 1.56.22 2.06.56-.04.18-.06.36-.06.56 0 1.66 1.34 3 3 3s3-1.34 3-3c0-.84-.28-1.6-.74-2.2C21.2 12.37 22 11.28 22 10c0-1.66-1.34-3-3-3-.84 0-1.6.28-2.2.74C16.6 7.28 15.8 6.4 16 5.5 16.2 4.6 17 4 17 4z" />
   };
 
-  const content = icons[name] || icons.home;
+  const content = (icons as any)[name] || icons.home;
   
   return (
     <svg 
@@ -51,14 +51,14 @@ const Icon = ({ name, size = 24, className = "" }) => {
 };
 
 // Flower Pattern for Mystery Machine vibes
-const MysteryFlower = ({ className }) => (
+const MysteryFlower = ({ className }: any) => (
     <svg viewBox="0 0 100 100" className={className} fill="currentColor">
         <path d="M50 35 C35 10, 15 35, 35 50 C15 65, 35 90, 50 65 C65 90, 85 65, 65 50 C85 35, 65 10, 50 35" />
         <circle cx="50" cy="50" r="10" />
     </svg>
 );
 
-export default function App({ state, actions, helpers }) {
+export default function App({ state, actions, helpers }: any) {
   const {
     loading, isVerified, activeTab, brand, tableLabel,
     banners, currentBannerIndex, categories, selectedCategoryId,
@@ -295,7 +295,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pb-10">
-                        {products?.filter(p => p.is_recommended).slice(0, 6).map((p) => {
+                        {products?.filter((p: any) => p.is_recommended).slice(0, 6).map((p: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="mystery-card overflow-hidden relative cursor-pointer group">
@@ -343,7 +343,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="flex gap-3 mb-8 overflow-x-auto no-scrollbar py-2 px-1">
-                        {categories?.map((c) => (
+                        {categories?.map((c: any) => (
                             <button key={c.id} onClick={() => setSelectedCategoryId(c.id)} 
                                     className={`tab-btn shrink-0 px-6 py-3 text-xl font-bold rounded-xl flex items-center gap-2 ${selectedCategoryId === c.id ? 'active' : ''}`}>
                                 <span>{c.name}</span>
@@ -352,7 +352,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pb-24">
-                        {filteredProducts?.map((p) => {
+                        {filteredProducts?.map((p: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="mystery-card overflow-hidden relative cursor-pointer group">
@@ -395,7 +395,7 @@ export default function App({ state, actions, helpers }) {
         </div>
 
         <div className="space-y-4">
-            {ordersList?.map((o) => (
+            {ordersList?.map((o: any) => (
                 <div key={o.id} className="bg-white p-5 border-4 border-black rounded-[2rem] relative overflow-hidden shadow-[6px_6px_0_#99CC33]">
                     
                     {/* Header: Case ID & Status */}
@@ -411,7 +411,7 @@ export default function App({ state, actions, helpers }) {
 
                     {/* Order Items List */}
                     <div className="mb-3 space-y-1 bg-[#F1F8E9] p-4 border-2 border-black rounded-xl">
-                        {o.order_items.map((i, idx) => {
+                        {o.order_items.map((i: any, idx: any) => {
                             // ✅ LOGIC: คำนวณราคาและส่วนลด
                             const quantity = i.quantity || 1;
                             const finalPriceTotal = i.price * quantity;
@@ -475,7 +475,7 @@ export default function App({ state, actions, helpers }) {
                     <div className="flex justify-between items-center pt-2 border-t-4 border-black">
                          <span className="font-bold text-[#7452A3] text-sm uppercase tracking-widest comic-font">TOTAL CLUES</span>
                          <span className="font-black text-black text-3xl comic-font">
-                             {o.order_items.reduce((acc, i) => acc + (i.price * i.quantity), 0)}.-
+                             {o.order_items.reduce((acc: any, i: any) => acc + (i.price * i.quantity), 0)}.-
                          </span>
                     </div>
                 </div>
@@ -646,12 +646,12 @@ export default function App({ state, actions, helpers }) {
                      <div className="flex justify-between items-center mb-6 px-8 pt-2">
                          <h2 className="text-4xl spooky-font text-[#7452A3] drop-shadow-[2px_2px_0_#99CC33] transform -rotate-2">Captured Snacks</h2>
                          <div className="w-14 h-14 bg-[#F28F1C] text-black border-4 border-black rounded-xl flex items-center justify-center font-black text-2xl comic-font shadow-[3px_3px_0_black]">
-                             <span>{cart.reduce((a, b) => a + b.quantity, 0)}</span>
+                             <span>{cart.reduce((a: any, b: any) => a + b.quantity, 0)}</span>
                          </div>
                      </div>
 
                      <div className="flex-1 overflow-y-auto space-y-4 px-6 pb-6 no-scrollbar">
-                         {cart.map((item, idx) => (
+                         {cart.map((item: any, idx: any) => (
                              <div key={idx} className="flex items-center gap-4 bg-white p-4 border-4 border-black rounded-2xl relative overflow-hidden shadow-[4px_4px_0_#36B5B0]">
                                  <div className="w-4 h-full absolute left-0 top-0 bg-[#36B5B0] border-r-4 border-black" />
                                  <img src={item.image_url} className="w-20 h-20 object-cover border-4 border-black rounded-xl ml-4 bg-gray-100" />

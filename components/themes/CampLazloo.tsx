@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 
 // --- 🏕️ Camp Lazlo Icons Wrapper ---
-const Icon = ({ name, size = 24, className = "" }) => {
+const Icon = ({ name, size = 24, className = "" }: any) => {
   const icons = {
     home: <path d="M22 19h-2.53l-2.22-6h-3.5l-2.22 6H2l10-18h1.11L17.5 10h2.97l1.53 9zM12 4.48L7.33 13h9.34L12 4.48zM10.5 15v4h3v-4h-3z" />,
     menu: <path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4z" />,
@@ -20,7 +20,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
     map: <path d="M20.5 3l-6 1.5-6-1.5-5.5 3V21l6-1.5 6 1.5 5.5-3V3zM12 18.5l-6 1.5v-12l6-1.5v12zm6-1.5l-6 1.5v-12l6-1.5v12z" />
   };
 
-  const content = icons[name] || icons.home;
+  const content = (icons as any)[name] || icons.home;
    
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -32,7 +32,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
   );
 };
 
-export default function CampLazloTheme({ state, actions, helpers }) {
+export default function CampLazloTheme({ state, actions, helpers }: any) {
   const {
     loading, isVerified, activeTab, brand, tableLabel,
     banners, currentBannerIndex, categories, selectedCategoryId,
@@ -204,7 +204,7 @@ export default function CampLazloTheme({ state, actions, helpers }) {
                         </div>
                         
                         <div className="grid grid-cols-2 gap-4 pb-10">
-                            {products?.filter(p => p.is_recommended).slice(0, 6).map((p, idx) => {
+                            {products?.filter((p: any) => p.is_recommended).slice(0, 6).map((p: any, idx: any) => {
                                  const pricing = calculatePrice(p, 'normal');
                                  return (
                                     <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card cursor-pointer" style={{animationDelay: `${idx * 0.1}s`}}>
@@ -242,7 +242,7 @@ export default function CampLazloTheme({ state, actions, helpers }) {
                         </div>
 
                         <div className="flex gap-3 mb-8 overflow-x-auto no-scrollbar py-2 px-1">
-                            {categories?.map((c) => (
+                            {categories?.map((c: any) => (
                                 <button key={c.id} onClick={() => setSelectedCategoryId(c.id)} className={`tab-btn shrink-0 px-6 py-3 text-lg font-bold camp-font ${selectedCategoryId === c.id ? 'tab-active' : ''}`}>
                                     <span>{c.name}</span>
                                 </button>
@@ -250,7 +250,7 @@ export default function CampLazloTheme({ state, actions, helpers }) {
                         </div>
 
                         <div className="grid grid-cols-2 gap-4 pb-24">
-                            {filteredProducts?.map((p, idx) => {
+                            {filteredProducts?.map((p: any, idx: any) => {
                                  const pricing = calculatePrice(p, 'normal');
                                  return (
                                     <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card cursor-pointer" style={{animationDelay: `${idx * 0.1}s`}}>
@@ -293,7 +293,7 @@ export default function CampLazloTheme({ state, actions, helpers }) {
                         </div>
 
                         <div className="space-y-4">
-                            {ordersList?.map((o) => (
+                            {ordersList?.map((o: any) => (
                                 <div key={o.id} className="bg-white p-6 border-4 border-[#78350f] rounded-xl shadow-sm relative overflow-hidden">
                                     <div className="flex justify-between items-start mb-4">
                                          <span className="text-xs text-[#f97316] font-bold uppercase tracking-widest flex items-center gap-1"><Icon name="menu" size={14} /> Ticket #{o.id.slice(-4)}</span>
@@ -302,7 +302,7 @@ export default function CampLazloTheme({ state, actions, helpers }) {
                                          </span>
                                     </div>
                                     <div className="mb-4 space-y-2 bg-[#ecfccb] p-5 rounded-lg border-2 border-[#65a30d]">
-                                        {o.order_items.map((i, idx) => (
+                                        {o.order_items.map((i: any, idx: any) => (
                                             <div key={idx} className="flex justify-between text-sm text-[#451a03] font-bold border-b-2 border-dashed border-[#a3e635] pb-2 last:border-0 camp-font">
                                                 <div className="flex flex-col">
                                                     <span>{i.quantity}x {i.product_name}</span>
@@ -315,7 +315,7 @@ export default function CampLazloTheme({ state, actions, helpers }) {
                                     </div>
                                     <div className="flex justify-between items-center pt-2 border-t-4 border-[#e5e7eb]">
                                          <span className="font-bold text-[#a8a29e] text-xs uppercase tracking-widest">TOTAL</span>
-                                         <span className="font-black text-[#451a03] text-3xl camp-font">{o.order_items.reduce((acc, i) => acc + (i.price * i.quantity), 0)}.-</span>
+                                         <span className="font-black text-[#451a03] text-3xl camp-font">{o.order_items.reduce((acc: any, i: any) => acc + (i.price * i.quantity), 0)}.-</span>
                                     </div>
                                 </div>
                             ))}
@@ -474,12 +474,12 @@ export default function CampLazloTheme({ state, actions, helpers }) {
                     <div className="flex justify-between items-center mb-6 px-8 pt-6">
                         <h2 className="text-4xl camp-font text-[#78350f] transform -rotate-1">Backpack</h2>
                         <div className="w-12 h-12 bg-[#65a30d] text-white border-4 border-[#3f6212] rounded-full flex items-center justify-center font-black text-xl camp-font shadow-md">
-                            <span>{cart.reduce((a, b) => a + b.quantity, 0)}</span>
+                            <span>{cart.reduce((a: any, b: any) => a + b.quantity, 0)}</span>
                         </div>
                     </div>
                     
                     <div className="flex-1 overflow-y-auto space-y-4 px-6 pb-6 no-scrollbar">
-                        {cart.map((item, idx) => (
+                        {cart.map((item: any, idx: any) => (
                             <div key={idx} className="flex items-center gap-4 bg-white p-4 border-2 border-[#d6d3d1] rounded-xl relative overflow-hidden shadow-sm">
                                 <div className="w-2 h-full absolute left-0 top-0 bg-[#f97316]" />
                                 <img src={item.image_url} className="w-16 h-16 object-cover border-2 border-[#d6d3d1] rounded-lg ml-2 bg-[#f5f5f4]" />

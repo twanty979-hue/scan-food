@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 
 // --- 🛠️ Icons Wrapper (Adapted for Pink Theme) ---
-const Icon = ({ name, size = 24, className = "" }) => {
+const Icon = ({ name, size = 24, className = "" }: any) => {
   const icons = {
     home: <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />, 
     menu: <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z" />, 
@@ -20,7 +20,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
     bolt: <path d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66.19-.34.05-.08.07-.12C8.48 10.94 10.42 7.54 13 3h1l-1 7h3.5c.49 0 .56.33.47.51l-.07.15C12.96 17.55 11 21 11 21z" />
   };
 
-  const content = icons[name] || icons.home;
+  const content = (icons as any)[name] || icons.home;
   
   return (
     <svg 
@@ -43,7 +43,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
   );
 };
 
-export default function App({ state, actions, helpers }) {
+export default function App({ state, actions, helpers }: any) {
   const {
     loading, isVerified, activeTab, brand, tableLabel,
     banners, currentBannerIndex, categories, selectedCategoryId,
@@ -311,7 +311,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 pb-10">
-                        {products?.filter(p => p.is_recommended).slice(0, 6).map((p, idx) => {
+                        {products?.filter((p: any) => p.is_recommended).slice(0, 6).map((p: any, idx: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card cursor-pointer animate-image-pop" style={{animationDelay: `${idx * 0.1}s`}}>
@@ -359,7 +359,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="flex gap-2 mb-8 overflow-x-auto no-scrollbar py-2 px-1 animate-pink-smooth" style={{animationDelay: '0.1s'}}>
-                        {categories?.map((c) => (
+                        {categories?.map((c: any) => (
                             <button key={c.id} onClick={() => setSelectedCategoryId(c.id)} 
                                     className={`tab-btn shrink-0 px-6 py-2 text-sm font-bold pink-font ${selectedCategoryId === c.id ? 'tab-active' : ''}`}>
                                 <span>{c.name}</span>
@@ -368,7 +368,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 pb-24">
-                        {filteredProducts?.map((p, idx) => {
+                        {filteredProducts?.map((p: any, idx: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card cursor-pointer animate-image-pop" style={{animationDelay: `${idx * 0.05}s`}}>
@@ -412,7 +412,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="space-y-6">
-                        {ordersList?.map((o, idx) => (
+                        {ordersList?.map((o: any, idx: any) => (
                             <div key={o.id} className="bg-white p-6 border border-pink-50 rounded-3xl shadow-sm relative overflow-hidden transition-all hover:shadow-md animate-pink-smooth" style={{animationDelay: `${idx * 0.1}s`}}>
                                 
                                 {/* Header */}
@@ -428,7 +428,7 @@ export default function App({ state, actions, helpers }) {
 
                                 {/* Items */}
                                 <div className="mb-4 space-y-3">
-                                    {o.order_items.map((i, idx) => {
+                                    {o.order_items.map((i: any, idx: any) => {
                                         const quantity = i.quantity || 1;
                                         const finalPriceTotal = i.price * quantity;
                                         const hasDiscount = (i.original_price && i.original_price > i.price) || (i.discount > 0);
@@ -472,7 +472,7 @@ export default function App({ state, actions, helpers }) {
                                 <div className="flex justify-between items-center pt-3 border-t border-pink-50">
                                      <span className="font-bold text-slate-400 text-xs uppercase tracking-wider">TOTAL</span>
                                      <span className="font-black text-2xl pink-font text-pink-600">
-                                         {o.order_items.reduce((acc, i) => acc + (i.price * i.quantity), 0)}.-
+                                         {o.order_items.reduce((acc: any, i: any) => acc + (i.price * i.quantity), 0)}.-
                                      </span>
                                 </div>
                             </div>
@@ -633,12 +633,12 @@ export default function App({ state, actions, helpers }) {
                     <div className="flex justify-between items-center mb-4 px-8 pt-4">
                         <h2 className="text-3xl font-black pink-font text-slate-800">My Order</h2>
                         <div className="w-12 h-12 bg-pink-100 text-pink-600 rounded-2xl flex items-center justify-center font-bold text-xl animate-pulse">
-                            {cart.reduce((a, b) => a + b.quantity, 0)}
+                            {cart.reduce((a: any, b: any) => a + b.quantity, 0)}
                         </div>
                     </div>
 
                     <div className="flex-1 overflow-y-auto space-y-4 px-6 pb-6 no-scrollbar">
-                        {cart.map((item, idx) => (
+                        {cart.map((item: any, idx: any) => (
                             <div key={idx} className="flex items-center gap-4 bg-white p-3 border border-pink-50 rounded-2xl shadow-sm relative overflow-hidden group animate-pink-smooth" style={{animationDelay: `${idx * 0.05}s`}}>
                                 <img src={item.image_url} className="w-20 h-20 object-cover rounded-xl bg-pink-50" />
                                 <div className="flex-1 min-w-0">

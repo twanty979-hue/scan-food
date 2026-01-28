@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 
 // --- 🛠️ Icons Wrapper (Moana / Motunui Style) ---
-const Icon = ({ name, size = 24, className = "" }) => {
+const Icon = ({ name, size = 24, className = "" }: any) => {
   const icons = {
     // Home -> Hut
     home: <path d="M2 22 12 2l10 20H2zM12 6v4M10 14h4" />, 
@@ -29,7 +29,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
     anchor: <path d="M12 22c4.97 0 9-4.03 9-9h-2c0 3.87-3.13 7-7 7s-7-3.13-7-7H3c0 4.97 4.03 9 9 9zM12 2a3 3 0 0 0-3 3v7h6V5a3 3 0 0 0-3-3z"/>
   };
 
-  const content = icons[name] || icons.home;
+  const content = (icons as any)[name] || icons.home;
   
   return (
     <svg 
@@ -50,7 +50,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
   );
 };
 
-export default function App({ state, actions, helpers }) {
+export default function App({ state, actions, helpers }: any) {
   const {
     loading, isVerified, activeTab, brand, tableLabel,
     banners, currentBannerIndex, categories, selectedCategoryId,
@@ -290,7 +290,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 gap-5 pb-10">
-                        {products?.filter(p => p.is_recommended).slice(0, 6).map((p, idx) => {
+                        {products?.filter((p: any) => p.is_recommended).slice(0, 6).map((p: any, idx: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card cursor-pointer animate-pop-up" style={{animationDelay: `${(idx * 0.1) + 0.2}s`}}>
@@ -338,7 +338,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="flex gap-4 mb-8 overflow-x-auto no-scrollbar py-2 px-1 animate-pop-up" style={{animationDelay: '0.1s'}}>
-                        {categories?.map((c) => (
+                        {categories?.map((c: any) => (
                             <button key={c.id} onClick={() => setSelectedCategoryId(c.id)} 
                                     className={`tab-btn shrink-0 px-8 py-3 text-lg font-bold ${selectedCategoryId === c.id ? 'active' : ''}`}>
                                 <span>{c.name}</span>
@@ -347,7 +347,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 gap-6 pb-24">
-                        {filteredProducts?.map((p, idx) => {
+                        {filteredProducts?.map((p: any, idx: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card cursor-pointer animate-pop-up" style={{animationDelay: `${(idx * 0.1) + 0.2}s`}}>
@@ -390,7 +390,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="space-y-6">
-                        {ordersList?.map((o) => (
+                        {ordersList?.map((o: any) => (
                             <div key={o.id} className="bg-white p-6 border-2 border-[#cffafe] rounded-[2.5rem] shadow-sm relative overflow-hidden">
                                 
                                 {/* Header */}
@@ -406,7 +406,7 @@ export default function App({ state, actions, helpers }) {
 
                                 {/* Items */}
                                 <div className="mb-4 space-y-2 bg-[#f0f9ff] p-5 rounded-2xl border border-[#e0f2fe]">
-                                    {o.order_items.map((i, idx) => {
+                                    {o.order_items.map((i: any, idx: any) => {
                                         // ✅ FIXED LOGIC FOR STATUS PAGE
                                         const quantity = i.quantity || 1;
                                         const finalPriceTotal = i.price * quantity;
@@ -460,7 +460,7 @@ export default function App({ state, actions, helpers }) {
                                 <div className="flex justify-between items-center pt-2">
                                      <span className="font-bold text-[#94a3b8] text-xs uppercase tracking-widest">TREASURE</span>
                                      <span className="font-black text-[#155e75] text-3xl ocean-font">
-                                         {o.order_items.reduce((acc, i) => acc + (i.price * i.quantity), 0)}.-
+                                         {o.order_items.reduce((acc: any, i: any) => acc + (i.price * i.quantity), 0)}.-
                                      </span>
                                 </div>
                             </div>
@@ -614,12 +614,12 @@ export default function App({ state, actions, helpers }) {
                     <div className="flex justify-between items-center mb-6 px-10">
                         <h2 className="text-4xl font-black text-[#164e63] ocean-font transform -rotate-2">Voyager Stash</h2>
                         <div className="w-14 h-14 bg-[#cffafe] text-[#06b6d4] border-4 border-white rounded-2xl flex items-center justify-center font-black text-2xl ocean-font shadow-lg">
-                            <span>{cart.reduce((a, b) => a + b.quantity, 0)}</span>
+                            <span>{cart.reduce((a: any, b: any) => a + b.quantity, 0)}</span>
                         </div>
                     </div>
 
                     <div className="flex-1 overflow-y-auto space-y-4 px-8 pb-6 no-scrollbar">
-                        {cart.map((item, idx) => (
+                        {cart.map((item: any, idx: any) => (
                             <div key={idx} className="flex items-center gap-4 bg-[#ecfeff] p-4 border-2 border-white rounded-[2rem] relative overflow-hidden shadow-sm hover:shadow-md transition-shadow">
                                 <img src={item.image_url} className="w-16 h-16 object-cover border-2 border-white rounded-2xl ml-2" />
                                 <div className="flex-1">

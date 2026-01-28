@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 
 // --- 🛠️ Icons Wrapper (Garfield Style) ---
-const Icon = ({ name, size = 24, className = "" }) => {
+const Icon = ({ name, size = 24, className = "" }: any) => {
   const icons = {
     // Home -> Cat House / Bed
     home: <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />, 
@@ -26,7 +26,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
     pencil: <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
   };
 
-  const content = icons[name] || icons.home;
+  const content = (icons as any)[name] || icons.home;
   
   return (
     <svg 
@@ -50,7 +50,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
   );
 };
 
-export default function App({ state, actions, helpers }) {
+export default function App({ state, actions, helpers }: any) {
   const {
     loading, isVerified, activeTab, brand, tableLabel,
     banners, currentBannerIndex, categories, selectedCategoryId,
@@ -274,7 +274,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pb-10">
-                        {products?.filter(p => p.is_recommended).slice(0, 6).map((p) => {
+                        {products?.filter((p: any) => p.is_recommended).slice(0, 6).map((p: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card overflow-hidden relative cursor-pointer group">
@@ -322,7 +322,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="flex gap-3 mb-8 overflow-x-auto no-scrollbar py-2 px-1">
-                        {categories?.map((c) => (
+                        {categories?.map((c: any) => (
                             <button key={c.id} onClick={() => setSelectedCategoryId(c.id)} 
                                     className={`tab-btn shrink-0 px-6 py-3 text-lg font-bold rounded-2xl cartoon-font flex items-center gap-2 ${selectedCategoryId === c.id ? 'active' : ''}`}>
                                 <span>{c.name}</span>
@@ -331,7 +331,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pb-24">
-                        {filteredProducts?.map((p) => {
+                        {filteredProducts?.map((p: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card overflow-hidden relative cursor-pointer group">
@@ -374,7 +374,7 @@ export default function App({ state, actions, helpers }) {
         </div>
 
         <div className="space-y-4">
-            {ordersList?.map((o) => (
+            {ordersList?.map((o: any) => (
                 <div key={o.id} className="bg-white p-5 border-4 border-[#18181B] rounded-[2rem] relative overflow-hidden shadow-[6px_6px_0_#FDBA74]">
                     
                     {/* Header: Order ID & Status */}
@@ -390,7 +390,7 @@ export default function App({ state, actions, helpers }) {
 
                     {/* Order Items List */}
                     <div className="mb-3 space-y-1 bg-[#FFF7ED] p-4 border-2 border-[#FED7AA] rounded-xl">
-                        {o.order_items.map((i, idx) => {
+                        {o.order_items.map((i: any, idx: any) => {
                             // ✅ LOGIC: คำนวณราคาและส่วนลด
                             const quantity = i.quantity || 1;
                             const finalPriceTotal = i.price * quantity;
@@ -454,7 +454,7 @@ export default function App({ state, actions, helpers }) {
                     <div className="flex justify-between items-center pt-2 border-t-2 border-[#18181B]">
                          <span className="font-bold text-[#FB923C] text-xs uppercase tracking-widest">TOTAL</span>
                          <span className="font-black text-[#18181B] text-2xl cartoon-font">
-                             {o.order_items.reduce((acc, i) => acc + (i.price * i.quantity), 0)}.-
+                             {o.order_items.reduce((acc: any, i: any) => acc + (i.price * i.quantity), 0)}.-
                          </span>
                     </div>
                 </div>
@@ -618,12 +618,12 @@ export default function App({ state, actions, helpers }) {
                      <div className="flex justify-between items-center mb-6 px-8 pt-2">
                          <h2 className="text-3xl font-black text-[#18181B] cartoon-font transform -rotate-2">Your Tray</h2>
                          <div className="w-12 h-12 bg-[#FB923C] text-white border-4 border-[#18181B] rounded-xl flex items-center justify-center font-black text-xl cartoon-font shadow-[3px_3px_0_#18181B]">
-                             <span>{cart.reduce((a, b) => a + b.quantity, 0)}</span>
+                             <span>{cart.reduce((a: any, b: any) => a + b.quantity, 0)}</span>
                          </div>
                      </div>
 
                      <div className="flex-1 overflow-y-auto space-y-4 px-6 pb-6 no-scrollbar">
-                         {cart.map((item, idx) => (
+                         {cart.map((item: any, idx: any) => (
                              <div key={idx} className="flex items-center gap-4 bg-white p-4 border-2 border-[#FED7AA] rounded-2xl relative overflow-hidden shadow-sm">
                                  <div className="w-2 h-full absolute left-0 top-0 bg-[#FBBF24]" />
                                  <img src={item.image_url} className="w-16 h-16 object-cover border-2 border-[#FED7AA] rounded-xl ml-2 bg-[#FFF7ED]" />

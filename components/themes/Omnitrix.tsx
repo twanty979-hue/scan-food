@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 
 // --- ⌚ Omnitrix Icons Wrapper ---
-const Icon = ({ name, size = 24, className = "" }) => {
+const Icon = ({ name, size = 24, className = "" }: any) => {
   const icons = {
     home: <path d="M2 22 L12 2 L22 22 L18 22 L18 14 L6 14 L6 22 Z M10 14 L10 10 L14 10 L14 14" />, 
     menu: <path d="M3 6h18M3 12h18M3 18h18" />,
@@ -19,7 +19,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
     pencil: <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
   };
 
-  const content = icons[name] || icons.home;
+  const content = (icons as any)[name] || icons.home;
   
   return (
     <svg 
@@ -42,7 +42,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
   );
 };
 
-export default function App({ state, actions, helpers }) {
+export default function App({ state, actions, helpers }: any) {
   const {
     loading, isVerified, activeTab, brand, tableLabel,
     banners, currentBannerIndex, categories, selectedCategoryId,
@@ -277,7 +277,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 pb-10">
-                        {products?.filter(p => p.is_recommended).slice(0, 6).map((p) => {
+                        {products?.filter((p: any) => p.is_recommended).slice(0, 6).map((p: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card cursor-pointer group">
@@ -325,7 +325,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="flex gap-3 mb-8 overflow-x-auto no-scrollbar py-2 px-1">
-                        {categories?.map((c) => (
+                        {categories?.map((c: any) => (
                             <button key={c.id} onClick={() => setSelectedCategoryId(c.id)} 
                                     className={`tab-btn shrink-0 px-6 py-3 text-xs uppercase tracking-wider rounded-full hero-font flex items-center gap-2 ${selectedCategoryId === c.id ? 'active' : ''}`}>
                                 <span>{c.name}</span>
@@ -334,7 +334,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 pb-24">
-                        {filteredProducts?.map((p) => {
+                        {filteredProducts?.map((p: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card cursor-pointer group">
@@ -376,7 +376,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="space-y-4">
-                        {ordersList?.map((o) => (
+                        {ordersList?.map((o: any) => (
                             <div key={o.id} className="bg-[#111] p-5 border border-lime-900 rounded-2xl relative overflow-hidden shadow-lg">
                                 <div className="flex justify-between items-start mb-4">
                                      <span className="text-[10px] text-lime-500 font-bold uppercase tracking-widest flex items-center gap-1 font-mono">
@@ -388,7 +388,7 @@ export default function App({ state, actions, helpers }) {
                                      </span>
                                 </div>
                                 <div className="mb-3 space-y-1 bg-[#0a0a0a] p-4 border border-lime-900/50 rounded-xl">
-                                    {o.order_items.map((i, idx) => {
+                                    {o.order_items.map((i: any, idx: any) => {
                                         const quantity = i.quantity || 1;
                                         const finalPriceTotal = i.price * quantity;
                                         return (
@@ -410,7 +410,7 @@ export default function App({ state, actions, helpers }) {
                                 <div className="flex justify-between items-center pt-2 border-t border-lime-900">
                                      <span className="font-bold text-gray-500 text-[10px] uppercase tracking-widest">ENERGY</span>
                                      <span className="font-black text-white text-xl hero-font drop-shadow-[0_0_5px_#84cc16]">
-                                         {o.order_items.reduce((acc, i) => acc + (i.price * i.quantity), 0)}.-
+                                         {o.order_items.reduce((acc: any, i: any) => acc + (i.price * i.quantity), 0)}.-
                                      </span>
                                 </div>
                             </div>
@@ -558,12 +558,12 @@ export default function App({ state, actions, helpers }) {
                      <div className="flex justify-between items-center mb-6 px-8 pt-2">
                          <h2 className="text-3xl font-black text-white hero-font uppercase tracking-wider">Inventory</h2>
                          <div className="px-4 py-1.5 bg-lime-900/30 text-lime-400 border border-lime-500 font-bold font-mono rounded-full">
-                             <span id="summaryCount">{cart.reduce((a, b) => a + b.quantity, 0)}</span> UNITS
+                             <span id="summaryCount">{cart.reduce((a: any, b: any) => a + b.quantity, 0)}</span> UNITS
                          </div>
                      </div>
 
                      <div className="flex-1 overflow-y-auto space-y-4 px-6 pb-6 no-scrollbar">
-                         {cart.map((item, idx) => (
+                         {cart.map((item: any, idx: any) => (
                              <div key={idx} className="flex items-center gap-4 bg-[#111] p-4 border border-lime-900/50 rounded-2xl relative overflow-hidden shadow-sm">
                                  <img src={item.image_url} className="w-16 h-16 object-cover border border-lime-900 rounded-xl opacity-80" />
                                  <div className="flex-1">

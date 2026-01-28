@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 
 // --- 🛠️ Icons Wrapper (Cow and Chicken Style) ---
-const Icon = ({ name, size = 24, className = "" }) => {
+const Icon = ({ name, size = 24, className = "" }: any) => {
   const icons = {
     // Home -> The House (Abstract/Wacky)
     home: <path d="M2 22 L12 2 L22 22 H2 Z M12 8 V16 M8 16 H16" strokeWidth="3" strokeLinejoin="round" />, 
@@ -32,7 +32,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
     butt: <path d="M12 22s-4-2-4-8c0-4 2-8 4-8s4 4 4 8c0 6-4 8-4 8z M12 6v6" />
   };
 
-  const content = icons[name] || icons.home;
+  const content = (icons as any)[name] || icons.home;
   
   return (
     <svg 
@@ -55,7 +55,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
   );
 };
 
-export default function App({ state, actions, helpers }) {
+export default function App({ state, actions, helpers }: any) {
   const {
     loading, isVerified, activeTab, brand, tableLabel,
     banners, currentBannerIndex, categories, selectedCategoryId,
@@ -326,7 +326,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 gap-5 pb-10">
-                        {products?.filter(p => p.is_recommended).slice(0, 6).map((p, idx) => {
+                        {products?.filter((p: any) => p.is_recommended).slice(0, 6).map((p: any, idx: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card cursor-pointer animate-image-pop" style={{animationDelay: `${idx * 0.1}s`}}>
@@ -374,7 +374,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="flex gap-4 mb-8 overflow-x-auto no-scrollbar py-2 px-1 animate-image-pop">
-                        {categories?.map((c) => (
+                        {categories?.map((c: any) => (
                             <button key={c.id} onClick={() => setSelectedCategoryId(c.id)} 
                                     className={`tab-btn shrink-0 px-8 py-3 text-xl font-bold ${selectedCategoryId === c.id ? 'active' : ''}`}>
                                 <span>{c.name}</span>
@@ -383,7 +383,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 gap-6 pb-24">
-                        {filteredProducts?.map((p, idx) => {
+                        {filteredProducts?.map((p: any, idx: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card cursor-pointer animate-image-pop" style={{animationDelay: `${idx * 0.1}s`}}>
@@ -426,7 +426,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="space-y-6">
-                        {ordersList?.map((o) => (
+                        {ordersList?.map((o: any) => (
                             <div key={o.id} className="bg-white p-6 border-4 border-black rounded-[2.5rem] shadow-[4px_4px_0_#9CA3AF] relative overflow-hidden">
                                 <div className="flex justify-between items-start mb-4">
                                      <span className="text-xs text-[#DC2626] font-bold uppercase tracking-widest flex items-center gap-1">
@@ -438,7 +438,7 @@ export default function App({ state, actions, helpers }) {
                                      </span>
                                 </div>
                                 <div className="mb-4 space-y-2 bg-[#F3F4F6] p-5 rounded-2xl border-2 border-black">
-                                    {o.order_items.map((i, idx) => (
+                                    {o.order_items.map((i: any, idx: any) => (
                                         <div key={idx} className="flex justify-between text-base text-black font-bold border-b-2 border-dashed border-gray-300 pb-2 last:border-0 wacky-font">
                                             <div className="flex flex-col">
                                                 <span>{i.quantity}x {i.product_name}</span>
@@ -460,7 +460,7 @@ export default function App({ state, actions, helpers }) {
                                 <div className="flex justify-between items-center pt-2 border-t-4 border-black">
                                      <span className="font-bold text-gray-500 text-xs uppercase tracking-widest">TOTAL</span>
                                      <span className="font-black text-black text-4xl wacky-font">
-                                         {o.order_items.reduce((acc, i) => acc + (i.price * i.quantity), 0)}.-
+                                         {o.order_items.reduce((acc: any, i: any) => acc + (i.price * i.quantity), 0)}.-
                                      </span>
                                 </div>
                             </div>
@@ -615,12 +615,12 @@ export default function App({ state, actions, helpers }) {
             <div className="flex justify-between items-center mb-6 px-10 pt-8">
                 <h2 className="text-5xl wacky-font text-[#DC2626] transform -rotate-2 tracking-widest uppercase text-shadow-sm">Your Stash</h2>
                 <div className="w-16 h-16 bg-[#FCD34D] text-black border-4 border-black rounded-full flex items-center justify-center font-black text-3xl shadow-[2px_2px_0_#000] wacky-font">
-                    <span>{cart.reduce((a, b) => a + b.quantity, 0)}</span>
+                    <span>{cart.reduce((a: any, b: any) => a + b.quantity, 0)}</span>
                 </div>
             </div>
             
             <div className="flex-1 overflow-y-auto space-y-6 px-8 pb-4 no-scrollbar">
-                {cart.map((item, idx) => (
+                {cart.map((item: any, idx: any) => (
                     <div key={idx} className="flex items-center gap-4 bg-white p-4 border-4 border-black rounded-[2rem] shadow-[4px_4px_0_#9CA3AF] relative overflow-hidden hover:shadow-[2px_2px_0_#9CA3AF] hover:translate-x-[2px] hover:translate-y-[2px] transition-all">
                         <div className="w-20 h-20 bg-[#FEF3C7] rounded-2xl overflow-hidden border-2 border-black shrink-0">
                             <img src={item.image_url} className="w-full h-full object-cover" />

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 
 // --- 🛠️ Icons Wrapper (Baby Looney Tunes Style) ---
-const Icon = ({ name, size = 24, className = "" }) => {
+const Icon = ({ name, size = 24, className = "" }: any) => {
   const icons = {
     // Home -> Cloud House / Playpen
     home: <path d="M3 10L12 2l9 8v11a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V10z M12 12c-2 0-3 2-3 4s1 4 3 4 3-2 3-4-1-4-3-4z" />, 
@@ -28,7 +28,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
     cookie: <circle cx="12" cy="12" r="10" />
   };
 
-  const content = icons[name] || icons.home;
+  const content = (icons as any)[name] || icons.home;
   
   return (
     <svg 
@@ -51,7 +51,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
   );
 };
 
-export default function App({ state, actions, helpers }) {
+export default function App({ state, actions, helpers }: any) {
   const {
     loading, isVerified, activeTab, brand, tableLabel,
     banners, currentBannerIndex, categories, selectedCategoryId,
@@ -301,7 +301,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pb-10">
-                        {products?.filter(p => p.is_recommended).slice(0, 6).map((p) => {
+                        {products?.filter((p: any) => p.is_recommended).slice(0, 6).map((p: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="baby-card group cursor-pointer">
@@ -349,7 +349,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="flex gap-3 mb-8 overflow-x-auto no-scrollbar py-2 px-1">
-                        {categories?.map((c) => (
+                        {categories?.map((c: any) => (
                             <button key={c.id} onClick={() => setSelectedCategoryId(c.id)} 
                                     className={`tab-btn shrink-0 px-6 py-3 text-lg font-bold rounded-2xl flex items-center gap-2 ${selectedCategoryId === c.id ? 'active' : ''}`}>
                                 <span>{c.name}</span>
@@ -358,7 +358,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pb-24">
-                        {filteredProducts?.map((p) => {
+                        {filteredProducts?.map((p: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="baby-card group cursor-pointer">
@@ -401,7 +401,7 @@ export default function App({ state, actions, helpers }) {
         </div>
 
         <div className="space-y-4">
-            {ordersList?.map((o) => (
+            {ordersList?.map((o: any) => (
                 <div key={o.id} className="bg-white p-5 border-4 border-[#B3E5FC] rounded-[2rem] relative overflow-hidden shadow-sm">
                     
                     {/* Header: Ticket ID & Status */}
@@ -417,7 +417,7 @@ export default function App({ state, actions, helpers }) {
 
                     {/* Order Items List */}
                     <div className="mb-3 space-y-1 bg-[#F3E5F5] p-4 border-2 border-[#E1BEE7] rounded-xl">
-                        {o.order_items.map((i, idx) => {
+                        {o.order_items.map((i: any, idx: any) => {
                             // ✅ LOGIC: คำนวณราคาและส่วนลด
                             const quantity = i.quantity || 1;
                             const finalPriceTotal = i.price * quantity;
@@ -481,7 +481,7 @@ export default function App({ state, actions, helpers }) {
                     <div className="flex justify-between items-center pt-2 border-t-2 border-[#B3E5FC]">
                          <span className="font-bold text-[#0288D1] text-sm uppercase tracking-widest bubbly-font">TOTAL</span>
                          <span className="font-black text-[#01579B] text-3xl bubbly-font drop-shadow-sm">
-                             {o.order_items.reduce((acc, i) => acc + (i.price * i.quantity), 0)}.-
+                             {o.order_items.reduce((acc: any, i: any) => acc + (i.price * i.quantity), 0)}.-
                          </span>
                     </div>
                 </div>
@@ -645,12 +645,12 @@ export default function App({ state, actions, helpers }) {
                      <div className="flex justify-between items-center mb-6 px-8 pt-2">
                          <h2 className="text-4xl bubbly-font text-[#EC407A] drop-shadow-sm transform -rotate-2">Your Toys</h2>
                          <div className="w-14 h-14 bg-[#FFF9C4] text-[#F9A825] border-4 border-[#FBC02D] rounded-xl flex items-center justify-center font-bold text-2xl bubbly-font shadow-sm">
-                             <span>{cart.reduce((a, b) => a + b.quantity, 0)}</span>
+                             <span>{cart.reduce((a: any, b: any) => a + b.quantity, 0)}</span>
                          </div>
                      </div>
 
                      <div className="flex-1 overflow-y-auto space-y-4 px-6 pb-6 no-scrollbar">
-                         {cart.map((item, idx) => (
+                         {cart.map((item: any, idx: any) => (
                              <div key={idx} className="flex items-center gap-4 bg-white p-4 border-4 border-[#E1F5FE] rounded-2xl relative overflow-hidden shadow-sm">
                                  <div className="w-4 h-full absolute left-0 top-0 bg-[#4FC3F7]" />
                                  <img src={item.image_url} className="w-20 h-20 object-cover border-4 border-[#B3E5FC] rounded-xl ml-4 bg-[#FAFAFA]" />

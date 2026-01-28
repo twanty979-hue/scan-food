@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 
 // --- 🛠️ Icons (Minimal & Thin Style) ---
-const Icon = ({ name, size = 24, className = "" }) => {
+const Icon = ({ name, size = 24, className = "" }: any) => {
   const icons = {
     // ต้องใส่ <>...</> ครอบถ้ามีหลาย Element
     shop: (
@@ -47,7 +47,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
     filter: <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
   };
 
-  const content = icons[name] || icons.home;
+  const content = (icons as any)[name] || icons.home;
   
   return (
     <svg 
@@ -67,7 +67,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
   );
 };
 
-export default function App({ state, actions, helpers }) {
+export default function App({ state, actions, helpers }: any) {
   const {
     loading, isVerified, activeTab, brand, tableLabel,
     banners, currentBannerIndex, categories, selectedCategoryId,
@@ -303,7 +303,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 gap-x-4 gap-y-8">
-                        {products?.filter(p => p.is_recommended).slice(0, 6).map((p, idx) => {
+                        {products?.filter((p: any) => p.is_recommended).slice(0, 6).map((p: any, idx: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="cursor-pointer group" style={{animationDelay: `${idx * 0.05}s`}}>
@@ -344,7 +344,7 @@ export default function App({ state, actions, helpers }) {
 
                     {/* Pill Filters */}
                     <div className="flex gap-2 mb-8 overflow-x-auto no-scrollbar pb-2">
-                        {categories?.map((c) => (
+                        {categories?.map((c: any) => (
                             <button key={c.id} onClick={() => setSelectedCategoryId(c.id)} 
                                     className={`shrink-0 px-4 py-2 rounded-full text-xs transition-all
                                     ${selectedCategoryId === c.id ? 'bg-[#1C1917] text-white' : 'bg-transparent border border-[#E7E5E4] text-[#57534E]'}`}>
@@ -354,7 +354,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="flex flex-col gap-4 pb-20">
-                        {filteredProducts?.map((p, idx) => {
+                        {filteredProducts?.map((p: any, idx: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="flex gap-4 cursor-pointer py-2 border-b border-[#f5f5f4] last:border-0" style={{animationDelay: `${idx * 0.05}s`}}>
@@ -387,7 +387,7 @@ export default function App({ state, actions, helpers }) {
                     <h2 className="text-xl font-light text-[#1C1917] mb-6 font-head tracking-wide">Order Status</h2>
 
                     <div className="space-y-6">
-                        {ordersList?.map((o) => (
+                        {ordersList?.map((o: any) => (
                             <div key={o.id} className="border border-[#E7E5E4] p-6 bg-white">
                                 <div className="flex justify-between items-start mb-6">
                                      <div>
@@ -401,7 +401,7 @@ export default function App({ state, actions, helpers }) {
                                 </div>
 
                                 <div className="space-y-3 mb-6">
-                                    {o.order_items.map((i, idx) => (
+                                    {o.order_items.map((i: any, idx: any) => (
                                         <div key={idx} className="flex justify-between text-sm text-[#57534E]">
                                             <div className="flex gap-3">
                                                 <span className="text-[#1C1917] w-6">{i.quantity}x</span>
@@ -417,7 +417,7 @@ export default function App({ state, actions, helpers }) {
                                 <div className="flex justify-between items-center pt-4 border-t border-[#E7E5E4]">
                                      <span className="text-xs text-[#1C1917] uppercase tracking-widest">Total</span>
                                      <span className="font-medium text-lg text-[#1C1917] font-head">
-                                         {o.order_items.reduce((acc, i) => acc + (i.price * i.quantity), 0)}.-
+                                         {o.order_items.reduce((acc: any, i: any) => acc + (i.price * i.quantity), 0)}.-
                                      </span>
                                 </div>
                             </div>
@@ -569,7 +569,7 @@ export default function App({ state, actions, helpers }) {
                      </div>
 
                      <div className="flex-1 overflow-y-auto px-8 py-6 space-y-8 no-scrollbar">
-                         {cart.map((item, idx) => {
+                         {cart.map((item: any, idx: any) => {
                             const finalPriceTotal = item.price * item.quantity;
                             const originalPriceTotal = (item.original_price || item.price) * item.quantity;
                             const hasDiscount = originalPriceTotal > finalPriceTotal;

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 
 // --- 🛠️ Icons Wrapper (Courage Style) ---
-const Icon = ({ name, size = 24, className = "" }) => {
+const Icon = ({ name, size = 24, className = "" }: any) => {
   const icons = {
     // Home -> Windmill / Farmhouse
     home: <path d="M12 2L2 12h3v8h14v-8h3L12 2z M12 5l6 6V18H6v-7l6-6z" strokeWidth="3" strokeLinejoin="round" />, 
@@ -32,7 +32,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
     ufo: <path d="M12 2C6 2 2 6 2 8c0 1.5 2 3 5 3.5V14h10v-2.5c3-.5 5-2 5-3.5 0-2-4-6-10-6z M12 4c2 0 4 1 4 2s-2 2-4 2-4-1-4-2 2-2 4-2z" />
   };
 
-  const content = icons[name] || icons.home;
+  const content = (icons as any)[name] || icons.home;
   
   return (
     <svg 
@@ -55,7 +55,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
   );
 };
 
-export default function App({ state, actions, helpers }) {
+export default function App({ state, actions, helpers }: any) {
   const {
     loading, isVerified, activeTab, brand, tableLabel,
     banners, currentBannerIndex, categories, selectedCategoryId,
@@ -364,7 +364,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 gap-5 pb-10">
-                        {products?.filter(p => p.is_recommended).slice(0, 6).map((p, idx) => {
+                        {products?.filter((p: any) => p.is_recommended).slice(0, 6).map((p: any, idx: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card cursor-pointer" style={{animationDelay: `${idx * 0.1}s`}}>
@@ -412,7 +412,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="flex gap-4 mb-8 overflow-x-auto no-scrollbar py-2 px-1">
-                        {categories?.map((c) => (
+                        {categories?.map((c: any) => (
                             <button key={c.id} onClick={() => setSelectedCategoryId(c.id)} 
                                     className={`tab-btn shrink-0 px-8 py-3 text-lg font-bold spooky-font uppercase ${selectedCategoryId === c.id ? 'tab-active' : ''}`}>
                                 <span>{c.name}</span>
@@ -421,7 +421,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 gap-6 pb-24">
-                        {filteredProducts?.map((p, idx) => {
+                        {filteredProducts?.map((p: any, idx: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card cursor-pointer" style={{animationDelay: `${idx * 0.1}s`}}>
@@ -464,7 +464,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="space-y-6">
-                        {ordersList?.map((o) => (
+                        {ordersList?.map((o: any) => (
                             <div key={o.id} className="bg-[#262626] p-6 border border-slate-600 rounded-lg shadow-sm relative overflow-hidden">
                                 <div className="flex justify-between items-start mb-4">
                                      <span className="text-xs text-pink-400 font-bold uppercase tracking-widest flex items-center gap-1">
@@ -476,7 +476,7 @@ export default function App({ state, actions, helpers }) {
                                      </span>
                                 </div>
                                 <div className="mb-4 space-y-2 bg-[#171717] p-5 rounded-lg border border-slate-800">
-                                    {o.order_items.map((i, idx) => (
+                                    {o.order_items.map((i: any, idx: any) => (
                                         <div key={idx} className="flex justify-between text-sm text-slate-300 font-bold border-b border-slate-700 pb-2 last:border-0 handwritten-font">
                                             <div className="flex flex-col">
                                                 <span>{i.quantity}x {i.product_name}</span>
@@ -492,7 +492,7 @@ export default function App({ state, actions, helpers }) {
                                 <div className="flex justify-between items-center pt-2">
                                      <span className="font-bold text-slate-500 text-xs uppercase tracking-widest">THREAT LEVEL</span>
                                      <span className="font-black text-white text-3xl spooky-font">
-                                         {o.order_items.reduce((acc, i) => acc + (i.price * i.quantity), 0)}.-
+                                         {o.order_items.reduce((acc: any, i: any) => acc + (i.price * i.quantity), 0)}.-
                                      </span>
                                 </div>
                             </div>
@@ -644,12 +644,12 @@ export default function App({ state, actions, helpers }) {
             <div className="flex justify-between items-center mb-6 px-10 pt-8">
                 <h2 className="text-4xl spooky-font text-white tracking-widest transform -rotate-1">Basement Gear</h2>
                 <div className="w-14 h-14 bg-pink-900/40 text-pink-400 border-2 border-pink-500 rounded-none flex items-center justify-center font-black text-2xl shadow-lg">
-                    <span>{cart.reduce((a, b) => a + b.quantity, 0)}</span>
+                    <span>{cart.reduce((a: any, b: any) => a + b.quantity, 0)}</span>
                 </div>
             </div>
             
             <div className="flex-1 overflow-y-auto space-y-6 px-8 pb-4 no-scrollbar">
-                {cart.map((item, idx) => (
+                {cart.map((item: any, idx: any) => (
                     <div key={idx} className="flex items-center gap-4 bg-black p-4 border border-slate-800 rounded-none shadow-sm relative overflow-hidden hover:border-pink-900 transition-all">
                         <div className="w-20 h-20 bg-slate-900 overflow-hidden border border-slate-700 shrink-0">
                             <img src={item.image_url} className="w-full h-full object-cover opacity-80" />

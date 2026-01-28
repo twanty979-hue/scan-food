@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 
 // --- 🛠️ Standard Modern Icons (Fixed Syntax) ---
-const Icon = ({ name, size = 24, className = "" }) => {
+const Icon = ({ name, size = 24, className = "" }: any) => {
   const icons = {
     home: <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>,
     menu: <path d="M4 6h16M4 12h16M4 18h16" />,
@@ -50,7 +50,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
     )
   };
 
-  const content = icons[name] || icons.home;
+  const content = (icons as any)[name] || icons.home;
   
   return (
     <svg 
@@ -70,7 +70,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
   );
 };
 
-export default function App({ state, actions, helpers }) {
+export default function App({ state, actions, helpers }: any) {
   const {
     loading, isVerified, activeTab, brand, tableLabel,
     banners, currentBannerIndex, categories, selectedCategoryId,
@@ -326,7 +326,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 gap-5 pb-10">
-                        {products?.filter(p => p.is_recommended).slice(0, 6).map((p, idx) => {
+                        {products?.filter((p: any) => p.is_recommended).slice(0, 6).map((p: any, idx: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="modern-card cursor-pointer p-3" style={{animationDelay: `${idx * 0.05}s`}}>
@@ -374,7 +374,7 @@ export default function App({ state, actions, helpers }) {
 
                     {/* Categories */}
                     <div className="flex gap-3 mb-6 overflow-x-auto no-scrollbar py-2 px-1">
-                        {categories?.map((c) => (
+                        {categories?.map((c: any) => (
                             <button key={c.id} onClick={() => setSelectedCategoryId(c.id)} 
                                     className={`tab-btn shrink-0 px-5 py-2.5 text-sm font-semibold ${selectedCategoryId === c.id ? 'tab-active' : ''}`}>
                                 {c.name}
@@ -383,7 +383,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 gap-5 pb-24">
-                        {filteredProducts?.map((p, idx) => {
+                        {filteredProducts?.map((p: any, idx: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="modern-card cursor-pointer p-3" style={{animationDelay: `${idx * 0.05}s`}}>
@@ -416,7 +416,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="space-y-4">
-                        {ordersList?.map((o) => (
+                        {ordersList?.map((o: any) => (
                             <div key={o.id} className="modern-card p-5 relative overflow-hidden">
                                 <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-slate-50 to-slate-100 rounded-bl-3xl -mr-2 -mt-2"></div>
                                 
@@ -432,7 +432,7 @@ export default function App({ state, actions, helpers }) {
                                 </div>
 
                                 <div className="space-y-3 relative z-10 border-t border-slate-100 pt-3">
-                                    {o.order_items.map((i, idx) => (
+                                    {o.order_items.map((i: any, idx: any) => (
                                         <div key={idx} className="flex justify-between text-sm text-slate-700 font-medium">
                                             <div className="flex items-start gap-2">
                                                 <span className="font-bold text-slate-900">{i.quantity}x</span>
@@ -449,7 +449,7 @@ export default function App({ state, actions, helpers }) {
                                 <div className="flex justify-between items-center pt-3 mt-3 border-t border-slate-100 relative z-10">
                                      <span className="font-semibold text-slate-400 text-xs uppercase">ยอดรวม</span>
                                      <span className="font-bold text-sky-700 text-xl font-inter">
-                                         {o.order_items.reduce((acc, i) => acc + (i.price * i.quantity), 0)}.-
+                                         {o.order_items.reduce((acc: any, i: any) => acc + (i.price * i.quantity), 0)}.-
                                      </span>
                                 </div>
                             </div>
@@ -614,7 +614,7 @@ export default function App({ state, actions, helpers }) {
                      </div>
 
                      <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-4 no-scrollbar">
-                         {cart.map((item, idx) => {
+                         {cart.map((item: any, idx: any) => {
                             // Calculate Discount for Cart Display
                             const finalPriceTotal = item.price * item.quantity;
                             const originalPriceTotal = (item.original_price || item.price) * item.quantity;

@@ -27,9 +27,9 @@ export function useMarketplace() {
             setLoading(true);
             const res = await getMarketplaceDataAction();
             if (res.success) {
-                setCategories(res.categories);
-                setAllThemes(res.themes);
-                setOwnedThemeIds(res.ownedThemeIds);
+                setCategories(res.categories || []);       // ถ้าว่าง ให้ใส่ []
+setAllThemes(res.themes || []);           // ถ้าว่าง ให้ใส่ []
+setOwnedThemeIds(res.ownedThemeIds || []); // ถ้าว่าง ให้ใส่ []
             }
             setLoading(false);
         };

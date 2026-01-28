@@ -42,8 +42,8 @@ export function useSettings() {
         const init = async () => {
             const res = await getBrandSettingsAction();
             if (res.success) {
-                setBrandId(res.brandId);
-                setIsOwner(res.isOwner);
+                setBrandId(res.brandId || '');
+                setIsOwner(res.isOwner || false);
                 if (res.brand) {
                     setFormData({
                         name: res.brand.name || '', phone: res.brand.phone || '', address: res.brand.address || '',

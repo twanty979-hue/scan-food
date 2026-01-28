@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 
 // --- 🛠️ Icons Wrapper (Krypto / Superdog Style) ---
-const Icon = ({ name, size = 24, className = "" }) => {
+const Icon = ({ name, size = 24, className = "" }: any) => {
   const icons = {
     // Home -> Metropolis
     home: <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />, 
@@ -28,7 +28,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
     bolt: <path d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66.19-.34.05-.08.07-.12C8.48 10.94 10.42 7.54 13 3h1l-1 7h3.5c.49 0 .56.33.47.51l-.07.15C12.96 17.55 11 21 11 21z" />
   };
 
-  const content = icons[name] || icons.home;
+  const content = (icons as any)[name] || icons.home;
   
   return (
     <svg 
@@ -51,7 +51,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
   );
 };
 
-export default function App({ state, actions, helpers }) {
+export default function App({ state, actions, helpers }: any) {
   const {
     loading, isVerified, activeTab, brand, tableLabel,
     banners, currentBannerIndex, categories, selectedCategoryId,
@@ -294,7 +294,7 @@ export default function App({ state, actions, helpers }) {
 
                     {/* ✅ FIX: Responsive Grid (grid-cols-2 md:grid-cols-3 lg:grid-cols-4) */}
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 pb-10">
-                        {products?.filter(p => p.is_recommended).slice(0, 6).map((p, idx) => {
+                        {products?.filter((p: any) => p.is_recommended).slice(0, 6).map((p: any, idx: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card cursor-pointer animate-image-pop" style={{animationDelay: `${idx * 0.1}s`}}>
@@ -343,7 +343,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="flex gap-2 mb-8 overflow-x-auto no-scrollbar py-1 px-1 animate-image-pop">
-                        {categories?.map((c) => (
+                        {categories?.map((c: any) => (
                             <button key={c.id} onClick={() => setSelectedCategoryId(c.id)} 
                                     className={`tab-btn shrink-0 px-8 py-3 text-xs font-bold uppercase tracking-widest hero-font ${selectedCategoryId === c.id ? 'active' : ''}`}>
                                 <span>{c.name}</span>
@@ -353,7 +353,7 @@ export default function App({ state, actions, helpers }) {
 
                     {/* ✅ FIX: Responsive Grid (grid-cols-2 md:grid-cols-3 lg:grid-cols-4) */}
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 pb-24">
-                        {filteredProducts?.map((p, idx) => {
+                        {filteredProducts?.map((p: any, idx: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card cursor-pointer animate-image-pop" style={{animationDelay: `${idx * 0.1}s`}}>
@@ -397,7 +397,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="space-y-6">
-                        {ordersList?.map((o) => (
+                        {ordersList?.map((o: any) => (
                             <div key={o.id} className="bg-white p-6 border border-slate-200 rounded-2xl shadow-sm relative overflow-hidden">
                                 
                                 {/* Header */}
@@ -413,7 +413,7 @@ export default function App({ state, actions, helpers }) {
 
                                 {/* Items */}
                                 <div className="mb-4 space-y-2">
-                                    {o.order_items.map((i, idx) => {
+                                    {o.order_items.map((i: any, idx: any) => {
                                         // ✅ FIXED LOGIC FOR STATUS PAGE
                                         const quantity = i.quantity || 1;
                                         const finalPriceTotal = i.price * quantity;
@@ -469,7 +469,7 @@ export default function App({ state, actions, helpers }) {
                                 <div className="flex justify-between items-center pt-3 border-t border-slate-100">
                                      <span className="font-bold text-slate-400 text-xs uppercase tracking-widest">POWER LEVEL</span>
                                      <span className="font-black text-3xl hero-font text-blue-600">
-                                         {o.order_items.reduce((acc, i) => acc + (i.price * i.quantity), 0)}.-
+                                         {o.order_items.reduce((acc: any, i: any) => acc + (i.price * i.quantity), 0)}.-
                                      </span>
                                 </div>
                             </div>
@@ -634,12 +634,12 @@ export default function App({ state, actions, helpers }) {
                     <div className="flex justify-between items-center mb-6 px-10 pt-6">
                         <h2 className="text-3xl font-black hero-font text-slate-900 transform -rotate-1 tracking-widest">SUPER STASH</h2>
                         <div className="w-14 h-14 bg-yellow-400 text-black border-4 border-slate-900 flex items-center justify-center font-black text-2xl shadow-lg rounded-xl">
-                            <span>{cart.reduce((a, b) => a + b.quantity, 0)}</span>
+                            <span>{cart.reduce((a: any, b: any) => a + b.quantity, 0)}</span>
                         </div>
                     </div>
 
                     <div className="flex-1 overflow-y-auto space-y-4 px-8 pb-6 no-scrollbar">
-                        {cart.map((item, idx) => (
+                        {cart.map((item: any, idx: any) => (
                             <div key={idx} className="flex items-center gap-4 bg-slate-50 p-4 border border-slate-200 rounded-xl shadow-sm relative overflow-hidden">
                                 <img src={item.image_url} className="w-16 h-16 object-cover border border-slate-300 rounded-lg" />
                                 <div className="flex-1">

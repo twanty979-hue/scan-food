@@ -75,10 +75,10 @@ export function usePayment() {
                 setCurrentUser(res.user);
                 setCurrentProfile(res.profile);
                 setCurrentBrand(res.brand);
-                setCategories(res.categories);
-                setProducts(res.products);
-                setDiscounts(res.discounts);
-                setAllTables(res.tables);
+                setCategories(res.categories || []); // ถ้าว่างให้ใส่อาร์เรย์เปล่า
+setProducts(res.products || []);     // ถ้าว่างให้ใส่อาร์เรย์เปล่า
+setDiscounts(res.discounts || []);   // ถ้าว่างให้ใส่อาร์เรย์เปล่า
+setAllTables(res.tables || []);      // ถ้าว่างให้ใส่อาร์เรย์เปล่า
                 
                 // Load unpaid orders
                 const orders = await getUnpaidOrdersAction(res.brandId!);
@@ -186,7 +186,7 @@ export function usePayment() {
         if (applicableDiscounts.length === 0) return { original: basePrice, final: basePrice, discount: 0, promoDetails: null };
 
         let bestPrice = basePrice;
-        let bestDiscountObj = null;
+       let bestDiscountObj: any = null;
 
         applicableDiscounts.forEach(d => {
             let final = basePrice;
@@ -292,7 +292,7 @@ export function usePayment() {
         // State
         activeTab, setActiveTab,
         loading, autoKitchen, setAutoKitchen,
-        categories, products: selectedCategory === 'ALL' ? products : products.filter(p => p.category_id === selectedCategory),
+        categories, products: selectedCategory === 'ALL' ? products : products.filter((p: any) => p.category_id === selectedCategory),
         unpaidOrders, allTables,
         selectedCategory, setSelectedCategory,
         cart, selectedOrder, setSelectedOrder,

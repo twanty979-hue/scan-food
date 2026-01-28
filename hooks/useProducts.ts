@@ -55,8 +55,8 @@ export function useProducts() {
     const res = await getProductsInitialDataAction();
     if (res.success) {
         setBrandId(res.brandId!);
-        setCategories(res.categories);
-        setProducts(res.products);
+        setCategories(res.categories || []); // ถ้าไม่มีหมวดหมู่ ให้ใส่ตะกร้าเปล่า
+setProducts(res.products || []);     // ถ้าไม่มีสินค้า ให้ใส่ตะกร้าเปล่า
     }
     setLoading(false);
   };
@@ -157,7 +157,7 @@ export function useProducts() {
     
     // Optimistic Update
     const oldProducts = [...products];
-    setProducts(prev => prev.filter(p => p.id !== id));
+    setProducts(prev => prev.filter((p: any) => p.id !== id));
 
     const res = await deleteProductAction(id);
     if (!res.success) {
@@ -194,7 +194,7 @@ export function useProducts() {
   };
 
   const filteredProducts = useMemo(() => {
-    return products.filter(p => {
+    return products.filter((p: any) => {
         const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesCategory = selectedCategoryId === 'ALL' || p.category_id === selectedCategoryId;
         return matchesSearch && matchesCategory;

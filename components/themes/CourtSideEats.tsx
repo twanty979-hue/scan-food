@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 
 // --- 🏀 Court Side Icons Wrapper ---
-const Icon = ({ name, size = 24, className = "" }) => {
+const Icon = ({ name, size = 24, className = "" }: any) => {
   const icons = {
     // Home -> Court / Stadium
     home: <path d="M2 22 L12 2 L22 22 L18 22 L18 14 L6 14 L6 22 Z M10 14 L10 10 L14 10 L14 14" />, 
@@ -26,7 +26,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
     stats: <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z M14 8V3l5 5h-5z" />
   };
 
-  const content = icons[name] || icons.home;
+  const content = (icons as any)[name] || icons.home;
   
   return (
     <svg 
@@ -49,7 +49,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
   );
 };
 
-export default function App({ state, actions, helpers }) {
+export default function App({ state, actions, helpers }: any) {
   const {
     loading, isVerified, activeTab, brand, tableLabel,
     banners, currentBannerIndex, categories, selectedCategoryId,
@@ -269,7 +269,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 pb-10">
-                        {products?.filter(p => p.is_recommended).slice(0, 6).map((p) => {
+                        {products?.filter((p: any) => p.is_recommended).slice(0, 6).map((p: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card bg-white rounded-lg cursor-pointer group">
@@ -317,7 +317,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="flex gap-3 mb-8 overflow-x-auto no-scrollbar py-2 px-1">
-                        {categories?.map((c) => (
+                        {categories?.map((c: any) => (
                             <button key={c.id} onClick={() => setSelectedCategoryId(c.id)} 
                                     className={`tab-btn shrink-0 px-6 py-2 rounded-full border-2 border-slate-200 text-slate-500 font-black text-sm uppercase tracking-wide flex items-center gap-2 ${selectedCategoryId === c.id ? 'tab-active' : 'bg-white'}`}>
                                 <span>{c.name}</span>
@@ -326,7 +326,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 pb-24">
-                        {filteredProducts?.map((p) => {
+                        {filteredProducts?.map((p: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card bg-white rounded-lg cursor-pointer group">
@@ -367,7 +367,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="space-y-4">
-                        {ordersList?.map((o) => (
+                        {ordersList?.map((o: any) => (
                             <div key={o.id} className="bg-white p-5 border-l-8 border-slate-900 rounded shadow-md relative overflow-hidden">
                                 <div className="flex justify-between items-start mb-4">
                                      <span className="text-xs text-orange-600 font-black uppercase tracking-widest flex items-center gap-1 font-bold sport-font">
@@ -379,7 +379,7 @@ export default function App({ state, actions, helpers }) {
                                      </span>
                                 </div>
                                 <div className="mb-3 space-y-1 bg-slate-50 p-4 border border-slate-200 rounded">
-                                    {o.order_items.map((i, idx) => {
+                                    {o.order_items.map((i: any, idx: any) => {
                                         const quantity = i.quantity || 1;
                                         const finalPriceTotal = i.price * quantity;
                                         return (
@@ -401,7 +401,7 @@ export default function App({ state, actions, helpers }) {
                                 <div className="flex justify-between items-center pt-2 border-t-2 border-slate-900">
                                      <span className="font-bold text-slate-400 text-xs uppercase tracking-widest">TOTAL SCORE</span>
                                      <span className="font-black text-orange-600 text-2xl sport-font italic">
-                                         {o.order_items.reduce((acc, i) => acc + (i.price * i.quantity), 0)}.-
+                                         {o.order_items.reduce((acc: any, i: any) => acc + (i.price * i.quantity), 0)}.-
                                      </span>
                                 </div>
                             </div>
@@ -543,12 +543,12 @@ export default function App({ state, actions, helpers }) {
                      <div className="flex justify-between items-center mb-6 px-6 pt-4">
                          <h2 className="text-3xl font-black text-slate-900 italic sport-font uppercase">Locker Room</h2>
                          <div className="w-10 h-10 bg-black text-white rounded flex items-center justify-center border-2 border-orange-500 shadow-[2px_2px_0_rgba(0,0,0,0.2)]">
-                             <span className="font-black text-lg sport-font">{cart.reduce((a, b) => a + b.quantity, 0)}</span>
+                             <span className="font-black text-lg sport-font">{cart.reduce((a: any, b: any) => a + b.quantity, 0)}</span>
                          </div>
                      </div>
 
                      <div className="flex-1 overflow-y-auto space-y-4 px-6 pb-6 no-scrollbar">
-                         {cart.map((item, idx) => (
+                         {cart.map((item: any, idx: any) => (
                              <div key={idx} className="flex items-center gap-4 bg-white p-4 border-2 border-black rounded shadow-[4px_4px_0_rgba(0,0,0,0.1)] relative overflow-hidden">
                                  <img src={item.image_url} className="w-16 h-16 object-cover border border-slate-200 rounded" />
                                  <div className="flex-1">

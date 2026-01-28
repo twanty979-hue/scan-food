@@ -49,7 +49,7 @@ export function useThemeDetail() {
             
             if (res.success) {
                 setTheme(res.theme);
-                setUserRole({ isOwner: res.isOwner }); // ✅ รับค่าสิทธิ์มาเก็บไว้
+                setUserRole({ isOwner: res.isOwner || false });
                 
                 // ✅ คำนวณสถานะการซื้อ
                 if (res.isOwned && res.ownedData) {
@@ -119,7 +119,7 @@ export function useThemeDetail() {
 
     const performInstall = async (verifiedChargeId?: string | null) => {
         setProcessing(true);
-        const res = await installThemeAction(theme.id, verifiedChargeId, selectedPlan);
+        const res = await installThemeAction(theme.id, verifiedChargeId || null, selectedPlan);
         if (res.success) {
             alert('🎉 Success!');
             window.location.reload(); 

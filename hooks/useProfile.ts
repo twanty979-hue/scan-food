@@ -28,7 +28,7 @@ export function useProfile() {
     useEffect(() => {
         const init = async () => {
             const res = await getProfileDataAction();
-            if (res.success) {
+            if (res.success && res.user) {
                 setUserId(res.user.id);
                 setEmail(res.user.email || '');
                 if (res.profile) {

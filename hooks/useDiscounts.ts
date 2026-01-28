@@ -42,9 +42,9 @@ export function useDiscounts() {
     const res = await getInitialDataAction();
     if (res.success) {
         setBrandId(res.brandId!);
-        setDiscounts(res.discounts);
-        setProducts(res.products);
-        setCategories(res.categories);
+        setDiscounts(res.discounts || []);
+setProducts(res.products || []);
+setCategories(res.categories || []);
     }
     setLoading(false);
   };
@@ -78,7 +78,7 @@ export function useDiscounts() {
       closeModal();
       // Refresh discounts only (in this simpler implementation we re-fetch all for consistency)
       const refreshRes = await getInitialDataAction();
-      if (refreshRes.success) setDiscounts(refreshRes.discounts);
+      if (refreshRes.success) setDiscounts(refreshRes.discounts || []);
 
     } catch (err: any) {
       alert("Error: " + err.message);
@@ -118,7 +118,7 @@ export function useDiscounts() {
   };
 
   const filteredProductsForModal = useMemo(() => {
-    return products.filter(p => {
+    return products.filter((p: any) => {
       const matchSearch = p.name.toLowerCase().includes(modalSearch.toLowerCase());
       const matchCat = modalCategory === 'ALL' || p.category_id === modalCategory;
       return matchSearch && matchCat;

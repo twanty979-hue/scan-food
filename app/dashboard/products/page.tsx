@@ -77,7 +77,7 @@ export default function ProductsPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredProducts.map((p) => (
+            {filteredProducts.map((p: any) => (
               <div key={p.id} className="bg-white p-4 rounded-[28px] shadow-sm border border-slate-200 flex flex-col justify-between hover:shadow-xl transition-all group relative overflow-hidden animate-in fade-in zoom-in duration-300">
                 
                 {/* Image Display */}

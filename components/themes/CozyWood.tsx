@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 
 // --- 🛠️ Icons (Simple & Cozy Style) ---
-const Icon = ({ name, size = 24, className = "" }) => {
+const Icon = ({ name, size = 24, className = "" }: any) => {
   const icons = {
     // ใส่ <>...</> ครอบเสมอหากมีหลาย element
     shop: (
@@ -47,7 +47,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
     spoon: <path d="M12 2a4 4 0 0 1 4 4v16H8V6a4 4 0 0 1 4-4Z"/>
   };
 
-  const content = icons[name] || icons.home;
+  const content = (icons as any)[name] || icons.home;
   
   return (
     <svg 
@@ -67,7 +67,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
   );
 };
 
-export default function App({ state, actions, helpers }) {
+export default function App({ state, actions, helpers }: any) {
   const {
     loading, isVerified, activeTab, brand, tableLabel,
     banners, currentBannerIndex, categories, selectedCategoryId,
@@ -181,7 +181,7 @@ export default function App({ state, actions, helpers }) {
       setShowConfirm(false);
   };
 
-  const stopProp = (e) => {
+  const stopProp = (e: any) => {
       e.stopPropagation();
   };
 
@@ -294,7 +294,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 pb-24">
-                        {products?.filter(p => p.is_recommended).slice(0, 6).map((p, idx) => {
+                        {products?.filter((p: any) => p.is_recommended).slice(0, 6).map((p: any, idx: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="card-wood p-3 cursor-pointer h-full flex flex-col" style={{animationDelay: `${idx * 0.05}s`}}>
@@ -343,7 +343,7 @@ export default function App({ state, actions, helpers }) {
 
                     {/* Filter Tabs */}
                     <div className="flex gap-2 mb-6 overflow-x-auto no-scrollbar py-2 px-1">
-                        {categories?.map((c) => (
+                        {categories?.map((c: any) => (
                             <button key={c.id} onClick={() => setSelectedCategoryId(c.id)} 
                                     className={`shrink-0 px-4 py-2 text-sm font-bold shadow-sm
                                     ${selectedCategoryId === c.id ? 'chip-active' : 'chip-inactive'}`}>
@@ -353,7 +353,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 pb-24">
-                        {filteredProducts?.map((p, idx) => {
+                        {filteredProducts?.map((p: any, idx: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="card-wood p-3 cursor-pointer h-full flex flex-col" style={{animationDelay: `${idx * 0.05}s`}}>
@@ -392,7 +392,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="space-y-4">
-                        {ordersList?.map((o) => (
+                        {ordersList?.map((o: any) => (
                             <div key={o.id} className="card-wood p-4 relative overflow-hidden bg-white">
                                 <div className="flex justify-between items-start mb-3">
                                      <span className="text-xs text-[#92400e] font-bold bg-[#fef3c7] px-2 py-1 rounded">
@@ -405,7 +405,7 @@ export default function App({ state, actions, helpers }) {
                                 </div>
 
                                 <div className="space-y-2 relative z-10 border-t border-dashed border-gray-200 pt-3">
-                                    {o.order_items.map((i, idx) => (
+                                    {o.order_items.map((i: any, idx: any) => (
                                         <div key={idx} className="flex justify-between text-sm text-[#451a03]">
                                             <div className="flex items-start gap-2">
                                                 <div className="font-bold text-[#78350f]">{i.quantity}x</div>
@@ -422,7 +422,7 @@ export default function App({ state, actions, helpers }) {
                                 <div className="flex justify-between items-center pt-3 mt-3 border-t border-gray-100">
                                      <span className="font-bold text-gray-400 text-xs">รวมทั้งหมด</span>
                                      <span className="font-bold text-[#d97706] text-xl font-mali">
-                                         {o.order_items.reduce((acc, i) => acc + (i.price * i.quantity), 0)}.-
+                                         {o.order_items.reduce((acc: any, i: any) => acc + (i.price * i.quantity), 0)}.-
                                      </span>
                                 </div>
                             </div>
@@ -582,7 +582,7 @@ export default function App({ state, actions, helpers }) {
                      </div>
 
                      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 no-scrollbar">
-                         {cart.map((item, idx) => {
+                         {cart.map((item: any, idx: any) => {
                             const finalPriceTotal = item.price * item.quantity;
                             const originalPriceTotal = (item.original_price || item.price) * item.quantity;
                             const hasDiscount = originalPriceTotal > finalPriceTotal;

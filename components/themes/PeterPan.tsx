@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 
 // --- 🛠️ Icons Wrapper (Peter Pan / Neverland Style) ---
-const Icon = ({ name, size = 24, className = "" }) => {
+const Icon = ({ name, size = 24, className = "" }: any) => {
   const icons = {
     // Home -> Treehouse / Star (Second star to the right)
     home: <path d="M12 2L2 22h20L12 2zm0 4l6 12H6l6-12z" />, // Simplified star/tent shape
@@ -28,7 +28,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
     feather: <path d="M20.24 3.76a3 3 0 0 0-4.24 0l-9 9a3 3 0 0 0 0 4.24l.76.76a1 1 0 0 0 1.41-1.41l-.76-.76a1 1 0 0 1 0-1.41l9-9a1 1 0 0 1 1.41 0 1 1 0 0 1 0 1.41l-9 9a1 1 0 0 0 0 1.41l.76.76a3 3 0 0 0 4.24 0l9-9a3 3 0 0 0 0-4.24zM6 20l2-2" />
   };
 
-  const content = icons[name] || icons.home;
+  const content = (icons as any)[name] || icons.home;
   
   return (
     <svg 
@@ -51,7 +51,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
   );
 };
 
-export default function App({ state, actions, helpers }) {
+export default function App({ state, actions, helpers }: any) {
   const {
     loading, isVerified, activeTab, brand, tableLabel,
     banners, currentBannerIndex, categories, selectedCategoryId,
@@ -284,7 +284,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pb-10">
-                        {products?.filter(p => p.is_recommended).slice(0, 6).map((p) => {
+                        {products?.filter((p: any) => p.is_recommended).slice(0, 6).map((p: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="wood-card overflow-hidden relative cursor-pointer group">
@@ -332,7 +332,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="flex gap-3 mb-8 overflow-x-auto no-scrollbar py-2 px-1">
-                        {categories?.map((c) => (
+                        {categories?.map((c: any) => (
                             <button key={c.id} onClick={() => setSelectedCategoryId(c.id)} 
                                     className={`tab-btn shrink-0 px-6 py-3 text-lg font-bold rounded-xl flex items-center gap-2 ${selectedCategoryId === c.id ? 'active' : ''}`}>
                                 <span>{c.name}</span>
@@ -341,7 +341,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pb-24">
-                        {filteredProducts?.map((p) => {
+                        {filteredProducts?.map((p: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="wood-card overflow-hidden relative cursor-pointer group">
@@ -383,7 +383,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="space-y-4">
-                        {ordersList?.map((o) => (
+                        {ordersList?.map((o: any) => (
                             <div key={o.id} className="bg-[#FFF8E1] p-5 border-4 border-[#5D4037] rounded-[2rem] relative overflow-hidden shadow-[6px_6px_0_#3E2723]">
                                 {/* Header: Map ID & Status Badge */}
                                 <div className="flex justify-between items-start mb-4">
@@ -398,7 +398,7 @@ export default function App({ state, actions, helpers }) {
 
                                 {/* Order Items List */}
                                 <div className="mb-3 space-y-1 bg-[#FFF3E0] p-4 border-2 border-[#FFE0B2] rounded-xl">
-                                    {o.order_items.map((i, idx) => {
+                                    {o.order_items.map((i: any, idx: any) => {
                                         // 1. คำนวณราคา
                                         const quantity = i.quantity || 1;
                                         const finalPriceTotal = i.price * quantity;
@@ -468,7 +468,7 @@ export default function App({ state, actions, helpers }) {
                                 <div className="flex justify-between items-center pt-2 border-t-2 border-[#5D4037]">
                                      <span className="font-bold text-[#8D6E63] text-sm uppercase tracking-widest">BOUNTY</span>
                                      <span className="font-black text-[#3E2723] text-3xl fantasy-font">
-                                         {o.order_items.reduce((acc, i) => acc + (i.price * i.quantity), 0)}.-
+                                         {o.order_items.reduce((acc: any, i: any) => acc + (i.price * i.quantity), 0)}.-
                                      </span>
                                 </div>
                             </div>
@@ -637,12 +637,12 @@ export default function App({ state, actions, helpers }) {
                      <div className="flex justify-between items-center mb-6 px-8 pt-2">
                          <h2 className="text-4xl fantasy-font text-[#3E2723] drop-shadow-sm transform -rotate-2">Your Loot</h2>
                          <div className="w-14 h-14 bg-[#FFD700] text-[#3E2723] border-4 border-[#F57F17] rounded-xl flex items-center justify-center font-bold text-2xl fantasy-font shadow-[3px_3px_0_#3E2723]">
-                             <span>{cart.reduce((a, b) => a + b.quantity, 0)}</span>
+                             <span>{cart.reduce((a: any, b: any) => a + b.quantity, 0)}</span>
                          </div>
                      </div>
 
                      <div className="flex-1 overflow-y-auto space-y-4 px-6 pb-6 no-scrollbar">
-                         {cart.map((item, idx) => (
+                         {cart.map((item: any, idx: any) => (
                              <div key={idx} className="flex items-center gap-4 bg-white p-4 border-4 border-[#8D6E63] rounded-2xl relative overflow-hidden shadow-[4px_4px_0_#5D4037]">
                                  <div className="w-4 h-full absolute left-0 top-0 bg-[#2E7D32]" />
                                  <img src={item.image_url} className="w-20 h-20 object-cover border-4 border-[#D7CCC8] rounded-xl ml-4 bg-[#EFEBE9]" />

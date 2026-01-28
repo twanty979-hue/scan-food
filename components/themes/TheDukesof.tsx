@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 
 // --- 🛠️ Icons Wrapper (Adapted for Punk Theme) ---
 // ปรับ SVG ให้เส้นหนาขึ้นและดูดุดันเข้ากับธีม Punk
-const Icon = ({ name, size = 24, className = "" }) => {
+const Icon = ({ name, size = 24, className = "" }: any) => {
   const icons = {
     home: <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />, 
     menu: <path d="M9 18V5l12-2v13M9 9l12-2M6 18H3c-1.1 0-2 .9-2 2v3h12v-3c0-1.1-.9-2-2-2h-3z" />, 
@@ -20,7 +20,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
     star: <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
   };
 
-  const content = icons[name] || icons.home;
+  const content = (icons as any)[name] || icons.home;
   
   return (
     <svg 
@@ -43,7 +43,7 @@ const Icon = ({ name, size = 24, className = "" }) => {
   );
 };
 
-export default function App({ state, actions, helpers }) {
+export default function App({ state, actions, helpers }: any) {
   const {
     loading, isVerified, activeTab, brand, tableLabel,
     banners, currentBannerIndex, categories, selectedCategoryId,
@@ -295,7 +295,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 pb-10">
-                        {products?.filter(p => p.is_recommended).slice(0, 6).map((p, idx) => {
+                        {products?.filter((p: any) => p.is_recommended).slice(0, 6).map((p: any, idx: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card cursor-pointer" style={{animationDelay: `${idx * 0.1}s`}}>
@@ -344,7 +344,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="flex gap-2 mb-8 overflow-x-auto no-scrollbar py-4 px-1">
-                        {categories?.map((c) => (
+                        {categories?.map((c: any) => (
                             <button key={c.id} onClick={() => setSelectedCategoryId(c.id)} 
                                     className={`tab-btn shrink-0 px-6 py-2 text-lg uppercase ${selectedCategoryId === c.id ? 'tab-active' : ''}`}>
                                 <span>{c.name}</span>
@@ -353,7 +353,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 pb-24">
-                        {filteredProducts?.map((p, idx) => {
+                        {filteredProducts?.map((p: any, idx: any) => {
                              const pricing = calculatePrice(p, 'normal');
                              return (
                                 <div key={p.id} onClick={() => setSelectedProduct(p)} className="item-card cursor-pointer" style={{animationDelay: `${idx * 0.05}s`}}>
@@ -398,7 +398,7 @@ export default function App({ state, actions, helpers }) {
                     </div>
 
                     <div className="space-y-6">
-                        {ordersList?.map((o, idx) => (
+                        {ordersList?.map((o: any, idx: any) => (
                             <div key={o.id} className="bg-white p-6 border-4 border-black shadow-[8px_8px_0_rgba(0,0,0,0.1)] relative overflow-hidden" style={{animationDelay: `${idx * 0.1}s`}}>
                                 
                                 {/* Header */}
@@ -414,7 +414,7 @@ export default function App({ state, actions, helpers }) {
 
                                 {/* Items */}
                                 <div className="mb-4 space-y-3 font-sans">
-                                    {o.order_items.map((i, idx) => {
+                                    {o.order_items.map((i: any, idx: any) => {
                                         const quantity = i.quantity || 1;
                                         const finalPriceTotal = i.price * quantity;
                                         return (
@@ -441,7 +441,7 @@ export default function App({ state, actions, helpers }) {
                                 <div className="flex justify-between items-center pt-3 border-t-2 border-dashed border-zinc-400">
                                      <span className="font-black text-zinc-500 text-xs uppercase tracking-wider">TOTAL DAMAGE</span>
                                      <span className="font-black text-3xl punk-font text-black">
-                                         {o.order_items.reduce((acc, i) => acc + (i.price * i.quantity), 0)}.-
+                                         {o.order_items.reduce((acc: any, i: any) => acc + (i.price * i.quantity), 0)}.-
                                      </span>
                                 </div>
                             </div>
@@ -605,12 +605,12 @@ export default function App({ state, actions, helpers }) {
                     <div className="flex justify-between items-center mb-6 px-8 pt-8">
                         <h2 className="text-4xl font-black punk-font text-black transform -rotate-1 tracking-widest">INVENTORY</h2>
                         <div className="w-14 h-14 bg-[#2563eb] text-white border-4 border-black flex items-center justify-center font-black text-2xl punk-font shadow-lg">
-                            {cart.reduce((a, b) => a + b.quantity, 0)}
+                            {cart.reduce((a: any, b: any) => a + b.quantity, 0)}
                         </div>
                     </div>
 
                     <div className="flex-1 overflow-y-auto space-y-4 px-6 pb-6 no-scrollbar">
-                        {cart.map((item, idx) => (
+                        {cart.map((item: any, idx: any) => (
                             <div key={idx} className="flex items-center gap-4 bg-white p-3 border-4 border-black shadow-[4px_4px_0_rgba(0,0,0,0.1)] relative group">
                                 {/* 🔴 EDITED: Removed grayscale */}
                                 <img src={item.image_url} className="w-20 h-20 object-cover border-2 border-black" />

@@ -183,7 +183,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* 3. Main Content */}
       {/* ✅ Remove pl-80 so content is full width by default */}
       <div className="flex-1 flex flex-col min-h-screen transition-all duration-300 w-full"> 
-        <header className="bg-white border-b border-slate-100 p-5 sticky top-0 z-30 flex items-center justify-between shadow-sm/30 backdrop-blur-md bg-white/80">
+        <header className="bg-white border-b border-slate-100 p-5 relative z-30 flex items-center justify-between shadow-sm/30 bg-white">
           <div className="flex items-center gap-4">
             {/* Toggle Button: Always visible now */}
             <button 

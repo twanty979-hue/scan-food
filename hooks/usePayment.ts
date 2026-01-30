@@ -9,6 +9,8 @@ import {
     getPendingOrdersAction 
 } from '@/app/actions/paymentActions';
 import { getLatestTableDataAction } from '@/app/actions/tableActions';
+// ✅ 1. เพิ่ม Import ฟังก์ชันเช็กโควต้า
+import { getOrderUsage } from '@/app/actions/limitGuard';
 
 export function usePayment() {
     // --- State ---
@@ -16,6 +18,9 @@ export function usePayment() {
     const [loading, setLoading] = useState(true);
     const [autoKitchen, setAutoKitchen] = useState(false);
     
+    // ✅ 2. เพิ่ม State เก็บสถานะโควต้า
+    const [limitStatus, setLimitStatus] = useState<any>(null);
+
     // Data
     const [brandId, setBrandId] = useState<string | null>(null);
     const [categories, setCategories] = useState<any[]>([]);
@@ -38,7 +43,7 @@ export function usePayment() {
 
     // Modals
     const [variantModalProduct, setVariantModalProduct] = useState<any>(null);
-    const [statusModal, setStatusModal] = useState<{ show: boolean; type: 'success' | 'error' | 'qrcode'; title: string; message: string }>({
+    const [statusModal, setStatusModal] = useState<{ show: boolean; type: 'success' | 'error' | 'alert' | 'qrcode'; title: string; message: string }>({
         show: false, type: 'success', title: '', message: ''
     });
     const [completedReceipt, setCompletedReceipt] = useState<any>(null);
@@ -55,6 +60,13 @@ export function usePayment() {
         const { data } = supabase.storage.from('brands').getPublicUrl(fullPath);
         return data.publicUrl;
     };
+
+    // ✅ 3. Helper สำหรับรีเฟรชโควต้า (ใช้ตอนจ่ายเงินเสร็จ)
+    const refreshQuota = useCallback(async () => {
+        if (!brandId) return;
+        const usage = await getOrderUsage(brandId);
+        setLimitStatus(usage);
+    }, [brandId]);
 
     // --- Init ---
     useEffect(() => {
@@ -75,11 +87,15 @@ export function usePayment() {
                 setCurrentUser(res.user);
                 setCurrentProfile(res.profile);
                 setCurrentBrand(res.brand);
-                setCategories(res.categories || []); // ถ้าว่างให้ใส่อาร์เรย์เปล่า
-setProducts(res.products || []);     // ถ้าว่างให้ใส่อาร์เรย์เปล่า
-setDiscounts(res.discounts || []);   // ถ้าว่างให้ใส่อาร์เรย์เปล่า
-setAllTables(res.tables || []);      // ถ้าว่างให้ใส่อาร์เรย์เปล่า
+                setCategories(res.categories || []);
+                setProducts(res.products || []);
+                setDiscounts(res.discounts || []);
+                setAllTables(res.tables || []);
                 
+                // ✅ 4. ดึงข้อมูลโควต้าตั้งแต่เริ่มต้น
+                const usage = await getOrderUsage(res.brandId!);
+                setLimitStatus(usage);
+
                 // Load unpaid orders
                 const orders = await getUnpaidOrdersAction(res.brandId!);
                 setUnpaidOrders(orders);
@@ -102,7 +118,9 @@ setAllTables(res.tables || []);      // ถ้าว่างให้ใส่�
         if (!brandId) return;
         const orders = await getUnpaidOrdersAction(brandId);
         setUnpaidOrders(orders);
-    }, [brandId]);
+        // ✅ 5. อัปเดตโควต้าด้วยทุกครั้งที่มีการเปลี่ยนแปลง Order
+        refreshQuota(); 
+    }, [brandId, refreshQuota]);
 
     // --- Logic: Auto Kitchen & Realtime ---
     useEffect(() => {
@@ -273,6 +291,8 @@ setAllTables(res.tables || []);      // ถ้าว่างให้ใส่�
             setCart([]);
             localStorage.removeItem('pos_cart');
             refreshOrders();
+            // ✅ 6. จ่ายเงินสำเร็จแล้ว อัปเดตตัวเลขโควต้าทันที
+            refreshQuota(); 
         } else {
             setStatusModal({ show: true, type: 'error', title: 'ผิดพลาด', message: res.error });
         }
@@ -283,10 +303,6 @@ setAllTables(res.tables || []);      // ถ้าว่างให้ใส่�
         setQrTableData(success && data ? data : table);
         setShowTableSelector(false);
     };
-
-// hooks/usePayment.ts
-
-// ... (code ส่วนบนเหมือนเดิม) ...
 
     return {
         // State
@@ -306,13 +322,17 @@ setAllTables(res.tables || []);      // ถ้าว่างให้ใส่�
         qrTableData, setQrTableData,
         showTableSelector, setShowTableSelector,
         currentBrand,
+        // ✅ 7. ส่งค่าโควต้าและฟังก์ชันรีเฟรชออกไปให้ UI ใช้
+        limitStatus, 
+        refreshQuota,
+
         // Methods
         getFullImageUrl,
         handleSelectTableForQR,
         handleProductClick: (p: any) => (p.price_special || p.price_jumbo) ? setVariantModalProduct(p) : addToCart(p, 'normal'),
         addToCart, removeFromCart,
         handlePayment,
-        calculatePrice, // ✅ เพิ่มบรรทัดนี้: ส่งฟังก์ชันคำนวณราคาออกไปให้หน้าจอใช้
+        calculatePrice,
         formatCurrency: (amt: number) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', minimumFractionDigits: 2 }).format(amt || 0)
     };
 }

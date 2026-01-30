@@ -26,7 +26,8 @@ export function useSettings() {
     const [isOwner, setIsOwner] = useState(false);
     const [brandId, setBrandId] = useState<string | null>(null);
     
-    // ✅ ตัวแปรสำหรับปุ่ม Auto Renew
+    // ✅ เพิ่ม State
+    const [period, setPeriod] = useState<'monthly' | 'yearly'>('monthly');
     const [isAutoRenew, setIsAutoRenew] = useState(true); 
 
     const [paymentModal, setPaymentModal] = useState<{
@@ -51,7 +52,6 @@ export function useSettings() {
                         qr_image_url: res.brand.qr_image_url || '', plan: res.brand.plan || 'free',
                         vat: res.brand.config?.vat || 0, service_charge: res.brand.config?.service_charge || 0
                     });
-                    // ถ้าใน DB มีค่า is_auto_renew ก็ดึงมา (ถ้ามี)
                     if (res.brand.is_auto_renew !== undefined) setIsAutoRenew(res.brand.is_auto_renew);
                 }
             } else {
@@ -81,7 +81,7 @@ export function useSettings() {
             window.OmiseCard.configure({
                 publicKey: process.env.NEXT_PUBLIC_OMISE_PUBLIC_KEY!,
                 frameLabel: 'Spring POS',
-                submitLabel: 'PAY NOW',
+                submitLabel: `PAY ฿${(amount/100).toLocaleString()}`,
                 currency: 'thb',
             });
             window.OmiseCard.open({
@@ -132,7 +132,7 @@ export function useSettings() {
                 promptpay_number: formData.promptpay_number, logo_url: formData.logo_url, qr_image_url: formData.qr_image_url
             });
             if (res.success) showAlert('success', 'บันทึกสำเร็จ', 'ข้อมูลอัปเดตแล้ว');
-            else throw new Error(res.error);
+            else throw new Error((res as any).error || 'Unknown error');
         } catch (err: any) {
             showAlert('error', 'เกิดข้อผิดพลาด', err.message);
         } finally {
@@ -140,36 +140,51 @@ export function useSettings() {
         }
     };
 
-    // ✅ Upgrade Function (ส่ง isAutoRenew ไปด้วย)
+    // ✅ Upgrade Function (Updated with Period)
     const handleUpgradePlan = async (newPlan: string, method: 'credit_card' | 'promptpay') => {
         if (!isOwner || !brandId) return;
         
-        const prices: Record<string, number> = { free: 0, basic: 39900, pro: 129900, ultimate: 199900 };
-        const amount = prices[newPlan] || 0;
+        // ราคารายเดือน (ใช้เพื่อคำนวณเบื้องต้นโชว์ Alert)
+        const basePrices: Record<string, number> = { free: 0, basic: 39900, pro: 129900, ultimate: 199900 };
+        let amount = basePrices[newPlan] || 0;
 
-        if (amount === 0) return; 
+        // ถ้าเลือกรายปี คำนวณส่วนลด 20%
+        if (period === 'yearly') {
+            amount = Math.floor((amount * 12) * 0.8);
+        }
 
-        // Message
-        let msg = `คุณเลือก ${newPlan.toUpperCase()} (ชำระด้วย ${method === 'promptpay' ? 'PromptPay' : 'บัตรเครดิต'})`;
-        if (method === 'credit_card' && isAutoRenew) msg += ` และเปิดระบบต่ออายุอัตโนมัติ`;
+        if (amount === 0 && newPlan === 'free') {
+             setSubmitting(true);
+             try {
+                 const res = await createPromptPayChargeAction(brandId, newPlan, 'monthly', 'dummy_source');
+                 if (res.success) {
+                     setFormData(prev => ({ ...prev, plan: newPlan }));
+                     showAlert('success', 'เปลี่ยนแพ็กเกจสำเร็จ', 'กลับมาใช้ Free Plan แล้ว');
+                 }
+             } catch(err: any) { showAlert('error', 'Error', err.message) }
+             setSubmitting(false);
+             return;
+        }
 
-        const isConfirmed = await showConfirm('ยืนยันการอัปเกรด?', msg, 'ชำระเงิน', 'ยกเลิก');
+        let msg = `ยืนยันสมัคร ${newPlan.toUpperCase()} (${period === 'monthly' ? 'รายเดือน' : 'รายปี'})\nยอดชำระ: ${(amount/100).toLocaleString()} บาท`;
+        if (method === 'credit_card' && isAutoRenew) msg += `\n(ระบบจะตัดบัตรอัตโนมัติเมื่อครบกำหนด)`;
+
+        const isConfirmed = await showConfirm('ยืนยันการชำระเงิน?', msg, 'ชำระเงิน', 'ยกเลิก');
         if (!isConfirmed) return;
 
         setSubmitting(true);
         try {
             if (method === 'credit_card') {
                 const token = await createOmiseToken(amount);
-                // ส่ง isAutoRenew
-                const res = await upgradeBrandPlanAction(brandId, newPlan, token, isAutoRenew);
+                const res = await upgradeBrandPlanAction(brandId, newPlan, period, token, isAutoRenew);
                 if (res.success) {
                     setFormData(prev => ({ ...prev, plan: newPlan }));
-                    showAlert('success', 'ชำระเงินสำเร็จ!', 'อัปเกรดแพ็กเกจแล้ว');
+                    showAlert('success', 'ชำระเงินสำเร็จ!', 'อัปเกรดแพ็กเกจเรียบร้อยแล้ว');
                 } else throw new Error(res.error);
 
             } else {
                 const sourceId = await createPromptPaySource(amount);
-                const res = await createPromptPayChargeAction(brandId, newPlan, sourceId);
+                const res = await createPromptPayChargeAction(brandId, newPlan, period, sourceId);
                 if (res.success && res.type === 'promptpay' && res.qrImage) {
                     setPaymentModal({ isOpen: true, qrImage: res.qrImage, chargeId: res.chargeId, plan: newPlan });
                 } else throw new Error("Failed to generate QR");
@@ -181,11 +196,12 @@ export function useSettings() {
         }
     };
 
+    // ✅ Check Status Loop (Updated with Period)
     useEffect(() => {
         let interval: NodeJS.Timeout;
         if (paymentModal.isOpen && paymentModal.chargeId && brandId) {
             interval = setInterval(async () => {
-                const res = await checkPaymentStatusAction(brandId, paymentModal.chargeId!, paymentModal.plan!);
+                const res = await checkPaymentStatusAction(brandId, paymentModal.chargeId!, paymentModal.plan!, period);
                 if (res.status === 'successful') {
                     clearInterval(interval);
                     setPaymentModal({ isOpen: false, qrImage: null, chargeId: null, plan: null });
@@ -199,7 +215,7 @@ export function useSettings() {
             }, 3000);
         }
         return () => clearInterval(interval);
-    }, [paymentModal.isOpen, paymentModal.chargeId, brandId]);
+    }, [paymentModal.isOpen, paymentModal.chargeId, brandId, period]); 
 
     const closePaymentModal = () => setPaymentModal({ isOpen: false, qrImage: null, chargeId: null, plan: null });
 
@@ -207,6 +223,7 @@ export function useSettings() {
         loading, submitting, isOwner, brandId, formData, setFormData, logoInputRef, qrInputRef,
         getImageUrl, copyBrandId, handleUpload, handleSave, 
         handleUpgradePlan, paymentModal, closePaymentModal,
-        isAutoRenew, setIsAutoRenew // ✅ ส่งออกไปใช้ในหน้า UI
+        isAutoRenew, setIsAutoRenew,
+        period, setPeriod // ✅ ส่ง period ออกไป
     };
 }

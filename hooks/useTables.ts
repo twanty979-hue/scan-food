@@ -1,6 +1,8 @@
 // hooks/useTables.ts
 import { useState, useEffect } from 'react';
 import * as actions from '@/app/actions/tableActions';
+// ✅ 1. Import ฟังก์ชันเช็คยอด
+import { getOrderUsage } from '@/app/actions/limitGuard';
 
 export function useTables() {
     const [tables, setTables] = useState<any[]>([]);
@@ -9,6 +11,9 @@ export function useTables() {
     const [qrLogoUrl, setQrLogoUrl] = useState<string | null>(null);
     const [brandSlug, setBrandSlug] = useState<string>('shop');
     const [searchTerm, setSearchTerm] = useState('');
+    
+    // ✅ 2. เพิ่ม State สำหรับเก็บสถานะโควต้า
+    const [limitStatus, setLimitStatus] = useState<any>(null);
 
     useEffect(() => {
         init();
@@ -20,11 +25,17 @@ export function useTables() {
             setBrandId(res.brandId!);
             setQrLogoUrl(res.qrLogoUrl!);
             setBrandSlug(res.brandSlug!);
-            fetchTables(); // ✅ ไม่ต้องส่ง param แล้ว
+            
+            // ✅ 3. ดึงสถานะโควต้ามาเก็บไว้
+            if (res.brandId) {
+                const status = await getOrderUsage(res.brandId);
+                setLimitStatus(status);
+            }
+
+            fetchTables(); 
         }
     };
 
-    // ✅ แก้ function นี้ให้ถูกต้อง
     const fetchTables = async () => { 
         setLoading(true);
         const res = await actions.getTablesAction(); 
@@ -33,7 +44,6 @@ export function useTables() {
     };
 
     const addTable = async (label: string) => {
-        // ❌ ไม่ต้องส่ง brandId แล้ว Server หาเอง
         const res = await actions.addTableAction(label); 
         if (res.success) setTables(prev => [...prev, res.data]);
         return res;
@@ -57,6 +67,8 @@ export function useTables() {
 
     return {
         tables, filteredTables, loading, brandId, qrLogoUrl, brandSlug,
-        searchTerm, setSearchTerm, addTable, deleteTable, refreshToken
+        searchTerm, setSearchTerm, addTable, deleteTable, refreshToken,
+        // ✅ 4. ส่ง limitStatus ออกไปให้หน้า TablesPage ใช้
+        limitStatus 
     };
 }

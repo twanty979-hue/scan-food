@@ -124,7 +124,7 @@ export default function LandingPage() {
                 <a href="#features" className="hover:text-brand-500 transition-colors font-medium relative group">จุดเด่น<span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-brand-500 transition-all duration-300 group-hover:w-full"></span></a>
                 <a href="#howitworks" className="hover:text-brand-500 transition-colors font-medium relative group">วิธีใช้งาน<span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-brand-500 transition-all duration-300 group-hover:w-full"></span></a>
                 {/* ✅ แก้ลิงก์ปุ่มสมัคร */}
-                <Link href="/register" className="relative px-6 py-2 bg-brand-600 text-white hover:bg-brand-700 font-bold rounded-full transition-all shadow-lg hover:shadow-brand-500/50 hover:-translate-y-1 overflow-hidden group">
+                <Link href="/login" className="relative px-6 py-2 bg-brand-600 text-white hover:bg-brand-700 font-bold rounded-full transition-all shadow-lg hover:shadow-brand-500/50 hover:-translate-y-1 overflow-hidden group">
                     <span className="absolute top-0 left-0 w-full h-full bg-white/20 -skew-x-12 -translate-x-full group-hover:animate-shine"></span>
                     <span className="relative z-10">สมัครใช้งานฟรี</span>
                 </Link>
@@ -170,7 +170,7 @@ export default function LandingPage() {
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4">
                     {/* ✅ แก้ลิงก์ปุ่ม Hero */}
-                    <Link href="/register" className="relative px-8 py-4 bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-700 hover:to-brand-600 rounded-full text-white font-bold text-lg transition-all shadow-xl shadow-brand-500/30 flex items-center justify-center gap-3 group transform hover:-translate-y-1 hover:shadow-brand-500/50 overflow-hidden active:scale-95 duration-100">
+                    <Link href="/login" className="relative px-8 py-4 bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-700 hover:to-brand-600 rounded-full text-white font-bold text-lg transition-all shadow-xl shadow-brand-500/30 flex items-center justify-center gap-3 group transform hover:-translate-y-1 hover:shadow-brand-500/50 overflow-hidden active:scale-95 duration-100">
                         <span className="absolute top-0 left-0 w-full h-full bg-white/20 -skew-x-12 -translate-x-full group-hover:animate-shine"></span>
                         <i className="fa-solid fa-rocket group-hover:rotate-12 transition-transform"></i> ทดลองใช้ฟรี 14 วัน
                     </Link>
@@ -344,7 +344,7 @@ export default function LandingPage() {
 
                             {/* ✅ แก้ลิงก์ปุ่ม CTA ด้านล่าง */}
                             <Link 
-                                href="/register"
+                                href="/login"
                                 className="w-full bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-700 hover:to-brand-600 text-white font-black py-6 rounded-2xl text-2xl shadow-2xl shadow-brand-500/40 transform transition-all hover:scale-[1.03] active:scale-95 duration-200 flex items-center justify-center gap-4 relative overflow-hidden group/btn">
                                 <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 -translate-x-full group-hover/btn:animate-shine"></span>
                                 สมัครใช้งานฟรี

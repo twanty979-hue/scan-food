@@ -5,14 +5,13 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import Omise from 'omise';
 import dayjs from 'dayjs';
+import { canAccessTheme } from '@/lib/planConfig';
 
-// Config Omise
 const omise = Omise({
   publicKey: process.env.NEXT_PUBLIC_OMISE_PUBLIC_KEY!,
   secretKey: process.env.OMISE_SECRET_KEY!,
 });
 
-// Helper: สร้าง Client
 async function getSupabase() {
   const cookieStore = await cookies();
   return createServerClient(
@@ -22,125 +21,160 @@ async function getSupabase() {
   );
 }
 
-// --- Action 1: ดึงรายละเอียดธีมและสิทธิ์ ---
-export async function getThemeDetailAction(themeId: string) {
-  const supabase = await getSupabase();
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error("Unauthorized");
-
-    // 1. เช็ค Role ของคนเรียก (Owner หรือไม่?)
-    const { data: profile } = await supabase
-        .from('profiles')
-        .select('role, brand_id')
-        .eq('id', user.id)
-        .single();
-    
-    if (!profile?.brand_id) throw new Error("No brand assigned");
-    const isOwner = profile.role === 'owner'; // ✅ เช็คสิทธิ์ว่าเป็นเจ้าของไหม
-
-    // 2. ดึงข้อมูล Theme
-    const { data: themeData } = await supabase
-      .from('marketplace_themes')
-      .select('*, marketplace_categories(name)')
-      .eq('id', themeId)
-      .single();
-
-    if (!themeData) throw new Error('Theme not found');
-
-    // 3. เช็คสถานะการซื้อ (Owned Data)
-    const { data: owned } = await supabase.from('themes')
-      .select('*') // ดึงหมดเลยรวมถึง expires_at
-      .eq('brand_id', profile.brand_id)
-      .eq('marketplace_theme_id', themeId)
-      .single();
-
-    return { 
-        success: true, 
-        theme: themeData, 
-        isOwned: !!owned,
-        ownedData: owned, // ส่งข้อมูลการซื้อกลับไป (วันหมดอายุ)
-        isOwner: isOwner  // ✅ ส่งสิทธิ์กลับไปบอกหน้าเว็บ
-    };
-
-  } catch (error: any) {
-    return { success: false, error: error.message };
-  }
+function calculateEffectivePlan(brand: any) {
+    const now = dayjs();
+    if (brand.expiry_ultimate && dayjs(brand.expiry_ultimate).isAfter(now)) return 'ultimate';
+    if (brand.expiry_pro && dayjs(brand.expiry_pro).isAfter(now)) return 'pro';
+    if (brand.expiry_basic && dayjs(brand.expiry_basic).isAfter(now)) return 'basic';
+    return 'free'; 
 }
 
-// --- Action 2: สั่งซื้อ / ติดตั้งธีม / ต่ออายุ ---
+// ... (Action 1: getThemeDetailAction เหมือนเดิม ไม่ต้องแก้) ...
+export async function getThemeDetailAction(themeId: string) {
+    // ... (โค้ดเดิม) ...
+    // ใส่โค้ดเดิมของนายตรงนี้ได้เลย ผมละไว้เพื่อความสั้น
+    const supabase = await getSupabase();
+    // ...
+    // Copy โค้ดเดิมมาใส่ได้เลยครับ ส่วนนี้ไม่มีผลกับการบันทึก
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("Unauthorized");
+        const { data: profile } = await supabase.from('profiles').select('role, brand_id, brands(plan, expiry_basic, expiry_pro, expiry_ultimate)').eq('id', user.id).single();
+        if (!profile?.brand_id) throw new Error("No brand assigned");
+        const brandData = profile.brands as any;
+        const currentPlan = calculateEffectivePlan(brandData);
+        const { data: themeData } = await supabase.from('marketplace_themes').select('*, min_plan, marketplace_categories(name)').eq('id', themeId).single();
+        if (!themeData) throw new Error('Theme not found');
+        const { data: owned } = await supabase.from('themes').select('*').eq('brand_id', profile.brand_id).eq('marketplace_theme_id', themeId).single();
+        return { success: true, theme: themeData, isOwned: !!owned, ownedData: owned, isOwner: profile.role === 'owner', currentPlan };
+    } catch (error: any) {
+        return { success: false, error: error.message };
+    }
+}
+
+
+// --- Action 2: สั่งซื้อ / ติดตั้ง (แก้ตรงนี้!!) ---
 export async function installThemeAction(marketplaceThemeId: string, chargeId: string | null, plan: 'monthly' | 'lifetime') {
   const supabase = await getSupabase();
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Unauthorized");
 
-    // 1. เช็คสิทธิ์ Owner (สำคัญมาก! กันคนอื่นแอบยิง API)
     const { data: profile } = await supabase.from('profiles').select('role, brand_id').eq('id', user.id).single();
-    if (!profile?.brand_id) throw new Error("No brand assigned");
-    
-    // 🔒 Security Check
-    if (profile.role !== 'owner') {
-        throw new Error("Permission denied: Only owner can purchase.");
-    }
-
+    if (!profile?.brand_id || profile.role !== 'owner') throw new Error("Permission denied");
     const brandId = profile.brand_id;
 
-    // 2. ดึงข้อมูลธีมและราคา
-    const { data: themeData } = await supabase
-        .from('marketplace_themes')
-        .select('price_monthly, price_lifetime')
-        .eq('id', marketplaceThemeId)
-        .single();
-    
-    if (!themeData) throw new Error("Theme not found");
+    // ดึงข้อมูล
+    const [themeRes, brandRes] = await Promise.all([
+        supabase.from('marketplace_themes').select('price_monthly, price_lifetime, min_plan').eq('id', marketplaceThemeId).single(),
+        supabase.from('brands').select('plan, expiry_basic, expiry_pro, expiry_ultimate').eq('id', brandId).single()
+    ]);
+    const themeData = themeRes.data;
+    const brand = brandRes.data;
+    if (!themeData || !brand) throw new Error("Data not found");
 
-    // 3. ตรวจสอบการจ่ายเงิน (ถ้ามีราคา)
+    // -------------------------------------------------------------
+    // 🛡️ SECURITY CHECK
+    // -------------------------------------------------------------
     const priceToPay = plan === 'monthly' ? themeData.price_monthly : themeData.price_lifetime;
-    if (priceToPay > 0) {
-        if (!chargeId) throw new Error("Payment required");
-        const charge = await omise.charges.retrieve(chargeId);
-        if (charge.status !== 'successful') throw new Error("Payment failed");
-        
-        // เช็คยอดเงิน (กัน Hacker แก้ราคาหน้าเว็บ)
-        if (charge.amount < (priceToPay * 100)) throw new Error("Invalid payment amount");
-    }
+    const currentBrandPlan = calculateEffectivePlan(brand);
+    const hasRightAccess = canAccessTheme(currentBrandPlan, themeData.min_plan);
 
-    // ✅ 4. ดึงข้อมูลเดิมก่อน (เพื่อดูว่าจะต่ออายุจากวันไหน)
+    // เช็คว่าต้องจ่ายตังไหม
+    if (!hasRightAccess) {
+        if (priceToPay && priceToPay > 0) {
+            if (!chargeId) throw new Error("Payment required");
+            const charge = await omise.charges.retrieve(chargeId);
+            if (charge.status !== 'successful') throw new Error("Payment failed");
+        }
+    }
+    // -------------------------------------------------------------
+
+    // 4. ดึงข้อมูลธีมเดิม (สำคัญมาก! เอามาเช็คว่าเคยซื้อขาดไปหรือยัง)
     const { data: existingTheme } = await supabase
         .from('themes')
-        .select('expires_at')
+        .select('expires_at, purchase_type') // ✅ ดึง purchase_type มาด้วย
         .eq('brand_id', brandId)
         .eq('marketplace_theme_id', marketplaceThemeId)
         .single();
 
-    // ✅ 5. คำนวณวันหมดอายุแบบ "ทบยอด" (Extend Logic)
-    let newExpiresAt = null; // เริ่มต้นเป็น null (สำหรับ Lifetime)
+    // =============================================================
+    // 🧠 LOGIC ใหม่: ห้ามลดเกรด (Protect Lifetime & Expiry)
+    // =============================================================
+    
+    // 1. เช็คว่า "เป็นอมตะ" (Lifetime) หรือไม่?
+    // - ถ้าของเดิมเป็น lifetime อยู่แล้ว -> ถือว่าเป็น lifetime
+    // - ถ้าอันใหม่ที่กำลังซื้อเป็น lifetime -> ถือว่าเป็น lifetime
+    const isPreviouslyLifetime = existingTheme?.purchase_type === 'lifetime';
+    const isBuyingLifetime = plan === 'lifetime';
+    const isFinalLifetime = isPreviouslyLifetime || isBuyingLifetime;
 
-if (plan === 'monthly') {
-    const now = dayjs();
-    let baseDate = now; 
+    let finalExpiresAt = null;
+    let finalPurchaseType = '';
 
-    // ถ้ามีวันหมดอายุเดิม และยังไม่หมด ให้ทบวัน
-    if (existingTheme?.expires_at) {
-        const currentExpire = dayjs(existingTheme.expires_at);
-        if (currentExpire.isAfter(now)) {
-            baseDate = currentExpire;
+    if (isFinalLifetime) {
+        // ✅ ถ้าเป็น Lifetime ให้เซ็ตเป็น Lifetime ตลอดไป (วันหมดอายุเป็น NULL)
+        finalPurchaseType = 'lifetime';
+        finalExpiresAt = null;
+    } else {
+        // 🔄 ถ้าไม่ใช่ Lifetime (เป็น Subscription หรือ Monthly)
+        // ให้หาวันหมดอายุที่ "ไกลที่สุด" (Max Date)
+        
+        const now = dayjs();
+        let targetDate = now;
+
+        // A. วันหมดอายุจาก Plan (ถ้ามีสิทธิ์)
+        let planExpiryDate = null;
+        if (hasRightAccess) {
+            if (currentBrandPlan === 'ultimate') planExpiryDate = brand.expiry_ultimate;
+            else if (currentBrandPlan === 'pro') planExpiryDate = brand.expiry_pro;
+            else if (currentBrandPlan === 'basic') planExpiryDate = brand.expiry_basic;
+        }
+
+        // B. วันหมดอายุจากการซื้อเพิ่ม (ถ้าซื้อ)
+        let purchaseExpiryDate = null;
+        if (plan === 'monthly') {
+             // ถ้าของเดิมยังไม่หมด ให้บวกเพิ่มจากของเดิม
+             let base = now;
+             if (existingTheme?.expires_at && dayjs(existingTheme.expires_at).isAfter(now)) {
+                 base = dayjs(existingTheme.expires_at);
+             }
+             purchaseExpiryDate = base.add(30, 'day');
+        }
+
+        // C. เทียบวัน: เอาวันที่ไกลที่สุด
+        const dates = [
+            existingTheme?.expires_at ? dayjs(existingTheme.expires_at) : null, // วันเดิม
+            planExpiryDate ? dayjs(planExpiryDate) : null,                      // วันตาม Plan
+            purchaseExpiryDate                                                  // วันที่ซื้อเพิ่ม
+        ].filter(d => d !== null) as dayjs.Dayjs[];
+
+        if (dates.length > 0) {
+            // เรียงวันที่จากน้อยไปมาก แล้วเอาตัวสุดท้าย (ไกลสุด)
+            // @ts-ignore
+            const maxDate = dates.sort((a, b) => a.valueOf() - b.valueOf()).pop(); 
+            finalExpiresAt = maxDate?.toISOString();
+        }
+
+        // กำหนด Type:
+        // ถ้าซื้อแยก -> ให้เป็น 'monthly' (หรือ plan ที่ส่งมา) เพื่อกันระบบ Sync ลบทิ้ง
+        // ถ้าใช้สิทธิ์ Plan -> ให้เป็น 'subscription'
+        // แต่ถ้าเคยซื้อแยกมาก่อน ให้คงสถานะซื้อแยกไว้
+        if (plan === 'monthly' || existingTheme?.purchase_type === 'monthly') {
+            finalPurchaseType = 'monthly';
+        } else {
+            finalPurchaseType = 'subscription';
         }
     }
-    // บวก 30 วัน
-    newExpiresAt = baseDate.add(30, 'day').toISOString();
-}
-    // ถ้า lifetime ให้เป็น null (แปลว่าตลอดชีพ)
 
-    // 6. บันทึก (Upsert: ถ้ามีแล้วให้ Update วันหมดอายุใหม่)
+    // 6. บันทึก
     const { error } = await supabase.from('themes').upsert({
-    brand_id: brandId,
-    marketplace_theme_id: marketplaceThemeId,
-    purchase_type: plan, // 'lifetime'
-    expires_at: newExpiresAt, // ส่ง null ไปทับของเก่าเลย
-    updated_at: new Date().toISOString()
-}, { onConflict: 'brand_id, marketplace_theme_id' });
+        brand_id: brandId,
+        marketplace_theme_id: marketplaceThemeId,
+        purchase_type: finalPurchaseType, // ✅ ใช้ค่าที่คำนวณใหม่
+        expires_at: finalExpiresAt,       // ✅ ใช้วันที่ไกลที่สุด
+        updated_at: new Date().toISOString()
+    }, { onConflict: 'brand_id, marketplace_theme_id' });
 
     if (error) throw error;
     return { success: true };

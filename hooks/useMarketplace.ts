@@ -1,6 +1,6 @@
 // hooks/useMarketplace.ts
 import { useState, useEffect, useMemo } from 'react';
-import { supabase } from '@/lib/supabase'; // ใช้สำหรับ Storage getPublicUrl (Client Side)
+import { supabase } from '@/lib/supabase';
 import { getMarketplaceDataAction } from '@/app/actions/marketplaceActions';
 import { useRouter } from 'next/navigation';
 
@@ -9,6 +9,7 @@ const ITEMS_PER_PAGE = 10;
 
 export function useMarketplace() {
     const router = useRouter();
+    const [currentPlan, setCurrentPlan] = useState('free');
     
     // Data States
     const [categories, setCategories] = useState<any[]>([]);
@@ -19,6 +20,7 @@ export function useMarketplace() {
     // Filter & Pagination States
     const [selectedCategory, setSelectedCategory] = useState('ALL');
     const [ownershipFilter, setOwnershipFilter] = useState<'ALL' | 'OWNED' | 'NOT_OWNED'>('ALL');
+    const [tierFilter, setTierFilter] = useState('ALL'); // ✅ เพิ่ม State กรอง Level
     const [currentPage, setCurrentPage] = useState(1);
 
     // Init Data
@@ -27,9 +29,10 @@ export function useMarketplace() {
             setLoading(true);
             const res = await getMarketplaceDataAction();
             if (res.success) {
-                setCategories(res.categories || []);       // ถ้าว่าง ให้ใส่ []
-setAllThemes(res.themes || []);           // ถ้าว่าง ให้ใส่ []
-setOwnedThemeIds(res.ownedThemeIds || []); // ถ้าว่าง ให้ใส่ []
+                setCategories(res.categories || []);
+                setAllThemes(res.themes || []);
+                setOwnedThemeIds(res.ownedThemeIds || []);
+                setCurrentPlan((res as any).currentPlan || 'free');
             }
             setLoading(false);
         };
@@ -39,7 +42,7 @@ setOwnedThemeIds(res.ownedThemeIds || []); // ถ้าว่าง ให้ใ
     // Reset Page on Filter Change
     useEffect(() => {
         setCurrentPage(1);
-    }, [selectedCategory, ownershipFilter]);
+    }, [selectedCategory, ownershipFilter, tierFilter]); // ✅ เพิ่ม tierFilter ใน dependency
 
     // --- Logic ---
 
@@ -58,20 +61,25 @@ setOwnedThemeIds(res.ownedThemeIds || []); // ถ้าว่าง ให้ใ
     const filteredThemes = useMemo(() => {
         let result = allThemes;
 
-        // Filter by Category
+        // 1. Filter by Category
         if (selectedCategory !== 'ALL') {
             result = result.filter(t => t.category_id === selectedCategory);
         }
 
-        // Filter by Ownership
+        // 2. Filter by Ownership
         if (ownershipFilter === 'OWNED') {
             result = result.filter(t => ownedThemeIds.includes(t.id));
         } else if (ownershipFilter === 'NOT_OWNED') {
             result = result.filter(t => !ownedThemeIds.includes(t.id));
         }
 
+        // 3. ✅ Filter by Tier (Level)
+        if (tierFilter !== 'ALL') {
+            result = result.filter(t => (t.min_plan || 'free') === tierFilter);
+        }
+
         return result;
-    }, [selectedCategory, ownershipFilter, allThemes, ownedThemeIds]);
+    }, [selectedCategory, ownershipFilter, tierFilter, allThemes, ownedThemeIds]);
 
     const totalPages = Math.ceil(filteredThemes.length / ITEMS_PER_PAGE);
 
@@ -91,6 +99,7 @@ setOwnedThemeIds(res.ownedThemeIds || []); // ถ้าว่าง ให้ใ
         currentThemes,
         ownedThemeIds,
         loading,
+        currentPlan, 
         
         // Pagination info
         currentPage,
@@ -100,6 +109,7 @@ setOwnedThemeIds(res.ownedThemeIds || []); // ถ้าว่าง ให้ใ
         // Actions / Setters
         selectedCategory, setSelectedCategory,
         ownershipFilter, setOwnershipFilter,
+        tierFilter, setTierFilter, // ✅ ส่งออกไปใช้หน้า UI
         changePage,
         getImageUrl,
         goToDetails

@@ -3,7 +3,7 @@
 
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
-
+import { checkOrderLimitOrThrow } from './limitGuard';
 // Helper: สร้าง Client (ใช้ Key ฝั่ง Server)
 async function getSupabase() {
     const cookieStore = await cookies();

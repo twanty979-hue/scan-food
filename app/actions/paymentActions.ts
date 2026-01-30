@@ -3,6 +3,11 @@
 
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import dayjs from 'dayjs';
+// ✅ 1. Import ฟังก์ชัน Sync Theme
+import { syncThemesWithPlan } from './themeActions';
+// ✅ 2. Import ยามเฝ้าประตู (จำกัดออเดอร์)
+import { checkOrderLimitOrThrow } from './limitGuard';
 
 // --- Helpers ---
 async function getSupabase() {
@@ -14,12 +19,30 @@ async function getSupabase() {
   );
 }
 
+// ----------------------------------------------------------------------
+// 🏆 HELPER: คำนวณ Plan (Logic เดียวกับ ThemeActions)
+// ----------------------------------------------------------------------
+function calculateEffectivePlan(brand: any) {
+    const now = dayjs();
+    if (brand.expiry_ultimate && dayjs(brand.expiry_ultimate).isAfter(now)) {
+        return { plan: 'ultimate', expiry: brand.expiry_ultimate };
+    }
+    if (brand.expiry_pro && dayjs(brand.expiry_pro).isAfter(now)) {
+        return { plan: 'pro', expiry: brand.expiry_pro };
+    }
+    if (brand.expiry_basic && dayjs(brand.expiry_basic).isAfter(now)) {
+        return { plan: 'basic', expiry: brand.expiry_basic };
+    }
+    return { plan: 'free', expiry: null }; 
+}
+
+// ... (getMyBrandId function เดิม) ...
 async function getMyBrandId(supabase: any) {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Unauthorized");
-  const { data: profile } = await supabase.from('profiles').select('*, brands(*)').eq('id', user.id).single();
-  if (!profile?.brand_id) throw new Error("No brand assigned");
-  return { brandId: profile.brand_id, user, profile, brand: profile.brands };
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Unauthorized");
+    const { data: profile } = await supabase.from('profiles').select('*, brands(*)').eq('id', user.id).single();
+    if (!profile?.brand_id) throw new Error("No brand assigned");
+    return { brandId: profile.brand_id, user, profile, brand: profile.brands };
 }
 
 // --- 1. Fetch Initial Data (โหลดครั้งแรกทีเดียวจบ) ---
@@ -27,6 +50,47 @@ export async function getPaymentInitialDataAction() {
   const supabase = await getSupabase();
   try {
     const { brandId, user, profile, brand } = await getMyBrandId(supabase);
+
+    // ======================================================================
+    // 🛡️ SECURITY CHECK: Sync Theme ทุกครั้งที่เข้าหน้าขาย (Payment)
+    // ======================================================================
+    
+    // 1. คำนวณ Plan ล่าสุด ณ วินาทีนี้
+    const { plan: effectivePlan, expiry: activeExpiry } = calculateEffectivePlan(brand);
+
+    // 2. ถ้า Plan ใน DB ไม่ตรงกับความจริง (เช่น หมดอายุเมื่อกี้) -> อัปเดต DB
+    if (brand.plan !== effectivePlan) {
+        await supabase.from('brands').update({ plan: effectivePlan }).eq('id', brandId);
+        brand.plan = effectivePlan; // อัปเดตตัวแปรใน memory ด้วย
+    }
+
+    // 3. สั่ง Sync Theme (ลบตัวเกินสิทธิ์ / รักษาตัวซื้อแยก)
+    await syncThemesWithPlan(supabase, brandId, effectivePlan, activeExpiry);
+
+    // 4. (แถม) ตรวจสอบ Theme Mode ปัจจุบัน
+    // ถ้า Theme Mode ที่ใช้อยู่ "เป็นของที่หมดสิทธิ์" -> ดีดกลับเป็น Standard
+    if (brand.theme_mode && brand.theme_mode !== 'standard') {
+        // เช็คว่าธีมที่ใช้อยู่ ยังมีสิทธิ์ใช้ไหม?
+        const { data: activeTheme } = await supabase.from('themes')
+            .select('id, expires_at, marketplace_themes!inner(theme_mode)')
+            .eq('brand_id', brandId)
+            .eq('marketplace_themes.theme_mode', brand.theme_mode)
+            .single();
+
+        let isValid = false;
+        if (activeTheme) {
+             const isExpired = activeTheme.expires_at && dayjs(activeTheme.expires_at).isBefore(dayjs());
+             // ถ้ายังไม่หมดอายุ หรือเป็น Lifetime -> ถือว่า Valid
+             if (!isExpired) isValid = true; 
+        }
+
+        // ถ้าไม่ Valid -> ดีดกลับเป็น Standard ทันที
+        if (!isValid) {
+            await supabase.from('brands').update({ theme_mode: 'standard' }).eq('id', brandId);
+            brand.theme_mode = 'standard'; // อัปเดตให้หน้าบ้านเห็นทันที
+        }
+    }
+    // ======================================================================
 
     const [cats, prods, discs, tables] = await Promise.all([
       supabase.from('categories').select('*').eq('brand_id', brandId).order('sort_order'),
@@ -40,7 +104,7 @@ export async function getPaymentInitialDataAction() {
         brandId, 
         user, 
         profile, 
-        brand,
+        brand, // ส่ง brand ที่อัปเดต plan/theme_mode แล้วกลับไป
         categories: cats.data || [],
         products: prods.data || [],
         discounts: discs.data || [],
@@ -55,7 +119,6 @@ export async function getPaymentInitialDataAction() {
 export async function getUnpaidOrdersAction(brandId: string) {
     const supabase = await getSupabase();
     // ดึงออเดอร์ที่ 'done' (ทำเสร็จแล้ว) แต่ยังไม่จ่าย
-    // หรือคุณอาจจะรวม 'pending', 'preparing' ด้วยแล้วแต่นโยบายร้าน
     const { data: rawOrders } = await supabase.from('orders')
         .select(`*, order_items(*)`)
         .eq('brand_id', brandId)
@@ -94,8 +157,14 @@ export async function processPaymentAction(payload: any) {
     const { brandId, userId, totalAmount, receivedAmount, changeAmount, paymentMethod, type, selectedOrder, cart } = payload;
 
     try {
+        // ======================================================================
+        // 🛑 เพิ่มบรรทัดนี้: เรียกยามมาตรวจก่อน! (ห้ามเกิน 30 ออเดอร์)
+        // ======================================================================
+        await checkOrderLimitOrThrow(brandId);
+        // ======================================================================
+
         let finalOrderId: any = null;
-let receiptItems: any[] = [];
+        let receiptItems: any[] = [];
         let tableLabel = 'Walk-in';
 
         // Case A: จ่ายจากโต๊ะ (มี Order อยู่แล้ว)
@@ -164,6 +233,7 @@ let receiptItems: any[] = [];
         return { success: true, payRecord, receiptItems, tableLabel };
 
     } catch (error: any) {
+        // 🚨 ถ้าติด Limit จะ Error ตรงนี้ และส่งข้อความกลับไปหน้าบ้าน
         return { success: false, error: error.message };
     }
 }

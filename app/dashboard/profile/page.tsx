@@ -1,7 +1,9 @@
 // app/dashboard/profile/page.tsx
 'use client';
 
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useProfile } from '@/hooks/useProfile';
+import { useState, useEffect, Suspense } from 'react'; // ✅ เพิ่ม Suspense
 
 // --- 🎨 Custom Icons ---
 const IconUser = ({ size = 24 }: any) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
@@ -9,14 +11,28 @@ const IconCamera = ({ size = 20 }: any) => <svg width={size} height={size} viewB
 const IconPhone = ({ size = 20 }: any) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>;
 const IconSave = ({ size = 20 }: any) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>;
 const IconMail = ({ size = 20 }: any) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>;
+const IconLock = ({ size = 24 }: any) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
+const IconX = ({ size = 20 }: any) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
 
-export default function ProfileSettingsPage() {
+// ✅ 1. สร้าง Component ย่อย สำหรับเนื้อหาที่ใช้ useSearchParams
+function ProfileContent() {
   const {
     loading, submitting, email,
     formData, setFormData,
     fileInputRef,
     getImageUrl, handleUpload, handleSave
   } = useProfile();
+
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const [showError, setShowError] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get('error') === 'premium_required') {
+      setShowError(true);
+      router.replace('/dashboard/profile', { scroll: false });
+    }
+  }, [searchParams, router]);
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 md:p-10 font-sans pb-32">
@@ -32,6 +48,32 @@ export default function ProfileSettingsPage() {
           </h1>
           <p className="text-slate-500 font-bold text-sm mt-2 ml-1">จัดการข้อมูลส่วนตัว</p>
         </div>
+
+        {/* 🚨 Alert Module */}
+        {showError && (
+            <div className="mb-8 bg-red-50 border-l-4 border-red-500 p-6 rounded-r-2xl shadow-sm relative animate-in slide-in-from-top-2 duration-300">
+                <button 
+                    onClick={() => setShowError(false)}
+                    className="absolute top-4 right-4 text-red-400 hover:text-red-600 transition-colors"
+                >
+                    <IconX size={20} />
+                </button>
+                <div className="flex gap-4">
+                    <div className="p-3 bg-red-100 rounded-full h-fit text-red-600">
+                        <IconLock size={24} />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-black text-red-700 mb-1">เข้าถึงไม่ได้</h3>
+                        <p className="text-sm font-medium text-red-600/80 leading-relaxed">
+                            คุณไม่สามารถเข้าใช้งานหน้านั้นได้ เนื่องจาก <strong>แพ็กเกจของร้านค้าปัจจุบัน (Free/Basic)</strong> ไม่รองรับการใช้งานฟีเจอร์นี้สำหรับพนักงาน
+                        </p>
+                        <div className="mt-3 inline-block px-3 py-1 bg-white rounded-lg text-xs font-bold text-red-500 border border-red-100">
+                            โปรดติดต่อเจ้าของร้านเพื่ออัปเกรด
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
 
         {loading ? (
           <div className="text-center py-20 animate-pulse text-slate-400 font-black">LOADING PROFILE...</div>
@@ -115,5 +157,14 @@ export default function ProfileSettingsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+// ✅ 2. Component หลัก ห่อด้วย Suspense
+export default function ProfileSettingsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-400 font-bold">Loading...</div>}>
+      <ProfileContent />
+    </Suspense>
   );
 }

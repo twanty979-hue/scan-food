@@ -15,9 +15,7 @@ export function useThemeDetail() {
     // Data State
     const [theme, setTheme] = useState<any>(null);
     const [loading, setLoading] = useState(true);
-    
-    // ✅ Ownership & Permission State
-    const [userRole, setUserRole] = useState<{ isOwner: boolean }>({ isOwner: false }); // เก็บสิทธิ์ user
+    const [userRole, setUserRole] = useState<{ isOwner: boolean }>({ isOwner: false });
     const [ownership, setOwnership] = useState<{
         isOwned: boolean;
         type: 'monthly' | 'lifetime' | null;
@@ -40,6 +38,15 @@ export function useThemeDetail() {
     const [chargeId, setChargeId] = useState<string | null>(null);
     const [paymentStatus, setPaymentStatus] = useState<'idle' | 'pending' | 'successful'>('idle');
 
+    // ✅✅ NEW: ระบบ Modal กลางจอ (แทน Alert/Confirm)
+    const [alertModal, setAlertModal] = useState<{
+        isOpen: boolean;
+        type: 'success' | 'error' | 'confirm';
+        title: string;
+        message: string;
+        onConfirm?: () => void; // ฟังก์ชันที่จะทำเมื่อกดปุ่มยืนยัน
+    }>({ isOpen: false, type: 'success', title: '', message: '' });
+
     // --- Init Data ---
     useEffect(() => {
         const fetchData = async () => {
@@ -51,7 +58,6 @@ export function useThemeDetail() {
                 setTheme(res.theme);
                 setUserRole({ isOwner: res.isOwner || false });
                 
-                // ✅ คำนวณสถานะการซื้อ
                 if (res.isOwned && res.ownedData) {
                     const owned = res.ownedData;
                     const isExpired = owned.expires_at && dayjs(owned.expires_at).isBefore(dayjs());
@@ -65,7 +71,6 @@ export function useThemeDetail() {
                         isExpired: isExpired
                     });
 
-                    // ถ้ามีรายเดือนแล้วแต่ยังไม่หมด ให้ default เป็น lifetime เผื่อจะอัปเกรด
                     if (owned.purchase_type === 'monthly' && !isExpired) {
                         setSelectedPlan('lifetime');
                     }
@@ -73,7 +78,6 @@ export function useThemeDetail() {
                     setOwnership({ isOwned: false, type: null, expiresAt: null, daysLeft: null, isExpired: false });
                 }
                 
-                // Init Images
                 let images: string[] = [];
                 if (res.theme.image_url) images.push(res.theme.image_url);
                 if (res.theme.gallery?.mobile) images = [...images, ...res.theme.gallery.mobile];
@@ -86,7 +90,6 @@ export function useThemeDetail() {
         fetchData();
     }, [id]);
 
-    // ... (View & Payment Effects เหมือนเดิม) ...
     useEffect(() => {
         if (!theme) return;
         let images: string[] = [];
@@ -117,24 +120,50 @@ export function useThemeDetail() {
         return () => clearInterval(interval);
     }, [showPaymentModal, chargeId, paymentStatus]);
 
+    // ---------------------------------------------------------
+    // ✅ Logic การติดตั้ง (ใช้ Modal แทน Alert)
+    // ---------------------------------------------------------
     const performInstall = async (verifiedChargeId?: string | null) => {
         setProcessing(true);
+        // ปิด Modal ยืนยันก่อน (ถ้ามี)
+        setAlertModal(prev => ({ ...prev, isOpen: false })); 
+
         const res = await installThemeAction(theme.id, verifiedChargeId || null, selectedPlan);
+        
+        setProcessing(false);
+        setShowPaymentModal(false);
+
         if (res.success) {
-            alert('🎉 Success!');
-            window.location.reload(); 
+            // 🎉 Success: เปิด Modal สีเขียว
+            setAlertModal({
+                isOpen: true,
+                type: 'success',
+                title: 'Installation Successful!',
+                message: 'Your new theme is ready to use.',
+                onConfirm: () => {
+                    // พอกด OK ใน Modal สำเร็จ ให้รีโหลดหน้า
+                    window.location.reload();
+                }
+            });
         } else {
-            alert('Error: ' + res.error);
-            setProcessing(false);
-            setShowPaymentModal(false);
+            // ❌ Error: เปิด Modal สีแดง
+            setAlertModal({
+                isOpen: true,
+                type: 'error',
+                title: 'Installation Failed',
+                message: res.error || 'Something went wrong.',
+                onConfirm: () => setAlertModal(prev => ({ ...prev, isOpen: false }))
+            });
         }
     };
 
-    // --- Handlers ---
     const handleGetTheme = async () => {
-        // 🔒 CHECK PERMISSION: ถ้าไม่ใช่ Owner ห้ามซื้อ
         if (!userRole.isOwner) {
-            alert("⚠️ ขออภัย: เฉพาะเจ้าของร้าน (Owner) เท่านั้นที่สามารถสั่งซื้อได้");
+            setAlertModal({
+                isOpen: true, type: 'error', title: 'Access Denied', 
+                message: 'Only the store owner can perform this action.',
+                onConfirm: () => setAlertModal(prev => ({ ...prev, isOpen: false }))
+            });
             return;
         }
 
@@ -145,14 +174,19 @@ export function useThemeDetail() {
 
         const currentPrice = selectedPlan === 'monthly' ? (theme.price_monthly ?? 0) : (theme.price_lifetime ?? 0);
 
+        // ✅ CASE 1: ของฟรี (Free Theme) -> เปิด Modal ยืนยัน
         if (currentPrice === 0) {
-            if (!confirm(`ยืนยันรับธีม "${theme.name}" ฟรี?`)) return;
-            await performInstall(null);
+            setAlertModal({
+                isOpen: true,
+                type: 'confirm',
+                title: 'Confirm Installation',
+                message: `Install "${theme.name}" for free?`,
+                onConfirm: () => performInstall(null) // ถ้ากด Yes ให้ไปติดตั้ง
+            });
             return;
         }
 
-        if (!confirm(`ยืนยันซื้อธีม "${theme.name}" ราคา ฿${currentPrice.toLocaleString()}?`)) return;
-        
+        // ✅ CASE 2: ของเสียเงิน -> เปิด QR Code เลย (ถือว่ากดปุ่มคือยืนยันแล้ว)
         setProcessing(true);
         const res = await createPromptPayQRCode(currentPrice);
 
@@ -162,7 +196,11 @@ export function useThemeDetail() {
             setPaymentStatus('pending');
             setShowPaymentModal(true);
         } else {
-            alert('Error: ' + res.error);
+            setAlertModal({
+                isOpen: true, type: 'error', title: 'Payment Error', 
+                message: res.error || 'Cannot generate QR Code.',
+                onConfirm: () => setAlertModal(prev => ({ ...prev, isOpen: false }))
+            });
         }
         setProcessing(false);
     };
@@ -176,23 +214,27 @@ export function useThemeDetail() {
     };
     
     const handleShare = () => { /* ... */ };
+    
     const closePaymentModal = () => {
         if (paymentStatus === 'successful') return;
-        if (confirm('ยกเลิกการชำระเงิน?')) {
-            setShowPaymentModal(false);
-            setQrCode(null);
-            setChargeId(null);
-            setPaymentStatus('idle');
-        }
+        setShowPaymentModal(false);
+        setQrCode(null);
+        setChargeId(null);
+        setPaymentStatus('idle');
+    };
+
+    // Helper ปิด Modal ทั่วไป
+    const closeAlertModal = () => {
+        setAlertModal(prev => ({ ...prev, isOpen: false }));
     };
 
     return {
-        theme, loading, ownership, processing, userRole, // ✅ ส่ง userRole ออกไป
-        viewMode, setViewMode,
-        activeImage, setActiveImage,
-        displayImages,
+        theme, loading, ownership, processing, userRole,
+        viewMode, setViewMode, activeImage, setActiveImage, displayImages,
         getImageUrl, handleGetTheme, handleShare, router,
         showPaymentModal, qrCode, paymentStatus, closePaymentModal,
-        selectedPlan, setSelectedPlan
+        selectedPlan, setSelectedPlan,
+        // ✅ ส่ง Modal State ออกไป
+        alertModal, closeAlertModal 
     };
 }

@@ -1,24 +1,25 @@
-// hooks/usePayment.ts
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { supabase } from '@/lib/supabase'; // Client for Realtime
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { supabase } from '@/lib/supabase';
+import dayjs from 'dayjs';
 import { 
     getPaymentInitialDataAction, 
     getUnpaidOrdersAction, 
     processPaymentAction,
     updateOrderStatusAction,
-    getPendingOrdersAction 
+    getPendingAndPreparingOrdersAction,
+    getAllTablesAction, // ✅ 1. เพิ่ม Import นี้
+    cancelOrderAction,
+    cancelOrderItemAction
 } from '@/app/actions/paymentActions';
 import { getLatestTableDataAction } from '@/app/actions/tableActions';
-// ✅ 1. เพิ่ม Import ฟังก์ชันเช็กโควต้า
 import { getOrderUsage } from '@/app/actions/limitGuard';
+
 
 export function usePayment() {
     // --- State ---
     const [activeTab, setActiveTab] = useState<'tables' | 'pos'>('tables');
     const [loading, setLoading] = useState(true);
     const [autoKitchen, setAutoKitchen] = useState(false);
-    
-    // ✅ 2. เพิ่ม State เก็บสถานะโควต้า
     const [limitStatus, setLimitStatus] = useState<any>(null);
 
     // Data
@@ -50,6 +51,9 @@ export function usePayment() {
     const [qrTableData, setQrTableData] = useState<any>(null);
     const [showTableSelector, setShowTableSelector] = useState(false);
 
+    // ✅ เพิ่ม Ref เพื่อกันยิงซ้ำ (Race Condition)
+    const processedOrdersRef = useRef<Set<string>>(new Set());
+
     // --- Helpers ---
     const roundForCash = (amount: number) => Math.ceil(amount * 4) / 4;
 
@@ -61,12 +65,24 @@ export function usePayment() {
         return data.publicUrl;
     };
 
-    // ✅ 3. Helper สำหรับรีเฟรชโควต้า (ใช้ตอนจ่ายเงินเสร็จ)
     const refreshQuota = useCallback(async () => {
         if (!brandId) return;
         const usage = await getOrderUsage(brandId);
         setLimitStatus(usage);
     }, [brandId]);
+
+    // ✅ 2. เพิ่มฟังก์ชันโหลดโต๊ะใหม่ (Refresh Tables)
+    const refreshTables = useCallback(async () => {
+        if (!brandId) return;
+        const tables = await getAllTablesAction(brandId);
+        setAllTables(tables);
+    }, [brandId]);
+
+    const playSound = () => {
+        const audio = new Audio('/sounds/alert.mp3'); 
+        audio.volume = 1.0; 
+        audio.play().catch(e => console.error("เล่นเสียงไม่ได้: ", e));
+    };
 
     // --- Init ---
     useEffect(() => {
@@ -92,11 +108,9 @@ export function usePayment() {
                 setDiscounts(res.discounts || []);
                 setAllTables(res.tables || []);
                 
-                // ✅ 4. ดึงข้อมูลโควต้าตั้งแต่เริ่มต้น
                 const usage = await getOrderUsage(res.brandId!);
                 setLimitStatus(usage);
 
-                // Load unpaid orders
                 const orders = await getUnpaidOrdersAction(res.brandId!);
                 setUnpaidOrders(orders);
             }
@@ -105,7 +119,6 @@ export function usePayment() {
         init();
     }, []);
 
-    // Save Cart & Auto Settings
     useEffect(() => {
         if (typeof window !== 'undefined') {
             localStorage.setItem('pos_cart', JSON.stringify(cart));
@@ -113,70 +126,85 @@ export function usePayment() {
         }
     }, [cart, autoKitchen]);
 
-    // --- Logic: Refresh Orders ---
     const refreshOrders = useCallback(async () => {
         if (!brandId) return;
         const orders = await getUnpaidOrdersAction(brandId);
         setUnpaidOrders(orders);
-        // ✅ 5. อัปเดตโควต้าด้วยทุกครั้งที่มีการเปลี่ยนแปลง Order
         refreshQuota(); 
     }, [brandId, refreshQuota]);
 
-    // --- Logic: Auto Kitchen & Realtime ---
+    // =========================================================================
+    // ✅ 3. Realtime Listener (ฟังทั้ง Orders และ Tables)
+    // =========================================================================
     useEffect(() => {
         if (!brandId) return;
 
-        // 1. Process Logic
-        const processOrder = async (orderId: string, currentStatus: string) => {
-            if (!autoKitchen) return;
+        // ฟังก์ชันจบงาน (แยกออกมาเพื่อเรียกใช้ซ้ำ)
+        const finishOrder = async (orderId: string) => {
+             if (processedOrdersRef.current.has(orderId)) return;
+             await updateOrderStatusAction(orderId, 'done');
+             console.log(`🤖 Auto: Done (Finished) ${orderId}`);
+             processedOrdersRef.current.add(orderId);
+             refreshOrders();
+        };
 
-            if (currentStatus === 'pending') {
-                await updateOrderStatusAction(orderId, 'preparing');
-                console.log(`🤖 Auto: Accepted ${orderId}`);
-                
-                // Schedule Done (5 mins)
-                setTimeout(async () => {
-                    await updateOrderStatusAction(orderId, 'done');
-                    console.log(`🤖 Auto: Done ${orderId}`);
-                    refreshOrders();
-                }, 5 * 60 * 1000); 
+        const processOrder = async (order: any) => {
+            if (!autoKitchen) return;
+            if (order.status === 'pending') {
+                await updateOrderStatusAction(order.id, 'preparing');
+                console.log(`🤖 Auto: Accepted New Order ${order.id}`);
+                playSound();
+                setTimeout(() => finishOrder(order.id), 5 * 60 * 1000);
+            } else if (order.status === 'preparing') {
+                const lastUpdate = dayjs(order.updated_at);
+                const now = dayjs();
+                const diffMins = now.diff(lastUpdate, 'minute', true);
+                console.log(`🤖 Auto: Resuming ${order.id}, Passed: ${diffMins.toFixed(2)} mins`);
+                if (diffMins >= 5) {
+                    finishOrder(order.id);
+                } else {
+                    const remainingMs = (5 - diffMins) * 60 * 1000;
+                    console.log(`🤖 Auto: Waiting remaining ${remainingMs} ms`);
+                    setTimeout(() => finishOrder(order.id), remainingMs);
+                }
             }
         };
 
-        // 2. Scan Existing Pending (On Toggle On)
         if (autoKitchen) {
-            getPendingOrdersAction(brandId).then(orders => {
-                orders.forEach(o => processOrder(o.id, o.status));
+            getPendingAndPreparingOrdersAction(brandId).then(orders => {
+                orders.forEach(o => processOrder(o));
             });
         }
 
-        // 3. Realtime Listener
-        const channel = supabase.channel('payment_realtime_v2')
+        // 🔥 สร้าง Channel เดียว ฟังหลาย Table ได้เลย
+        const channel = supabase.channel('payment_page_combined_channel')
+            // ฟัง Orders (เหมือนเดิม)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `brand_id=eq.${brandId}` }, 
             (payload) => {
-                // Refresh list
                 refreshOrders();
-
-                // Check Auto Kitchen
+                refreshTables(); // ✅ รีเฟรชโต๊ะด้วยเมื่อออเดอร์เปลี่ยน
                 if (autoKitchen && payload.eventType === 'INSERT') {
                     const newOrder = payload.new;
-                    if (newOrder.status === 'pending') processOrder(newOrder.id, 'pending');
+                    if (newOrder.status === 'pending') processOrder(newOrder);
                 }
+            })
+            // 🔥 ฟัง Tables (เพิ่มใหม่): พอสถานะโต๊ะเปลี่ยน -> โหลดโต๊ะใหม่ทันที
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'tables', filter: `brand_id=eq.${brandId}` }, 
+            () => {
+                console.log('⚡ Table status changed! Refreshing tables...');
+                refreshTables();
             })
             .subscribe();
 
         return () => { supabase.removeChannel(channel); };
-    }, [brandId, autoKitchen, refreshOrders]);
+    }, [brandId, autoKitchen, refreshOrders, refreshTables]); // ✅ ใส่ refreshTables ใน dependency
 
     // --- Logic: Pricing ---
     const calculatePrice = useCallback((product: any, variant: string = 'normal') => {
         let basePrice = Number(product.price || 0);
-        
-        // Handle Variants
         if (variant === 'special' && product.price_special) basePrice = Number(product.price_special);
         if (variant === 'jumbo' && product.price_jumbo) basePrice = Number(product.price_jumbo);
 
-        // Fallback for modal product which might be incomplete
         if (!product.price_special && !product.price_jumbo && products.length > 0) {
              const originalProduct = products.find(p => p.id === product.id);
              if(originalProduct) {
@@ -190,12 +218,9 @@ export function usePayment() {
         const applicableDiscounts = discounts.filter(d => {
             const isTimeValid = (!d.start_date || new Date(d.start_date) <= now) && (!d.end_date || new Date(d.end_date) >= now);
             if (!isTimeValid) return false;
-            
-            // Check Scope
             if (variant === 'normal' && !d.apply_normal) return false;
             if (variant === 'special' && !d.apply_special) return false;
             if (variant === 'jumbo' && !d.apply_jumbo) return false;
-            
             if (d.apply_to === 'all') return true;
             if (d.apply_to === 'specific') return d.discount_products?.some((dp: any) => dp.product_id === product.id);
             return false;
@@ -204,7 +229,7 @@ export function usePayment() {
         if (applicableDiscounts.length === 0) return { original: basePrice, final: basePrice, discount: 0, promoDetails: null };
 
         let bestPrice = basePrice;
-       let bestDiscountObj: any = null;
+        let bestDiscountObj: any = null;
 
         applicableDiscounts.forEach(d => {
             let final = basePrice;
@@ -290,22 +315,24 @@ export function usePayment() {
             setReceivedAmount(0);
             setCart([]);
             localStorage.removeItem('pos_cart');
+            
             refreshOrders();
-            // ✅ 6. จ่ายเงินสำเร็จแล้ว อัปเดตตัวเลขโควต้าทันที
-            refreshQuota(); 
+            refreshQuota();
+            refreshTables(); // ✅ 4. สั่งรีเฟรชโต๊ะทันทีที่จ่ายเงินสำเร็จ
         } else {
             setStatusModal({ show: true, type: 'error', title: 'ผิดพลาด', message: res.error });
         }
     };
 
     const handleSelectTableForQR = async (table: any) => {
+        // 🔥 โหลดสถานะโต๊ะล่าสุดก่อนเปิด Modal เสมอ (Double Check)
         const { success, data } = await getLatestTableDataAction(table.id);
-        setQrTableData(success && data ? data : table);
+        const updatedTable = (success && data) ? data : table;
+        setQrTableData(updatedTable);
         setShowTableSelector(false);
     };
 
     return {
-        // State
         activeTab, setActiveTab,
         loading, autoKitchen, setAutoKitchen,
         categories, products: selectedCategory === 'ALL' ? products : products.filter((p: any) => p.category_id === selectedCategory),
@@ -315,24 +342,22 @@ export function usePayment() {
         receivedAmount, setReceivedAmount,
         paymentMethod, setPaymentMethod,
         payableAmount, rawTotal,
-        // Modals
         variantModalProduct, setVariantModalProduct,
         statusModal, setStatusModal,
         completedReceipt, setCompletedReceipt,
         qrTableData, setQrTableData,
         showTableSelector, setShowTableSelector,
         currentBrand,
-        // ✅ 7. ส่งค่าโควต้าและฟังก์ชันรีเฟรชออกไปให้ UI ใช้
         limitStatus, 
         refreshQuota,
-
-        // Methods
         getFullImageUrl,
         handleSelectTableForQR,
         handleProductClick: (p: any) => (p.price_special || p.price_jumbo) ? setVariantModalProduct(p) : addToCart(p, 'normal'),
         addToCart, removeFromCart,
         handlePayment,
         calculatePrice,
-        formatCurrency: (amt: number) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', minimumFractionDigits: 2 }).format(amt || 0)
+        formatCurrency: (amt: number) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', minimumFractionDigits: 2 }).format(amt || 0),
+        
+        refreshTables // ✅✅✅ เติมบรรทัดนี้เข้าไปครับ แล้วหาย Error ทันที!
     };
 }

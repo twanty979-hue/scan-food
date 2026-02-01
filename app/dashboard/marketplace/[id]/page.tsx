@@ -2,7 +2,7 @@
 
 import { useThemeDetail } from '@/hooks/useThemeDetail';
 
-// --- Professional Icons ---
+// --- Icons (เหมือนเดิม) ---
 const IconArrowLeft = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>;
 const IconMobile = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12" y2="18"/></svg>;
 const IconTablet = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12" y2="18"/></svg>;
@@ -12,8 +12,8 @@ const IconX = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" 
 const IconLock = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
 const IconShield = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>;
 const IconClock = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
-const IconInfinity = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 12c-2.828-2.828-5.657-2.828-8.485 0-2.829 2.829-2.829 5.657 0 8.485 2.828 2.828 5.657 2.828 8.485 0M12 12c2.828 2.828 5.657 2.828 8.485 0 2.829-2.829 2.829-5.657 0-8.485-2.828-2.828-5.657-2.828-8.485 0"/></svg>;
 const IconCreditCard = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>;
+const IconInfo = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>;
 
 export default function ThemeDetailPage() {
     const {
@@ -21,7 +21,9 @@ export default function ThemeDetailPage() {
         viewMode, setViewMode, activeImage, setActiveImage, displayImages,
         getImageUrl, handleGetTheme, handleShare, router,
         showPaymentModal, qrCode, paymentStatus, closePaymentModal,
-        selectedPlan, setSelectedPlan
+        selectedPlan, setSelectedPlan,
+        // ✅ รับค่า Modal มา
+        alertModal, closeAlertModal
     } = useThemeDetail();
 
     if (loading) return <div className="min-h-screen flex items-center justify-center text-slate-400 font-medium tracking-wide">Loading resources...</div>;
@@ -62,24 +64,35 @@ export default function ThemeDetailPage() {
                     </div>
 
                     {/* Device Frame */}
-                    <div className="relative w-full flex justify-center items-center h-[600px]"> 
-                        <div className={`transition-all duration-500 ease-in-out relative ${viewMode === 'mobile' ? 'w-[300px] h-[600px]' : 'w-[800px] h-[600px]'}`}>
+                    <div className="relative w-full flex justify-center items-center min-h-[600px]"> 
+                        <div className={`transition-all duration-500 ease-in-out relative ${viewMode === 'mobile' ? 'w-full max-w-[340px]' : 'w-full max-w-[800px]'}`}>
+                            
                             {viewMode === 'mobile' ? (
-                                <div className="relative w-full h-full bg-slate-900 rounded-[3.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] border-[6px] border-slate-900 overflow-hidden ring-1 ring-slate-900/50">
-                                    <div className="absolute inset-0 bg-black rounded-[3.2rem] overflow-hidden">
-                                        {activeImage ? (
-                                            <img src={getImageUrl(activeImage)!} className="w-full h-full object-cover transition-transform duration-700 hover:scale-105" alt="Preview" />
-                                        ) : (
-                                            <div className="h-full flex flex-col items-center justify-center text-slate-600 gap-2"><div className="w-8 h-8 border-2 border-slate-700 rounded-full"></div><span className="text-xs font-medium">No Preview</span></div>
-                                        )}
+                                <div className="relative w-full aspect-[9/19.5]">
+                                    <div className="relative h-full w-full rounded-[3.5rem] p-[4px] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.4)] border ring-1 ring-[#111] z-10 overflow-hidden bg-[#363535] border-[#555]">
+                                        <div className="absolute inset-0 rounded-[3.5rem] border-[1px] border-white/20 pointer-events-none z-20"></div>
+                                        <div className="relative w-full h-full bg-black rounded-[3.2rem] overflow-hidden border-[4px] border-black">
+                                            <div className="absolute top-[12px] left-1/2 -translate-x-1/2 w-[32%] h-[28px] bg-black rounded-full z-50 flex items-center justify-between px-2 shadow-sm pointer-events-none">
+                                                <div className="w-[30%] h-[60%] bg-[#1a1a1a]/80 rounded-full blur-[0.5px]"></div>
+                                                <div className="w-[20%] h-[60%] bg-[#252525]/80 rounded-full blur-[0.5px]"></div>
+                                            </div>
+                                            {activeImage ? (
+                                                <img src={getImageUrl(activeImage)!} className="w-full h-full object-cover transition-transform duration-700 hover:scale-105" alt="Preview" />
+                                            ) : (
+                                                <div className="h-full flex flex-col items-center justify-center text-slate-600 gap-2"><div className="w-8 h-8 border-2 border-slate-700 rounded-full"></div><span className="text-xs font-medium">No Preview</span></div>
+                                            )}
+                                            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[35%] h-1.5 bg-white/40 rounded-full backdrop-blur-md z-40"></div>
+                                        </div>
                                     </div>
-                                    {/* Dynamic Island */}
-                                    <div className="absolute top-3 left-1/2 -translate-x-1/2 w-[30%] h-[24px] bg-black rounded-full z-20"></div>
                                 </div>
                             ) : (
-                                <div className="relative w-full h-full bg-slate-900 rounded-[2rem] shadow-2xl border-[8px] border-slate-900 overflow-hidden">
-                                    <div className="h-full w-full bg-black flex items-center justify-center relative">
-                                        {activeImage ? (<img src={getImageUrl(activeImage)!} className="w-full h-full object-contain" alt="Preview" />) : (<span className="text-slate-600 text-xs font-medium">No Preview</span>)}
+                                <div className="relative w-full aspect-[4/3]">
+                                    <div className="relative h-full w-full rounded-[2.5rem] p-[4px] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.4)] border ring-1 ring-[#111] z-10 overflow-hidden bg-[#363535] border-[#555]">
+                                        <div className="absolute inset-0 rounded-[2.5rem] border-[1px] border-white/20 pointer-events-none z-20"></div>
+                                        <div className="relative w-full h-full bg-black rounded-[2.2rem] overflow-hidden border-[6px] border-black flex items-center justify-center">
+                                            <div className="absolute top-[8px] left-1/2 -translate-x-1/2 w-2 h-2 bg-[#1a1a1a] rounded-full z-50 ring-1 ring-slate-800"></div>
+                                            {activeImage ? (<img src={getImageUrl(activeImage)!} className="w-full h-full object-cover" alt="Preview" />) : (<span className="text-slate-600 text-xs font-medium">No Preview</span>)}
+                                        </div>
                                     </div>
                                 </div>
                             )}
@@ -100,7 +113,6 @@ export default function ThemeDetailPage() {
 
                 {/* --- Right: Details & Action --- */}
                 <div className="lg:col-span-5 flex flex-col justify-center space-y-8 py-4">
-                    
                     {/* Header */}
                     <div>
                         <div className="flex items-center gap-2 mb-4">
@@ -245,10 +257,10 @@ export default function ThemeDetailPage() {
                 </div>
             </div>
 
-            {/* 💰 Payment Modal (Cleaned Up) */}
+            {/* 💰 Payment Modal (สำหรับของเสียเงิน) */}
             {showPaymentModal && qrCode && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white p-8 rounded-[24px] shadow-2xl max-w-sm w-full mx-4 relative animate-in zoom-in-95 duration-300">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200 p-4">
+                    <div className="bg-white p-8 rounded-[24px] shadow-2xl max-w-sm w-full relative animate-in zoom-in-95 duration-300">
                         <button onClick={closePaymentModal} disabled={paymentStatus === 'successful'} className="absolute top-4 right-4 p-2 bg-slate-50 text-slate-400 rounded-full hover:bg-slate-100 hover:text-slate-600 transition-colors disabled:opacity-0"><IconX /></button>
                         
                         <div className="flex flex-col items-center text-center gap-4">
@@ -281,6 +293,32 @@ export default function ThemeDetailPage() {
                                     </div>
                                 )}
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ✅✅ Alert Modal (ของฟรี + แจ้งเตือนกลางจอ) */}
+            {alertModal.isOpen && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200 p-4">
+                    <div className="bg-white p-6 rounded-[20px] shadow-2xl max-w-sm w-full relative animate-in zoom-in-95 duration-300 flex flex-col items-center text-center">
+                        <div className={`p-3 rounded-full mb-4 ${alertModal.type === 'success' ? 'bg-emerald-100 text-emerald-600' : alertModal.type === 'error' ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-600'}`}>
+                            {alertModal.type === 'success' ? <IconCheck /> : alertModal.type === 'error' ? <IconX /> : <IconInfo />}
+                        </div>
+                        <h3 className="text-lg font-black text-slate-900 mb-1">{alertModal.title}</h3>
+                        <p className="text-sm text-slate-500 mb-6 px-4">{alertModal.message}</p>
+                        
+                        <div className="flex gap-3 w-full">
+                            {alertModal.type === 'confirm' ? (
+                                <>
+                                    <button onClick={closeAlertModal} className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-600 font-bold text-sm hover:bg-slate-200 transition-colors">Cancel</button>
+                                    <button onClick={alertModal.onConfirm} className="flex-1 py-3 rounded-xl bg-slate-900 text-white font-bold text-sm hover:bg-slate-800 transition-colors">Confirm</button>
+                                </>
+                            ) : (
+                                <button onClick={() => { if(alertModal.onConfirm) alertModal.onConfirm(); else closeAlertModal(); }} className="w-full py-3 rounded-xl bg-slate-900 text-white font-bold text-sm hover:bg-slate-800 transition-colors">
+                                    {alertModal.type === 'success' ? 'Continue' : 'Close'}
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>

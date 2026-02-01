@@ -14,8 +14,6 @@ async function getSupabase() {
   );
 }
 
-// (ลบบรรทัดที่นายวางผิดตรงนี้ออกไปแล้วครับ)
-
 async function getMyBrandInfo(supabase: any) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthorized");
@@ -42,7 +40,7 @@ function calculateEffectivePlan(brand: any) {
 }
 
 // ----------------------------------------------------------------------
-// ✅ HELPER: ระบบ Sync Themes แบบ Smart Merge (คงเดิม 100% ห้ามแตะ!)
+// ✅ HELPER: ระบบ Sync Themes แบบ Smart Merge (คงเดิม 100%)
 // ----------------------------------------------------------------------
 export async function syncThemesWithPlan(supabase: any, brandId: string, plan: string, planExpiry: string | null) {
     // 1. กำหนดสิทธิ์
@@ -62,7 +60,6 @@ export async function syncThemesWithPlan(supabase: any, brandId: string, plan: s
     const allowedIds = allowedThemes?.map((t: any) => t.id) || [];
 
     // --- PHASE A: ล้างบาง (Delete) ---
-    // ลบเฉพาะ Subscription ที่ไม่อยู่ในรายการอนุญาต
     let deleteQuery = supabase.from('themes')
         .delete()
         .eq('brand_id', brandId)
@@ -75,7 +72,6 @@ export async function syncThemesWithPlan(supabase: any, brandId: string, plan: s
 
     // --- PHASE B: เติมของแบบฉลาด (Smart Upsert) ---
     if (allowedIds.length > 0) {
-        // 1. ดึงธีมเดิมที่มีอยู่ทั้งหมด
         const { data: existingThemes } = await supabase
             .from('themes')
             .select('marketplace_theme_id, purchase_type, expires_at')
@@ -85,7 +81,6 @@ export async function syncThemesWithPlan(supabase: any, brandId: string, plan: s
         const existingMap = new Map();
         existingThemes?.forEach((t: any) => existingMap.set(t.marketplace_theme_id, t));
 
-        // 2. เตรียมข้อมูล Upsert
         const records = allowedIds.map((id: string) => {
             const existing = existingMap.get(id);
             
@@ -93,12 +88,10 @@ export async function syncThemesWithPlan(supabase: any, brandId: string, plan: s
             let finalExpiresAt = planExpiry; 
 
             if (existing) {
-                // 🛡️ กฎข้อ 1: Lifetime ต้องเป็น Lifetime วันยังค่ำ
                 if (existing.purchase_type === 'lifetime') {
                     finalPurchaseType = 'lifetime';
                     finalExpiresAt = null;
                 }
-                // 🛡️ กฎข้อ 2: Monthly (ซื้อแยก) ต้องคงสถานะ Monthly ไว้
                 else if (existing.purchase_type === 'monthly') {
                     finalPurchaseType = 'monthly';
                     
@@ -124,7 +117,6 @@ export async function syncThemesWithPlan(supabase: any, brandId: string, plan: s
             };
         });
 
-        // 3. บันทึกลง Database
         if (records.length > 0) {
             await supabase.from('themes').upsert(records, { 
                 onConflict: 'brand_id, marketplace_theme_id',
@@ -141,17 +133,21 @@ export async function getThemesDataAction() {
   try {
     const { brandId, isOwner } = await getMyBrandInfo(supabase);
 
-    // 1. ดึงข้อมูล Plan
+    // ✅ 1. เพิ่ม: ดึง Categories ทั้งหมด
+    const { data: categories } = await supabase
+        .from('marketplace_categories')
+        .select('id, name')
+        .order('name');
+
+    // 2. ดึงข้อมูล Plan
     let { data: brand } = await supabase
         .from('brands')
         .select('slug, theme_mode, plan, expiry_basic, expiry_pro, expiry_ultimate') 
         .eq('id', brandId)
         .single();
 
-    // 2. คำนวณ Plan จริง
+    // 3. คำนวณ Plan จริง & Force Sync
     const { plan: effectivePlan, expiry: activeExpiry } = calculateEffectivePlan(brand);
-
-    // 3. Force Sync (เรียกใช้ฟังก์ชัน Smart Merge ตัวเดิม)
     await syncThemesWithPlan(supabase, brandId, effectivePlan, activeExpiry);
 
     // 4. Update Plan
@@ -159,11 +155,14 @@ export async function getThemesDataAction() {
         await supabase.from('brands').update({ plan: effectivePlan }).eq('id', brandId);
     }
 
-    // 5. ดึง Themes
+    // 5. ดึง Themes (✅ เพิ่ม category_id เข้าไปใน query)
     const { data: themes } = await supabase.from('themes')
         .select(`
           id, purchase_type, expires_at, marketplace_theme_id,
-          marketplace_themes ( name, slug, image_url, theme_mode, marketplace_categories ( name ) )
+          marketplace_themes ( 
+            name, slug, image_url, theme_mode, category_id, 
+            marketplace_categories ( name ) 
+          )
         `)
         .eq('brand_id', brandId)
         .order('created_at', { ascending: false });
@@ -188,16 +187,16 @@ export async function getThemesDataAction() {
         return { ...theme, is_expired: isExpired, days_left: daysLeft };
     }) || [];
 
-    // ✅✅ จุดที่แก้: ย้าย activeThemes/expiredThemes มาไว้ตรงนี้ครับ (ก่อน return) ✅✅
-    // เพื่อให้มันใช้ข้อมูล processedThemes ที่ทำเสร็จแล้วได้
     const activeThemes = processedThemes.filter((t: any) => !t.is_expired);
     const expiredThemes = processedThemes.filter((t: any) => t.is_expired);
 
+    // ✅ ส่ง categories กลับไปด้วย
     return { 
         success: true, 
         themes: processedThemes, 
-        activeThemes,  // ส่งกลับไปด้วย
-        expiredThemes, // ส่งกลับไปด้วย
+        categories: categories || [], // <--- เพิ่มตรงนี้
+        activeThemes, 
+        expiredThemes, 
         currentConfig: { slug: brand?.slug || '', mode: brand?.theme_mode || '' },
         currentPlan: effectivePlan, 
         brandId,
@@ -210,7 +209,7 @@ export async function getThemesDataAction() {
 }
 
 export async function applyThemeAction(slug: string, themeMode: string) {
-    // ... (ส่วนนี้เหมือนเดิม 100%) ...
+    // ... (ส่วนนี้เหมือนเดิม 100% ไม่แตะต้อง) ...
     const supabase = await getSupabase();
     try {
         const { brandId, isOwner } = await getMyBrandInfo(supabase);

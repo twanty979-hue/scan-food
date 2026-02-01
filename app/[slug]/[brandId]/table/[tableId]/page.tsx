@@ -2,7 +2,7 @@
 
 import React from "react";
 
-import { useShopLogic } from "./useShopLogic"; 
+import { useShopLogic } from "../../../../../hooks/useShopLogic"; 
 
 import StandardTheme from "@/components/themes/StandardTheme";
 import LuxuryTheme from "@/components/themes/LuxuryTheme";

@@ -1,6 +1,6 @@
+// hooks/useShopLogic.ts
 import { useState, useEffect, useMemo, useCallback, use } from "react";
-// ยังคง import supabase client จาก lib เดิม เพื่อใช้ Realtime (Subscribe)
-import { supabase } from "../../../../../lib/supabase"; 
+import { supabase } from "@/lib/supabase"; 
 import { useRouter } from "next/navigation";
 import { fetchShopData, submitOrder } from "@/app/actions/shop";
 
@@ -13,7 +13,6 @@ const roundToQuarter = (value: number) => Math.round(value * 4) / 4;
 export const useShopLogic = (params: any) => {
   const router = useRouter();
   
-  // ✅ แก้ไขการใช้ use() ให้รองรับทั้ง Next.js 14 และ 15 (เผื่อ params ไม่ใช่ Promise)
   const resolvedParams = params instanceof Promise ? use(params) : params;
   const { slug: currentSlug, brandId, tableId: combinedId } = resolvedParams || {};
 
@@ -50,6 +49,44 @@ export const useShopLogic = (params: any) => {
 
   const getMenuUrl = (imageName: string) => imageName ? (imageName.startsWith('http') ? imageName : `${CDN_MENU_URL}${brandId}/${imageName}`) : null;
   const getBannerUrl = (imageName: string) => imageName ? (imageName.startsWith('http') ? imageName : `${CDN_BANNER_URL}${brandId}/${imageName}`) : null;
+
+  // =========================================================================
+  // 🔥 ฟังก์ชันพระเอก V4: กรองบิลยกเลิกทิ้ง + ตัดราคาเมนูย่อยเหลือ 0
+  // =========================================================================
+  const transformOrdersForDisplay = useCallback((orders: any[]) => {
+    if (!orders || !Array.isArray(orders)) return [];
+
+    // ✅ 1. กรองบิลที่สถานะเป็น 'cancelled' ทิ้งไปเลย (ไม่ต้องโผล่หัวมา)
+    const activeOrders = orders.filter(order => order.status !== 'cancelled');
+
+    return activeOrders.map(order => {
+      // 2. แปลงร่างรายการอาหารย่อย (ถ้า Cancel -> แก้ชื่อ และแก้ราคาเป็น 0)
+      const transformedItems = (order.order_items || []).map((item: any) => {
+        if (item.status === 'cancelled') {
+          return {
+            ...item,
+            product_name: `❌ [ยกเลิก] ${item.product_name}`,
+            // บังคับราคาเป็น 0 เพื่อให้สูตรคำนวณในธีม ไม่เอายอดนี้ไปบวก
+            price: 0 
+          };
+        }
+        return item;
+      });
+
+      // 3. คำนวณราคารวมของบิลนี้ใหม่ (จาก item ที่ราคาโดนแก้แล้ว)
+      const newTotalPrice = transformedItems.reduce((sum: number, item: any) => {
+        return sum + (Number(item.price) * Number(item.quantity));
+      }, 0);
+
+      // 4. ส่งข้อมูลชุดใหม่กลับไป
+      return {
+        ...order,
+        total_price: newTotalPrice, 
+        order_items: transformedItems
+      };
+    });
+  }, []);
+  // =========================================================================
 
   // --- Pricing Logic ---
   const calculatePrice = useCallback((product: any, variant = 'normal') => {
@@ -91,21 +128,17 @@ export const useShopLogic = (params: any) => {
     };
   }, [discounts]);
 
-  // --- Initialize Effect (✅ ใช้ Server Action) ---
+  // --- Initialize Effect ---
   useEffect(() => {
     let isMounted = true; 
     
     async function init() {
-      if (!brandId || !combinedId || !realTableId) {
-        // window.location.href = "https://google.com"; // ปิดไว้ก่อนตอน dev จะได้ไม่เด้งไป google
-        return; 
-      }
+      if (!brandId || !combinedId || !realTableId) return;
 
       setLoading(true);
       setError(null);
 
       try {
-        // เรียกใช้ Server Action
         const res = await fetchShopData({ 
           brandId, 
           combinedId, 
@@ -114,7 +147,6 @@ export const useShopLogic = (params: any) => {
 
         if (!isMounted) return;
 
-        // ✅ แก้ไข: เช็ค !res.data เพิ่ม เพื่อกัน TypeScript โวยวาย
         if (!res.success || !res.data) {
           if (res.redirect) {
              window.location.href = res.redirect;
@@ -124,17 +156,17 @@ export const useShopLogic = (params: any) => {
           return;
         }
 
-        // Set Data from Server
         const d = res.data;
         
-        // ✅ ปลอดภัยขึ้นด้วยการเช็คอีกรอบ หรือใช้ค่า default []
         setBrand(d.brand);
         setTableLabel(d.tableLabel);
         setBanners(d.banners || []);
         setCategories(d.categories || []);
         setProducts(d.products || []);
         setDiscounts(d.discounts || []);
-        setOrdersList(d.orders || []); 
+        
+        // ✅ จุดที่ 1: ย้อมแมวตอนโหลดครั้งแรก
+        setOrdersList(transformOrdersForDisplay(d.orders || [])); 
         
         setIsVerified(true);
         setLoading(false);
@@ -146,7 +178,7 @@ export const useShopLogic = (params: any) => {
 
     init();
     return () => { isMounted = false; };
-  }, [brandId, combinedId, realTableId, currentSlug, kickOut]);
+  }, [brandId, combinedId, realTableId, currentSlug, kickOut, transformOrdersForDisplay]);
 
   // --- Banner Interval ---
   useEffect(() => {
@@ -157,7 +189,7 @@ export const useShopLogic = (params: any) => {
     return () => clearInterval(interval);
   }, [banners]);
 
-  // --- Realtime / Security Watcher ---
+  // --- Realtime 1: Table Security Watcher ---
   useEffect(() => {
     if (!realTableId) return;
     const channel = supabase.channel(`table_guard_${realTableId}`)
@@ -169,6 +201,43 @@ export const useShopLogic = (params: any) => {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [realTableId, providedCode]);
+
+  // =========================================================================
+  // ✅ Realtime 2: Order Status Watcher
+  // =========================================================================
+  useEffect(() => {
+    if (!realTableId || !brandId) return;
+
+    const refreshOrders = async () => {
+        const res = await fetchShopData({ 
+            brandId, 
+            combinedId, 
+            slug: decodeURIComponent(currentSlug || '') 
+        });
+        
+        if (res.success && res.data) {
+            // ✅ จุดที่ 2: ย้อมแมวตอน Realtime มา
+            setOrdersList(transformOrdersForDisplay(res.data.orders || []));
+        }
+    };
+
+    const channel = supabase.channel(`customer_order_watch_${realTableId}`)
+      .on(
+        'postgres_changes', 
+        { event: 'UPDATE', schema: 'public', table: 'orders', filter: `brand_id=eq.${brandId}` }, 
+        (payload) => { refreshOrders(); }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'order_items' },
+        (payload) => { refreshOrders(); }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [realTableId, brandId, combinedId, currentSlug, transformOrdersForDisplay]); 
+  // =========================================================================
+
 
   // --- Cart Actions ---
   const handleAddToCart = (product: any, variant: any, note: string = "") => {
@@ -243,7 +312,9 @@ export const useShopLogic = (params: any) => {
 
       setCart([]);
       setActiveTab('status');
-      setOrdersList(result.orders || []); 
+      
+      // ✅ จุดที่ 3: ย้อมแมวตอนสั่งเสร็จ
+      setOrdersList(transformOrdersForDisplay(result.orders || [])); 
 
     } catch (err: any) { 
         alert(`Failed to order: ${err.message}`); 

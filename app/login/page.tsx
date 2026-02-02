@@ -1,8 +1,9 @@
 'use client';
-import { useState, useEffect } from 'react'; // ✅ เพิ่ม useEffect
+import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image'; // ✅ 1. import Image เข้ามา
 
 export default function LoginPage() {
   const router = useRouter();
@@ -11,14 +12,12 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // ✅ เพิ่มส่วนนี้: เช็คว่าล็อกอินค้างไว้หรือยัง?
+  // เช็ค Session (โค้ดเดิม)
   useEffect(() => {
     const checkSession = async () => {
-      // 1. ดูว่ามี Session ค้างในเครื่องไหม
       const { data: { session } } = await supabase.auth.getSession();
       
       if (session) {
-        // 2. ถ้ามี -> เช็คต่อว่ามีร้านหรือยัง (เหมือนตอนกด Login)
         const { data: profile } = await supabase
           .from('profiles')
           .select('brand_id')
@@ -26,9 +25,9 @@ export default function LoginPage() {
           .single();
 
         if (profile?.brand_id) {
-          router.replace('/dashboard'); // มีครบ -> ไป Dashboard
+          router.replace('/dashboard');
         } else {
-          router.replace('/setup');     // มีแต่ตัว ไม่มีร้าน -> ไป Setup
+          router.replace('/setup');
         }
       }
     };
@@ -36,13 +35,19 @@ export default function LoginPage() {
     checkSession();
   }, [router]);
 
+  // ✅ ฟังก์ชันเติม @gmail.com
+  const addGmailSuffix = () => {
+    if (!email.includes('@')) {
+      setEmail((prev) => prev + '@gmail.com');
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setErrorMsg(null);
 
     try {
-      // 1. ล็อกอินเข้าสู่ระบบ (Auth)
       const { data: authData, error: loginError } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -51,14 +56,12 @@ export default function LoginPage() {
       if (loginError) throw loginError;
       if (!authData.user) throw new Error("ไม่พบข้อมูลผู้ใช้");
 
-      // 2. เช็คว่ามีร้านหรือยัง? (Check Profile & Brand)
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('brand_id')
         .eq('id', authData.user.id)
         .single();
 
-      // Logic การเปลี่ยนหน้า:
       if (profileError || !profile || !profile.brand_id) {
         router.push('/setup'); 
       } else {
@@ -79,13 +82,29 @@ export default function LoginPage() {
 
       <div className="bg-white w-full max-w-md p-8 rounded-[2rem] shadow-2xl shadow-brand-500/10 border border-white/50 backdrop-blur-sm relative z-10">
         
-        {/* Header */}
+        {/* Header with Shop Logo */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-gradient-to-br from-brand-400 to-brand-600 rounded-2xl flex items-center justify-center text-white text-3xl shadow-lg shadow-brand-500/30 mx-auto mb-4">
-            <i className="fa-solid fa-right-to-bracket"></i>
+          {/* ✅ ส่วนแสดง Logo ร้าน */}
+          <div className="w-24 h-24 bg-white rounded-2xl flex items-center justify-center shadow-lg shadow-brand-500/20 mx-auto mb-4 p-2 border border-slate-100 relative overflow-hidden">
+             {/* ⚠️ เปลี่ยน src="/logo.png" เป็น path รูปของคุณ */}
+             {/* ถ้ายังไม่มีรูป ให้ใช้ Placeholder นี้ไปก่อนได้ครับ */}
+             <Image 
+               src="/logo.png" 
+               alt="Shop Logo" 
+               fill 
+               className="object-contain p-2"
+               onError={(e) => {
+                 // Fallback ถ้าหารูปไม่เจอ ให้ซ่อนแล้วโชว์ไอคอนแทน (เทคนิคเสริม)
+                 e.currentTarget.style.display = 'none';
+                 e.currentTarget.parentElement?.classList.add('fallback-icon');
+               }}
+             />
+             {/* Fallback Icon (เผื่อรูปเสียหรือไม่ใส่รูป) */}
+             <i className="fa-solid fa-store text-4xl text-brand-500 hidden fallback-icon:block absolute"></i>
           </div>
+          
           <h1 className="text-3xl font-bold text-slate-800">ยินดีต้อนรับกลับ!</h1>
-          <p className="text-slate-500 mt-2">เข้าสู่ระบบเพื่อจัดการร้านของคุณ</p>
+          <p className="text-slate-500 mt-2">FoodScan Management System</p>
         </div>
 
         {/* Error Message */}
@@ -100,23 +119,36 @@ export default function LoginPage() {
         <form onSubmit={handleLogin} className="space-y-5">
           <div>
             <label className="block text-sm font-bold text-slate-700 mb-2 ml-1">อีเมล</label>
-            <div className="relative">
-              <i className="fa-solid fa-envelope absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+            <div className="relative group">
+              <i className="fa-solid fa-envelope absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-brand-500 transition-colors"></i>
+              
               <input 
                 type="email" 
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all font-medium text-slate-700"
-                placeholder="name@example.com"
+                placeholder="ชื่อบัญชีของคุณ"
               />
+
+              {/* ✅ ปุ่มทางลัด + @gmail.com */}
+              {/* จะแสดงเมื่อมีข้อความ และยังไม่มีเครื่องหมาย @ */}
+              {email.length > 0 && !email.includes('@') && (
+                <button
+                  type="button" // สำคัญมาก! ต้องเป็น type button ไม่งั้นมันจะ submit form
+                  onClick={addGmailSuffix}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-bold bg-brand-100 text-brand-600 px-2 py-1.5 rounded-lg hover:bg-brand-200 transition-colors animate-in fade-in zoom-in duration-200"
+                >
+                  + @gmail.com
+                </button>
+              )}
             </div>
           </div>
 
           <div>
             <label className="block text-sm font-bold text-slate-700 mb-2 ml-1">รหัสผ่าน</label>
-            <div className="relative">
-              <i className="fa-solid fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+            <div className="relative group">
+              <i className="fa-solid fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-brand-500 transition-colors"></i>
               <input 
                 type="password" 
                 required

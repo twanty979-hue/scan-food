@@ -1,6 +1,28 @@
 'use client';
 import React, { useEffect } from 'react';
-import Link from 'next/link'; // ✅ Import Link มาใช้
+import Link from 'next/link';
+
+// ✅ แยก Component โลโก้ออกมาเพื่อให้เรียกใช้ซ้ำได้ง่าย และโค้ดสะอาด
+const LogoIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
+  <svg 
+    viewBox="0 0 24 24" 
+    fill="none" 
+    stroke="currentColor" 
+    strokeWidth="2" 
+    strokeLinecap="round" 
+    strokeLinejoin="round" 
+    className={className}
+  >
+    <rect width="5" height="5" x="3" y="3" rx="1"/>
+    <rect width="5" height="5" x="16" y="3" rx="1"/>
+    <rect width="5" height="5" x="3" y="16" rx="1"/>
+    <path d="M21 16h-3a2 2 0 0 0-2 2v3"/>
+    <path d="M12 7v3a2 2 0 0 1-2 2H7"/>
+    <path d="M16 12h1"/>
+    <path d="M21 12v.01"/>
+    <path d="M12 21v.01"/>
+  </svg>
+);
 
 export default function LandingPage() {
 
@@ -113,22 +135,38 @@ export default function LandingPage() {
             <a href="#" className="text-2xl font-bold tracking-wider flex items-center gap-2 group relative">
                 <div className="absolute inset-0 bg-brand-400 blur-lg opacity-20 group-hover:opacity-40 transition-opacity rounded-full"></div>
                 <div className="w-10 h-10 bg-gradient-to-br from-brand-400 to-brand-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-brand-500/30 group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 relative z-10">
-                    <i className="fa-solid fa-qrcode"></i>
+                    {/* ✅ ใส่ SVG Logo ตรงนี้ */}
+                    <LogoIcon className="w-6 h-6" />
                 </div>
-                <span className="relative z-10 group-hover:tracking-widest transition-all duration-300">Quick<span className="text-brand-500">Order</span></span>
+                <span className="relative z-10 group-hover:tracking-widest transition-all duration-300">Food<span className="text-brand-500">Scan</span></span>
             </a>
 
             {/* Desktop Menu */}
             <div className="hidden md:flex gap-8 items-center">
-                <a href="#home" className="hover:text-brand-500 transition-colors font-medium relative group">หน้าแรก<span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-brand-500 transition-all duration-300 group-hover:w-full"></span></a>
-                <a href="#features" className="hover:text-brand-500 transition-colors font-medium relative group">จุดเด่น<span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-brand-500 transition-all duration-300 group-hover:w-full"></span></a>
-                <a href="#howitworks" className="hover:text-brand-500 transition-colors font-medium relative group">วิธีใช้งาน<span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-brand-500 transition-all duration-300 group-hover:w-full"></span></a>
-                {/* ✅ แก้ลิงก์ปุ่มสมัคร */}
-                <Link href="/login" className="relative px-6 py-2 bg-brand-600 text-white hover:bg-brand-700 font-bold rounded-full transition-all shadow-lg hover:shadow-brand-500/50 hover:-translate-y-1 overflow-hidden group">
-                    <span className="absolute top-0 left-0 w-full h-full bg-white/20 -skew-x-12 -translate-x-full group-hover:animate-shine"></span>
-                    <span className="relative z-10">สมัครใช้งานฟรี</span>
-                </Link>
-            </div>
+    {/* 1. หน้าแรก -> กลับไปจุดเริ่มต้น */}
+    <Link href="/" className="hover:text-brand-500 transition-colors font-medium relative group">
+        หน้าแรก
+        <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-brand-500 transition-all duration-300 group-hover:w-full"></span>
+    </Link>
+
+    {/* 2. จุดเด่น -> กลับหน้าแรกแล้วเลื่อนลงไปตรง Feature */}
+    <Link href="/#features" className="hover:text-brand-500 transition-colors font-medium relative group">
+        จุดเด่น
+        <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-brand-500 transition-all duration-300 group-hover:w-full"></span>
+    </Link>
+
+    {/* 3. วิธีใช้งาน -> ไปหน้าคู่มือเต็มๆ ที่เราเพิ่งสร้าง */}
+    <Link href="/manual" className="hover:text-brand-500 transition-colors font-medium relative group">
+        วิธีใช้งาน
+        <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-brand-500 transition-all duration-300 group-hover:w-full"></span>
+    </Link>
+
+    {/* ปุ่มสมัคร */}
+    <Link href="/login" className="relative px-6 py-2 bg-brand-600 text-white hover:bg-brand-700 font-bold rounded-full transition-all shadow-lg hover:shadow-brand-500/50 hover:-translate-y-1 overflow-hidden group">
+        <span className="absolute top-0 left-0 w-full h-full bg-white/20 -skew-x-12 -translate-x-full group-hover:animate-shine"></span>
+        <span className="relative z-10">เข้าสู่ระบบ</span>
+    </Link>
+</div>
 
             {/* Mobile Menu Button */}
             <button onClick={() => document.getElementById('mobile-menu')?.classList.toggle('hidden')} className="md:hidden text-2xl focus:outline-none hover:text-brand-500 transition-colors">
@@ -141,7 +179,6 @@ export default function LandingPage() {
             <a href="#home" className="text-lg font-medium hover:text-brand-600">หน้าแรก</a>
             <a href="#features" className="text-lg font-medium hover:text-brand-600">จุดเด่น</a>
             <a href="#howitworks" className="text-lg font-medium hover:text-brand-600">วิธีใช้งาน</a>
-            {/* ✅ แก้ลิงก์ Mobile Menu */}
             <Link href="/register" className="text-white bg-gradient-to-r from-brand-500 to-brand-600 px-8 py-2 rounded-full font-bold shadow-lg shadow-brand-500/30">สมัครใช้งานฟรี</Link>
         </div>
       </nav>
@@ -157,7 +194,7 @@ export default function LandingPage() {
             <div className="text-left reveal active order-2 md:order-1">
                 <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/80 border border-brand-100 text-brand-600 mb-6 text-sm font-semibold tracking-wide shadow-sm backdrop-blur-sm hover:scale-105 transition-transform cursor-default">
                     <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                    ระบบร้านอาหารยุค 2024
+                    ระบบร้านอาหารยุค ใหม่
                 </div>
                 <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-6 leading-tight text-slate-900">
                     สแกนปุ๊บ สั่งปั๊บ<br/>
@@ -169,12 +206,11 @@ export default function LandingPage() {
                     เปลี่ยนร้านอาหารของคุณให้เป็นระบบดิจิทัล ลดการรอคอย ลดความผิดพลาด ลูกค้าแฮปปี้ <span className="font-semibold text-slate-800">ยอดขายดีขึ้นเห็นๆ</span>
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4">
-                    {/* ✅ แก้ลิงก์ปุ่ม Hero */}
-                    <Link href="/login" className="relative px-8 py-4 bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-700 hover:to-brand-600 rounded-full text-white font-bold text-lg transition-all shadow-xl shadow-brand-500/30 flex items-center justify-center gap-3 group transform hover:-translate-y-1 hover:shadow-brand-500/50 overflow-hidden active:scale-95 duration-100">
+                    <Link href="/register" className="relative px-8 py-4 bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-700 hover:to-brand-600 rounded-full text-white font-bold text-lg transition-all shadow-xl shadow-brand-500/30 flex items-center justify-center gap-3 group transform hover:-translate-y-1 hover:shadow-brand-500/50 overflow-hidden active:scale-95 duration-100">
                         <span className="absolute top-0 left-0 w-full h-full bg-white/20 -skew-x-12 -translate-x-full group-hover:animate-shine"></span>
-                        <i className="fa-solid fa-rocket group-hover:rotate-12 transition-transform"></i> ทดลองใช้ฟรี 14 วัน
+                        <i className="fa-solid fa-rocket group-hover:rotate-12 transition-transform"></i> สมัครใช้งานฟรี
                     </Link>
-                    <a href="#features" className="px-8 py-4 bg-white/80 border border-slate-200 hover:bg-white text-slate-700 rounded-full font-medium transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-lg backdrop-blur-sm hover:-translate-y-1 active:scale-95 duration-100">
+                    <a href="https://www.youtube.com/watch?v=xiuRS7e-5R8" className="px-8 py-4 bg-white/80 border border-slate-200 hover:bg-white text-slate-700 rounded-full font-medium transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-lg backdrop-blur-sm hover:-translate-y-1 active:scale-95 duration-100">
                         <i className="fa-regular fa-circle-play text-brand-500 text-xl"></i> ดูวิดีโอตัวอย่าง
                     </a>
                 </div>
@@ -221,7 +257,7 @@ export default function LandingPage() {
 
                 {/* Floating QR */}
                 <div className="tilt-element absolute -bottom-6 -left-6 md:bottom-20 md:-left-16 w-44 h-44 p-3 rounded-3xl shadow-2xl qr-frame backdrop-blur-sm bg-white/90 floating-qr">
-                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=DemoOrder&color=0ea5e9" alt="QR Code" className="w-full h-full opacity-90" />
+                    <img src="https://xvhibjejvbriotfpunvv.supabase.co/storage/v1/object/public/menus/37af2d22-459a-4049-8658-bdfdf8d9bcc4/1770043723915.webp" alt="QR Code" className="w-full h-full opacity-90" />
                     <div className="scanner-line"></div>
                     <div className="qr-corner tl"></div>
                     <div className="qr-corner tr"></div>
@@ -311,7 +347,7 @@ export default function LandingPage() {
             <div className="reveal delay-100 grid md:grid-cols-12 gap-8 items-center">
                 <div className="md:col-span-5 space-y-4">
                     {[
-                        {icon: 'fa-bolt-lightning', color: 'text-green-500', bg: 'bg-green-50', title: 'Zero Setup', desc: 'ระบบถูกตั้งค่าไว้ให้พร้อมลอง ไม่ต้องกรอกข้อมูลส่วนตัว'},
+                        {icon: 'fa-bolt-lightning', color: 'text-green-500', bg: 'bg-green-50', title: 'Zero Setup', desc: 'ระบบถูกตั้งค่าไว้ให้พร้อมใช่งาน เพียงสมัครจะได้ร้านของตัวเองทันที'},
                         {icon: 'fa-mobile-screen-button', color: 'text-blue-500', bg: 'bg-blue-50', title: 'Real Dashboard', desc: 'จัดการเมนู ดูออเดอร์ และสรุปยอดขายได้แบบ Real-time'},
                         {icon: 'fa-wand-magic-sparkles', color: 'text-purple-500', bg: 'bg-purple-50', title: 'Full Features', desc: 'ลองใช้ระบบหลังบ้าน (Backstore) ได้ครบทุกฟังก์ชัน'}
                     ].map((item, idx) => (
@@ -342,9 +378,8 @@ export default function LandingPage() {
                             <h3 className="text-2xl font-bold text-slate-900 mb-2">พร้อมลุยแล้วหรือยัง?</h3>
                             <p className="text-slate-500 mb-10">กดปุ่มด้านล่างเพื่อเข้าสู่ระบบทดได้ทันที</p>
 
-                            {/* ✅ แก้ลิงก์ปุ่ม CTA ด้านล่าง */}
                             <Link 
-                                href="/login"
+                                href="/register"
                                 className="w-full bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-700 hover:to-brand-600 text-white font-black py-6 rounded-2xl text-2xl shadow-2xl shadow-brand-500/40 transform transition-all hover:scale-[1.03] active:scale-95 duration-200 flex items-center justify-center gap-4 relative overflow-hidden group/btn">
                                 <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 -translate-x-full group-hover/btn:animate-shine"></span>
                                 สมัครใช้งานฟรี
@@ -368,26 +403,80 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-slate-50 text-slate-500 py-12 border-t border-slate-200">
-        <div className="max-w-7xl mx-auto px-6 lg:px-12 flex flex-col md:flex-row justify-between items-center gap-6">
-            <div className="text-2xl font-bold tracking-wider text-slate-800 flex items-center gap-2">
-                 <div className="w-8 h-8 bg-gradient-to-br from-brand-400 to-brand-600 rounded-lg flex items-center justify-center text-white text-sm shadow-lg shadow-brand-500/20">
-                    <i className="fa-solid fa-qrcode"></i>
-                </div>
-                Quick<span className="text-brand-500">Order</span>
-            </div>
-            <div className="flex gap-8 text-sm font-medium">
-                <a href="#" className="hover:text-brand-500 transition-colors">คู่มือการใช้งาน</a>
-                <a href="#" className="hover:text-brand-500 transition-colors">เงื่อนไขการบริการ</a>
-                <a href="#" className="hover:text-brand-500 transition-colors">ความเป็นส่วนตัว</a>
-                {/* ✅ เพิ่มลิงก์เข้าสู่ระบบตรง Footer */}
-                <Link href="/login" className="hover:text-brand-500 transition-colors">เข้าสู่ระบบ (Login)</Link>
-            </div>
-            <div className="text-sm">
-                &copy; 2024 QuickOrder. Made with <i className="fa-solid fa-heart text-red-500 mx-1"></i> in Thailand.
-            </div>
+<footer className="bg-slate-50 text-slate-500 py-12 border-t border-slate-200">
+  <div className="max-w-7xl mx-auto px-6 lg:px-12">
+    
+    {/* ส่วนเนื้อหาหลัก (บน) */}
+    <div className="flex flex-col md:flex-row justify-between items-center gap-8 mb-8">
+      
+      {/* 1. Logo Section */}
+      <div className="text-2xl font-bold tracking-wider text-slate-800 flex items-center gap-2">
+        <div className="w-8 h-8 bg-gradient-to-br from-brand-400 to-brand-600 rounded-lg flex items-center justify-center text-white text-sm shadow-lg shadow-brand-500/20">
+          <LogoIcon className="w-5 h-5" />
         </div>
-      </footer>
+        Food<span className="text-brand-500">Scan</span>
+      </div>
+
+      {/* 2. Links Section */}
+      <div className="flex flex-wrap justify-center gap-6 md:gap-8 text-sm font-medium">
+        <Link href="/manual" className="hover:text-brand-500 transition-colors">
+          คู่มือการใช้งาน
+        </Link>
+        <Link href="/terms" className="hover:text-brand-500 transition-colors">
+          เงื่อนไขการบริการ
+        </Link>
+        <Link href="/privacy" className="hover:text-brand-500 transition-colors">
+          ความเป็นส่วนตัว
+        </Link>
+        <Link href="/login" className="hover:text-brand-500 transition-colors">
+          เข้าสู่ระบบ (Login)
+        </Link>
+      </div>
+
+      {/* 3. Contact & Socials Section (ส่วนที่เพิ่มใหม่) */}
+      <div className="flex flex-col items-center md:items-end gap-3">
+        {/* เบอร์โทรศัพท์ */}
+        <a href="tel:0997547764" className="flex items-center gap-2 text-slate-700 hover:text-brand-500 transition-colors font-semibold">
+          <i className="fa-solid fa-phone-volume animate-pulse"></i>
+          099-754-7764
+        </a>
+        
+        {/* Social Icons */}
+        <div className="flex gap-4 text-xl">
+          {/* Line */}
+          <a href="#" target="_blank" aria-label="Line" className="hover:text-[#00B900] transition-transform hover:scale-110">
+            <i className="fa-brands fa-line"></i>
+          </a>
+          {/* Facebook */}
+          <a href="#" target="_blank" aria-label="Facebook" className="hover:text-[#1877F2] transition-transform hover:scale-110">
+            <i className="fa-brands fa-facebook"></i>
+          </a>
+          {/* Instagram */}
+          <a href="#" target="_blank" aria-label="Instagram" className="hover:text-[#E4405F] transition-transform hover:scale-110">
+            <i className="fa-brands fa-instagram"></i>
+          </a>
+          {/* TikTok */}
+          <a href="#" target="_blank" aria-label="TikTok" className="hover:text-black transition-transform hover:scale-110">
+            <i className="fa-brands fa-tiktok"></i>
+          </a>
+          {/* YouTube */}
+          <a href="#" target="_blank" aria-label="YouTube" className="hover:text-[#FF0000] transition-transform hover:scale-110">
+            <i className="fa-brands fa-youtube"></i>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    {/* เส้นคั่น */}
+    <div className="border-t border-slate-200 my-6"></div>
+
+    {/* ส่วนล่างสุด (Copyright) */}
+    <div className="text-center text-sm text-slate-400">
+      &copy; 2026/2/2 FoodScan. Made with <i className="fa-solid fa-heart text-red-500 mx-1"></i> in Thailand.
+    </div>
+
+  </div>
+</footer>
     </div>
   );
 }

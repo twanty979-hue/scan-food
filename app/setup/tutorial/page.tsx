@@ -21,41 +21,75 @@ const IconServer = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg>
 );
 
-// --- Timezone Helper ---
+// --- ✅ Global Timezone Generator with Smart Keywords ---
 type TimezoneOption = {
   value: string;
-  label: string; 
+  label: string;
+  searchString: string; // รวม keywords สำหรับค้นหา
   offset: number;
 };
 
-const getTimezoneOptions = (): TimezoneOption[] => {
+// จับคู่เมือง -> ประเทศ (เพื่อให้ค้นหาเจอง่ายๆ)
+const CITY_KEYWORD_MAP: Record<string, string> = {
+  'Bangkok': 'Thailand Thai Siam ไทย กรุงเทพ',
+  'Phnom_Penh': 'Cambodia Khmer กัมพูชา เขมร',
+  'Vientiane': 'Laos Lao ลาว',
+  'Yangon': 'Myanmar Burma พม่า',
+  'Jakarta': 'Indonesia',
+  'Ho_Chi_Minh': 'Vietnam เวียดนาม',
+  'Singapore': 'SG สิงคโปร์',
+  'Tokyo': 'Japan JP ญี่ปุ่น',
+  'Seoul': 'Korea KR เกาหลี',
+  'Taipei': 'Taiwan ไต้หวัน',
+  'London': 'UK England British อังกฤษ',
+  'New_York': 'USA America US',
+  'Los_Angeles': 'USA US California',
+  'Sydney': 'Australia AU',
+  'Paris': 'France ฝรั่งเศส',
+  'Berlin': 'Germany เยอรมัน',
+};
+
+const getGlobalTimezones = (): TimezoneOption[] => {
   try {
+    // 1. ดึง Timezone ทั่วโลก
     const timezones = Intl.supportedValuesOf('timeZone');
     const now = new Date();
     
     return timezones.map(tz => {
+      // 2. จัดรูปแบบ Label: (GMT+07:00) Asia/Bangkok
       const str = now.toLocaleString('en-US', { timeZone: tz, timeZoneName: 'longOffset' });
       const offsetPart = str.split('GMT')[1] || '+00:00';
+      const cleanOffset = `GMT${offsetPart}`;
       
+      // 3. คำนวณ Offset เป็นนาที (ไว้เรียงลำดับ)
       const sign = offsetPart.includes('-') ? -1 : 1;
       const [h, m] = offsetPart.replace('+', '').replace('-', '').split(':').map(Number);
       const totalMinutes = sign * (h * 60 + m);
 
+      // 4. สร้าง Keywords สำหรับค้นหา
+      // เช่น tz = 'Asia/Bangkok' -> keywords = 'thailand thai ...'
+      const city = tz.split('/')[1] || '';
+      const extraKeywords = CITY_KEYWORD_MAP[city] || '';
+      const searchString = `${tz} ${cleanOffset} ${extraKeywords}`.toLowerCase();
+
       return {
         value: tz,
-        label: `(GMT${offsetPart}) ${tz}`,
+        label: `(${cleanOffset}) ${tz}`,
+        searchString,
         offset: totalMinutes
       };
-    }).sort((a, b) => a.offset - b.offset); 
+    }).sort((a, b) => a.offset - b.offset); // เรียงตามเวลา
   } catch (e) {
-    return [{ value: 'Asia/Bangkok', label: '(GMT+07:00) Asia/Bangkok', offset: 420 }];
+    // Fallback เผื่อ Browser เก่า
+    return [
+      { value: 'Asia/Bangkok', label: '(GMT+07:00) Asia/Bangkok', searchString: 'thai', offset: 420 },
+      { value: 'UTC', label: '(GMT+00:00) UTC', searchString: 'utc', offset: 0 }
+    ];
   }
 };
 
-// --- Helper สุ่มตัวอักษร (แทน crypto.randomUUID) ---
-const generateRandomToken = () => {
-  return Math.random().toString(36).substring(2, 10); // ได้ string สุ่มประมาณ 8 ตัวอักษร
-};
+// --- Helper ---
+const generateRandomToken = () => Math.random().toString(36).substring(2, 10);
 
 export default function SetupTutorialPage() {
   const router = useRouter();
@@ -64,17 +98,17 @@ export default function SetupTutorialPage() {
   const [brandId, setBrandId] = useState<string | null>(null);
   
   // Timezone State
+  const tzList = useMemo(() => getGlobalTimezones(), []); // โหลดครั้งเดียว
   const [selectedTz, setSelectedTz] = useState<TimezoneOption | null>(null);
   const [searchTz, setSearchTz] = useState('');
   const [isTzOpen, setIsTzOpen] = useState(false);
-  const tzList = useMemo(() => getTimezoneOptions(), []);
   const tzDropdownRef = useRef<HTMLDivElement>(null);
 
   // Processing State
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState('Initializing...');
 
-  // 1. Load User & Default Timezone
+  // 1. Load User & Default
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -89,10 +123,7 @@ export default function SetupTutorialPage() {
 
       // Default Bangkok
       const bkk = tzList.find(t => t.value === 'Asia/Bangkok');
-      if (bkk) {
-        setSelectedTz(bkk);
-        setSearchTz(bkk.label);
-      }
+      if (bkk) setSelectedTz(bkk);
     };
     init();
 
@@ -105,10 +136,12 @@ export default function SetupTutorialPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [router, tzList]);
 
-  // Filter Logic
+  // ✅ Filter Logic (Global + Smart Keywords)
   const filteredTz = useMemo(() => {
     if (!searchTz) return tzList;
-    return tzList.filter(t => t.label.toLowerCase().includes(searchTz.toLowerCase()));
+    const lowerSearch = searchTz.toLowerCase();
+    // ค้นหาจาก searchString ที่เราเตรียมไว้ (รวมชื่อเมือง, ประเทศ, offset)
+    return tzList.filter(t => t.searchString.includes(lowerSearch));
   }, [searchTz, tzList]);
 
   // --- Main Logic ---
@@ -121,20 +154,13 @@ export default function SetupTutorialPage() {
       // Step 1: Timezone
       setProgress(10);
       setStatusText('Setting up store timezone...');
-      const { error: tzError } = await supabase.from('brands').update({ timezone: selectedTz.value }).eq('id', brandId);
-      if (tzError) throw tzError;
+      await supabase.from('brands').update({ timezone: selectedTz.value }).eq('id', brandId);
 
       // Step 2: Tables
       setProgress(30);
       setStatusText('Generating default tables...');
-      
-      // ✅ แก้ตรงนี้: ใช้ฟังก์ชัน generateRandomToken() แทน crypto.randomUUID()
       const tablesData = Array.from({ length: 10 }, (_, i) => ({
-        brand_id: brandId,
-        label: `T-${i + 1}`,
-        capacity: 4,
-        status: 'available',
-        access_token: generateRandomToken() 
+        brand_id: brandId, label: `T-${i + 1}`, capacity: 4, status: 'available', access_token: generateRandomToken() 
       }));
       await supabase.from('tables').insert(tablesData);
 
@@ -147,7 +173,7 @@ export default function SetupTutorialPage() {
       ];
       await supabase.from('banners').insert(bannersData);
 
-      // Step 4: Products (Import with Recommend Logic)
+      // Step 4: Products
       setProgress(70);
       setStatusText('Importing sample menu items...');
       const { data: sourceCats } = await supabase.from('categoriesphotoadmin').select('*');
@@ -155,24 +181,16 @@ export default function SetupTutorialPage() {
 
       if (sourceCats && sourceImages) {
         const catMap: Record<number, string> = {};
-        
-        // 4.1 สร้าง Categories
         for (const cat of sourceCats) {
           const { data: newCat } = await supabase.from('categories').insert({ brand_id: brandId, name: cat.name, is_active: true }).select().single();
           if (newCat) catMap[cat.id] = newCat.id;
         }
-
-        // 4.2 สร้าง Products
         const productsToInsert = sourceImages.map((img, index) => ({
           brand_id: brandId,
-          name: img.name,
-          image_name: img.url,
-          price: img.price || 0,
+          name: img.name, image_name: img.url, price: img.price || 0,
           category_id: img.category_id ? catMap[img.category_id] : null,
-          is_available: true,
-          is_recommended: index < 4 
+          is_available: true, is_recommended: index < 4 
         }));
-
         await supabase.from('products').insert(productsToInsert);
       }
 
@@ -197,7 +215,7 @@ export default function SetupTutorialPage() {
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 font-sans text-slate-800">
       <div className="max-w-md w-full">
         
-        {/* Header Section */}
+        {/* Header */}
         <div className="text-center mb-10">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white border border-slate-200 shadow-sm mb-6">
             <IconServer className="text-blue-600 w-8 h-8" />
@@ -218,7 +236,7 @@ export default function SetupTutorialPage() {
                   Select Store Timezone
                 </label>
                 
-                {/* Custom Searchable Dropdown */}
+                {/* Custom Dropdown */}
                 <div className="relative" ref={tzDropdownRef}>
                   <div 
                     className={`flex items-center w-full border border-slate-200 rounded-xl px-4 py-3 bg-slate-50 hover:bg-white hover:border-slate-300 transition-colors cursor-text ${isTzOpen ? 'ring-2 ring-blue-100 border-blue-500' : ''}`}
@@ -237,7 +255,7 @@ export default function SetupTutorialPage() {
                         setSearchTz('');
                         setIsTzOpen(true);
                       }}
-                      placeholder="Search timezone (e.g. +7, Bangkok)"
+                      placeholder="Search Country or City (e.g. Thai)"
                     />
                     <IconChevronDown className="text-slate-400 w-4 h-4 ml-2" />
                   </div>
@@ -256,7 +274,8 @@ export default function SetupTutorialPage() {
                               setIsTzOpen(false);
                             }}
                           >
-                            {tz.label}
+                            {/* Highlight ถ้ามีคำว่า Bangkok */}
+                            {tz.value.includes('Bangkok') ? '🇹🇭 ' : ''} {tz.label}
                           </div>
                         ))
                       ) : (
@@ -266,7 +285,7 @@ export default function SetupTutorialPage() {
                   )}
                 </div>
                 <p className="text-[11px] text-slate-400 mt-2 ml-1">
-                  * This will affect your sales reports and opening hours.
+                  * Supports smart search (e.g. type "Thai" to find "Bangkok")
                 </p>
               </div>
 
@@ -311,13 +330,8 @@ export default function SetupTutorialPage() {
               </div>
               <h3 className="text-lg font-semibold text-slate-900 mb-2">Setting up your store</h3>
               <p className="text-slate-500 text-sm mb-6">{statusText}</p>
-              
-              {/* Progress Bar */}
               <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-blue-600 transition-all duration-500 ease-out" 
-                  style={{ width: `${progress}%` }}
-                ></div>
+                <div className="h-full bg-blue-600 transition-all duration-500 ease-out" style={{ width: `${progress}%` }}></div>
               </div>
             </div>
           )}
@@ -334,7 +348,6 @@ export default function SetupTutorialPage() {
           )}
         </div>
 
-        {/* Footer */}
         <p className="text-center text-slate-400 text-xs mt-8">
           Secure Installation • Powered by ScanFood
         </p>

@@ -20,16 +20,19 @@ const IconArrowRight = ({ className }: { className?: string }) => (
 const IconServer = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg>
 );
+// ✅ เพิ่มไอคอนกุญแจ
+const IconLock = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+);
 
-// --- ✅ Global Timezone Generator with Smart Keywords ---
+// --- Global Timezone Generator with Smart Keywords ---
 type TimezoneOption = {
   value: string;
   label: string;
-  searchString: string; // รวม keywords สำหรับค้นหา
+  searchString: string;
   offset: number;
 };
 
-// จับคู่เมือง -> ประเทศ (เพื่อให้ค้นหาเจอง่ายๆ)
 const CITY_KEYWORD_MAP: Record<string, string> = {
   'Bangkok': 'Thailand Thai Siam ไทย กรุงเทพ',
   'Phnom_Penh': 'Cambodia Khmer กัมพูชา เขมร',
@@ -51,23 +54,18 @@ const CITY_KEYWORD_MAP: Record<string, string> = {
 
 const getGlobalTimezones = (): TimezoneOption[] => {
   try {
-    // 1. ดึง Timezone ทั่วโลก
     const timezones = Intl.supportedValuesOf('timeZone');
     const now = new Date();
     
     return timezones.map(tz => {
-      // 2. จัดรูปแบบ Label: (GMT+07:00) Asia/Bangkok
       const str = now.toLocaleString('en-US', { timeZone: tz, timeZoneName: 'longOffset' });
       const offsetPart = str.split('GMT')[1] || '+00:00';
       const cleanOffset = `GMT${offsetPart}`;
       
-      // 3. คำนวณ Offset เป็นนาที (ไว้เรียงลำดับ)
       const sign = offsetPart.includes('-') ? -1 : 1;
       const [h, m] = offsetPart.replace('+', '').replace('-', '').split(':').map(Number);
       const totalMinutes = sign * (h * 60 + m);
 
-      // 4. สร้าง Keywords สำหรับค้นหา
-      // เช่น tz = 'Asia/Bangkok' -> keywords = 'thailand thai ...'
       const city = tz.split('/')[1] || '';
       const extraKeywords = CITY_KEYWORD_MAP[city] || '';
       const searchString = `${tz} ${cleanOffset} ${extraKeywords}`.toLowerCase();
@@ -78,9 +76,8 @@ const getGlobalTimezones = (): TimezoneOption[] => {
         searchString,
         offset: totalMinutes
       };
-    }).sort((a, b) => a.offset - b.offset); // เรียงตามเวลา
+    }).sort((a, b) => a.offset - b.offset); 
   } catch (e) {
-    // Fallback เผื่อ Browser เก่า
     return [
       { value: 'Asia/Bangkok', label: '(GMT+07:00) Asia/Bangkok', searchString: 'thai', offset: 420 },
       { value: 'UTC', label: '(GMT+00:00) UTC', searchString: 'utc', offset: 0 }
@@ -88,7 +85,6 @@ const getGlobalTimezones = (): TimezoneOption[] => {
   }
 };
 
-// --- Helper ---
 const generateRandomToken = () => Math.random().toString(36).substring(2, 10);
 
 export default function SetupTutorialPage() {
@@ -97,8 +93,12 @@ export default function SetupTutorialPage() {
   const [step, setStep] = useState<'config' | 'processing' | 'done'>('config');
   const [brandId, setBrandId] = useState<string | null>(null);
   
+  // ✅ Password State
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  
   // Timezone State
-  const tzList = useMemo(() => getGlobalTimezones(), []); // โหลดครั้งเดียว
+  const tzList = useMemo(() => getGlobalTimezones(), []); 
   const [selectedTz, setSelectedTz] = useState<TimezoneOption | null>(null);
   const [searchTz, setSearchTz] = useState('');
   const [isTzOpen, setIsTzOpen] = useState(false);
@@ -108,20 +108,29 @@ export default function SetupTutorialPage() {
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState('Initializing...');
 
-  // 1. Load User & Default
+  // 1. Load User & Check Redirect
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.replace('/login'); return; }
 
       const { data: profile } = await supabase.from('profiles').select('brand_id').eq('id', user.id).single();
+      
       if (profile?.brand_id) {
+        // 🔥 เช็คว่าร้านเคย Setup หรือยัง? (ถ้ามี timezone แล้ว = เสร็จแล้ว)
+        const { data: brand } = await supabase.from('brands').select('timezone').eq('id', profile.brand_id).single();
+        
+        if (brand?.timezone) {
+           // เสร็จแล้ว -> ดีดไปหน้า pai_order ทันที
+           router.replace('/dashboard/pai_order');
+           return;
+        }
+
         setBrandId(profile.brand_id);
       } else {
         router.replace('/setup');
       }
 
-      // Default Bangkok
       const bkk = tzList.find(t => t.value === 'Asia/Bangkok');
       if (bkk) setSelectedTz(bkk);
     };
@@ -136,28 +145,47 @@ export default function SetupTutorialPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [router, tzList]);
 
-  // ✅ Filter Logic (Global + Smart Keywords)
+  // Filter Logic
   const filteredTz = useMemo(() => {
     if (!searchTz) return tzList;
     const lowerSearch = searchTz.toLowerCase();
-    // ค้นหาจาก searchString ที่เราเตรียมไว้ (รวมชื่อเมือง, ประเทศ, offset)
     return tzList.filter(t => t.searchString.includes(lowerSearch));
   }, [searchTz, tzList]);
 
   // --- Main Logic ---
   const handleStartSetup = async () => {
+    // 1. Validate Form
     if (!brandId || !selectedTz) return;
+    if (!password || !confirmPassword) {
+        alert("กรุณาตั้งรหัสผ่านสำหรับบัญชีของคุณ (Please set a password)");
+        return;
+    }
+    if (password !== confirmPassword) {
+        alert("รหัสผ่านไม่ตรงกัน กรุณากรอกใหม่ (Passwords do not match)");
+        return;
+    }
+    if (password.length < 6) {
+        alert("รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร (Password min length 6)");
+        return;
+    }
+
     setStep('processing');
     setLoading(true);
 
     try {
+      // ✅ Step 0: Set Password first (บันทึกรหัสผ่านเข้า Auth)
+      setProgress(5);
+      setStatusText('Securing your account with new password...');
+      const { error: pwdError } = await supabase.auth.updateUser({ password: password });
+      if (pwdError) throw pwdError;
+
       // Step 1: Timezone
-      setProgress(10);
+      setProgress(20);
       setStatusText('Setting up store timezone...');
       await supabase.from('brands').update({ timezone: selectedTz.value }).eq('id', brandId);
 
       // Step 2: Tables
-      setProgress(30);
+      setProgress(40);
       setStatusText('Generating default tables...');
       const tablesData = Array.from({ length: 10 }, (_, i) => ({
         brand_id: brandId, label: `T-${i + 1}`, capacity: 4, status: 'available', access_token: generateRandomToken() 
@@ -165,7 +193,7 @@ export default function SetupTutorialPage() {
       await supabase.from('tables').insert(tablesData);
 
       // Step 3: Banners
-      setProgress(50);
+      setProgress(60);
       setStatusText('Designing storefront banners...');
       const bannersData = [
         { brand_id: brandId, image_name: 'https://d1csarkz8obe9u.cloudfront.net/posterpreviews/delicious-food-banner-template-design-cd3994e39458960f4f33e73b8c60edb9_screen.jpg?ts=1645769305', title: 'Welcome', sort_order: 1 },
@@ -174,7 +202,7 @@ export default function SetupTutorialPage() {
       await supabase.from('banners').insert(bannersData);
 
       // Step 4: Products
-      setProgress(70);
+      setProgress(80);
       setStatusText('Importing sample menu items...');
       const { data: sourceCats } = await supabase.from('categoriesphotoadmin').select('*');
       const { data: sourceImages } = await supabase.from('images').select('*');
@@ -200,8 +228,9 @@ export default function SetupTutorialPage() {
       await new Promise(r => setTimeout(r, 800));
       setStep('done');
       
+      // ✅ Redirect to pai_order (เสร็จแล้วไปหน้าขายเลย)
       setTimeout(() => {
-        router.replace('/dashboard');
+        router.replace('/dashboard/pai_order');
       }, 1500);
 
     } catch (err: any) {
@@ -221,7 +250,7 @@ export default function SetupTutorialPage() {
             <IconServer className="text-blue-600 w-8 h-8" />
           </div>
           <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">System Configuration</h1>
-          <p className="text-slate-500 mt-2 text-sm">Initialize your restaurant database and settings.</p>
+          <p className="text-slate-500 mt-2 text-sm">Create password and initialize database.</p>
         </div>
 
         {/* Card */}
@@ -231,6 +260,35 @@ export default function SetupTutorialPage() {
           {step === 'config' && (
             <div className="p-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
               
+              {/* ✅ ส่วนตั้งรหัสผ่าน (ใหม่: มี 2 ช่องตามที่ขอ) */}
+              <div className="mb-8">
+                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+                    Set Your Password
+                 </label>
+                 <div className="space-y-3">
+                    <div className="relative">
+                        <IconLock className="absolute left-4 top-3 text-slate-400 w-5 h-5" />
+                        <input 
+                            type="password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            placeholder="New Password (min 6 chars)"
+                            className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-sm"
+                        />
+                    </div>
+                    <div className="relative">
+                        <IconLock className="absolute left-4 top-3 text-slate-400 w-5 h-5" />
+                        <input 
+                            type="password"
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            placeholder="Confirm Password"
+                            className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-sm"
+                        />
+                    </div>
+                 </div>
+              </div>
+
               <div className="mb-6">
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
                   Select Store Timezone
@@ -274,7 +332,6 @@ export default function SetupTutorialPage() {
                               setIsTzOpen(false);
                             }}
                           >
-                            {/* Highlight ถ้ามีคำว่า Bangkok */}
                             {tz.value.includes('Bangkok') ? '🇹🇭 ' : ''} {tz.label}
                           </div>
                         ))
@@ -284,9 +341,6 @@ export default function SetupTutorialPage() {
                     </div>
                   )}
                 </div>
-                <p className="text-[11px] text-slate-400 mt-2 ml-1">
-                  * Supports smart search (e.g. type "Thai" to find "Bangkok")
-                </p>
               </div>
 
               {/* Summary Items */}
@@ -294,23 +348,19 @@ export default function SetupTutorialPage() {
                 <h3 className="text-xs font-semibold text-slate-900 mb-3">AUTOMATED SETUP ACTIONS</h3>
                 <ul className="space-y-3">
                   <li className="flex items-center text-sm text-slate-600">
-                    <div className="w-5 h-5 rounded-full bg-green-100 text-green-600 flex items-center justify-center mr-3 text-[10px]"><IconCheck className="w-3 h-3"/></div>
-                    Generate 10 default tables
+                     <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-3 text-[10px]"><IconLock className="w-3 h-3"/></div>
+                     Set Account Password
                   </li>
                   <li className="flex items-center text-sm text-slate-600">
                     <div className="w-5 h-5 rounded-full bg-green-100 text-green-600 flex items-center justify-center mr-3 text-[10px]"><IconCheck className="w-3 h-3"/></div>
-                    Install standard banners
-                  </li>
-                  <li className="flex items-center text-sm text-slate-600">
-                    <div className="w-5 h-5 rounded-full bg-green-100 text-green-600 flex items-center justify-center mr-3 text-[10px]"><IconCheck className="w-3 h-3"/></div>
-                    Import menu items (4 Recommended)
+                    Generate default tables & menus
                   </li>
                 </ul>
               </div>
 
               <button 
                 onClick={handleStartSetup}
-                disabled={loading || !selectedTz}
+                disabled={loading || !selectedTz || !password || !confirmPassword}
                 className="w-full py-3.5 bg-slate-900 text-white rounded-xl font-medium shadow-lg hover:bg-slate-800 hover:shadow-slate-800/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {loading ? 'Processing...' : 'Start Installation'} 
@@ -343,7 +393,7 @@ export default function SetupTutorialPage() {
                 <IconCheck className="w-8 h-8" />
               </div>
               <h2 className="text-xl font-bold text-slate-900 mb-2">Setup Completed</h2>
-              <p className="text-slate-500 text-sm">Redirecting to dashboard...</p>
+              <p className="text-slate-500 text-sm">Redirecting to Pai Order...</p>
             </div>
           )}
         </div>

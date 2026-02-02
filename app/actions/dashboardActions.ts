@@ -11,7 +11,6 @@ import Holidays from 'date-holidays';
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
-// ✅ ฟังก์ชันช่วยแปลง Timezone เป็นรหัสประเทศ (ISO Code)
 function getCountryFromTimezone(tz: string): string {
     if (!tz) return 'TH';
     if (tz.includes('Bangkok')) return 'TH';
@@ -53,9 +52,8 @@ export async function getDashboardDataAction(
 
         const localCountryCode = getCountryFromTimezone(brandTimezone);
         
-        // เตรียมสมุดวันหยุด 3 เล่ม
         const hdLocal = new Holidays(localCountryCode, 'en');
-        const hdCN = new Holidays('SG', 'en');
+        const hdCN = new Holidays('SG', 'en'); // ใช้ SG แทนจีนเพื่อให้ได้วันหยุดจีนแบบสากล (หรือใช้ CN ก็ได้)
         const hdUS = new Holidays('US', 'en');
 
         let now = dayjs().tz(brandTimezone);
@@ -81,7 +79,6 @@ export async function getDashboardDataAction(
             isAllTime = true;
         }
 
-        // Query ข้อมูล
         let salesQuery = supabase.from('dashboard_daily_sales').select('*').eq('brand_id', brandId).order('report_date', { ascending: true });
         if (!isAllTime) salesQuery = salesQuery.gte('report_date', startDate.format('YYYY-MM-DD')).lte('report_date', endDate.format('YYYY-MM-DD'));
         const { data: salesData, error: salesError } = await salesQuery;
@@ -96,27 +93,23 @@ export async function getDashboardDataAction(
         let processedTrend: { date: string; value: number; holiday?: string }[] = [];
         const parseDate = (dateStr: string) => dayjs.tz(dateStr, brandTimezone);
 
-        // ✅ แก้ไข: ฟังก์ชันรวมวันหยุด ส่งเป็น "รหัสประเภท|ชื่อวันหยุด"
+        // ✅ ฟังก์ชันคำนวณวันหยุด (Logic เดิมของคุณ ถูกต้องแล้ว)
         const getHolidayName = (dateInput: string | Date) => { 
             const holidays: string[] = [];
             const d = dayjs(dateInput).toDate(); 
 
-            // Helper function: รับ type แทน icon
             const addHoliday = (type: string, name: string) => {
                 if (!holidays.some(h => h.includes(name))) {
-                    // ใช้ | คั่นระหว่างประเภทกับชื่อ
                     holidays.push(`${type}|${name}`);
                 }
             };
 
-            // 1. 📍 Local Holidays
             const hLocal = hdLocal.isHoliday(d);
             if (hLocal) {
                 const list = Array.isArray(hLocal) ? hLocal : [hLocal];
                 list.forEach((h: any) => addHoliday('local', h.name));
             }
 
-            // 2. 🧧 China Holidays
             const hCN = hdCN.isHoliday(d);
             if (hCN) {
                 const list = Array.isArray(hCN) ? hCN : [hCN];
@@ -127,7 +120,6 @@ export async function getDashboardDataAction(
                 });
             }
 
-            // 3. 🌎 Global Holidays
             const hUS = hdUS.isHoliday(d);
             if (hUS) {
                 const list = Array.isArray(hUS) ? hUS : [hUS];
@@ -142,33 +134,27 @@ export async function getDashboardDataAction(
                 });
             }
 
-            // 4. Manual Special Days
             const month = d.getMonth() + 1;
             const day = d.getDate();
             if (month === 2 && day === 14) addHoliday('love', "Valentine's Day");
             if (month === 10 && day === 31) addHoliday('halloween', "Halloween");
 
             if (holidays.length > 0) {
-                // สมมติวันนึงมีหลายเทศกาล เอาแค่อันแรกสุดไปโชว์พอ เพื่อความสวยงามในกราฟ
                 return holidays[0]; 
             }
             return null;
         };
 
         if (range === 'year') {
-    processedTrend = Array.from({ length: 12 }, (_, i) => {
-        const d = startDate.month(i).startOf('month');
-        return {
-            // ✅ เปลี่ยนจาก label เป็น date
-            date: d.locale('th').format('MMM'), 
-            
-            // ✅ เปลี่ยนจาก total_revenue เป็น value
-            value: 0, 
-            
-            // ✅ เปลี่ยนจาก null เป็น undefined หรือ string ว่าง (ตาม Type ที่ตั้งไว้)
-            holiday: undefined 
-        };
-    });
+            // รายปี: ปกติไม่แสดงวันหยุดรายวันเพราะสเกลเป็นเดือน
+            processedTrend = Array.from({ length: 12 }, (_, i) => {
+                const d = startDate.month(i).startOf('month');
+                return {
+                    date: d.locale('th').format('MMM'), 
+                    value: 0, 
+                    holiday: undefined 
+                };
+            });
             salesData?.forEach((item) => {
                 const itemDate = parseDate(item.report_date);
                 if (itemDate.year() === startDate.year()) {
@@ -176,26 +162,21 @@ export async function getDashboardDataAction(
                     if (processedTrend[idx]) processedTrend[idx].value += Number(item.total_revenue);
                 }
             });
+
         } else if (range === 'month') {
-    const daysInMonth = startDate.daysInMonth();
-    processedTrend = Array.from({ length: daysInMonth }, (_, i) => {
-        const d = startDate.date(i + 1);
-        const dateStr = d.format('YYYY-MM-DD');
-        
-        return {
-            // ✅ เปลี่ยนจาก label เป็น date
-            date: d.format('D'), 
-            
-            // ✅ เปลี่ยนจาก total_revenue เป็น value
-            value: 0, 
-            
-            // ✅ เปลี่ยนจาก null เป็น undefined (หรือเช็คค่าวันหยุด)
-            holiday: undefined 
-            
-            // 💡 หมายเหตุ: ตัวแปร fullDate ถ้าไม่ได้ใช้ใน Type 
-            // ไม่ต้องใส่มาก็ได้ครับ จะได้ไม่ Error เรื่อง Property เกิน
-        };
-    });
+            // ✅ รายเดือน: แก้ไขจุดนี้ ให้เรียก getHolidayName
+            const daysInMonth = startDate.daysInMonth();
+            processedTrend = Array.from({ length: daysInMonth }, (_, i) => {
+                const d = startDate.date(i + 1);
+                const dateStr = d.format('YYYY-MM-DD');
+                
+                return {
+                    date: d.format('D'), 
+                    value: 0, 
+                    // ✅ เรียกใช้ฟังก์ชันที่นี่ครับ
+                    holiday: getHolidayName(dateStr) || undefined 
+                };
+            });
             salesData?.forEach((item) => {
                 const itemDate = parseDate(item.report_date);
                 if (itemDate.month() === startDate.month() && itemDate.year() === startDate.year()) {
@@ -203,36 +184,36 @@ export async function getDashboardDataAction(
                     if (processedTrend[dayIdx]) processedTrend[dayIdx].value += Number(item.total_revenue);
                 }
             });
+
         } else {
-            // ✅ แก้ไข: เปลี่ยน label -> date และ total_revenue -> value
+            // Custom Range / Today / All Time
+            // ใช้ map จาก salesData โดยตรง แต่อาจขาดวันที่ที่ยอดขายเป็น 0
+            // ถ้าอยากให้ครบทุกวัน ต้องทำ Loop เหมือน 'month' แต่เปลี่ยน range
+            
+            // กรณีนี้ใช้ข้อมูลที่มีไปก่อน
             processedTrend = salesData?.map(d => {
-                const dateObj = parseDate(d.report_date);
                 return {
-                    date: dateObj.locale('th').format('D MMM'), 
+                    date: parseDate(d.report_date).locale('th').format('D MMM'), 
                     value: Number(d.total_revenue),
-                    // ใช้ || undefined เพื่อให้ตรงกับ Type holiday?: string
                     holiday: getHolidayName(d.report_date) || undefined 
                 };
             }) || [];
             
             if (processedTrend.length === 0 && range === 'today') {
-                // ✅ แก้ไข: ปรับให้ตรงกับ Interface TrendData
+                const todayStr = now.format('YYYY-MM-DD');
                 processedTrend = [{ 
                     date: 'วันนี้', 
                     value: 0, 
-                    holiday: getHolidayName(now.format('YYYY-MM-DD')) || undefined 
+                    holiday: getHolidayName(todayStr) || undefined 
                 }];
             }
         }
 
-        // --- ส่วนคำนวณ Summary ---
-        // ใช้ข้อมูลดิบจาก salesData (Database) ชื่อ Key จึงเป็นแบบเดิมได้ครับ
         const summary = {
             totalRevenue: salesData?.reduce((sum, item) => sum + Number(item.total_revenue), 0) || 0,
             totalOrders: salesData?.reduce((sum, item) => sum + Number(item.total_orders), 0) || 0,
         };
 
-        // --- ส่วนคำนวณ Top Products ---
         const productMap = new Map();
         productStats?.forEach((p) => {
             const current = productMap.get(p.product_name) || { qty: 0, revenue: 0 };
@@ -247,7 +228,6 @@ export async function getDashboardDataAction(
             .sort((a, b) => b.qty - a.qty)
             .slice(0, 5);
 
-        // ✅ ส่งออกข้อมูลที่ Clean แล้ว
         return { success: true, range, summary, salesTrend: processedTrend, topProducts };
 
     } catch (error: any) {

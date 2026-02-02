@@ -180,22 +180,18 @@ const onMainPaymentClick = () => {
 };
 const confirmCashPayment = async () => {
     try {
-        // 1. เช็คว่าเงินพอไหม
-        if (receivedAmount < payableAmount) {
+        // 1. เช็คยอดเงินก่อน (แปลงเป็น Number เพื่อความชัวร์)
+        if (Number(receivedAmount) < Number(payableAmount)) {
             alert("ยอดเงินที่รับมาไม่เพียงพอ");
             return;
         }
 
-        // 2. (จำลอง) บันทึกข้อมูลลงฐานข้อมูล
-        // ตรงนี้พี่สามารถเรียก API หรือ Server Action จริงๆ ได้เลย
-        
-        // 3. แจ้งเตือนและปิดหน้าต่าง
-        alert("บันทึกการชำระเงินสดสำเร็จ!");
+        // ✅ 2. บรรทัดนี้สำคัญที่สุด! ต้องเรียก handlePayment() เพื่อบันทึกลง Database
+        // ฟังก์ชันนี้จะจัดการทุกอย่าง (ตัดสต็อก, บันทึกยอด, เคลียร์ตะกร้า)
+        await handlePayment();
+
+        // 3. ปิดหน้าต่างรับเงินสด
         setShowCashModal(false);
-        setReceivedAmount(0);
-        
-        // 4. รีเฟรชข้อมูล (ถ้าจำเป็น)
-        // refreshTables(); 
         
     } catch (error) {
         console.error("Cash Payment Error:", error);

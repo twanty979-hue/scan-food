@@ -274,20 +274,28 @@ export function usePayment() {
     }, [rawTotal, paymentMethod]);
 
     const handlePayment = async () => {
-        if (payableAmount <= 0) return;
-        if (paymentMethod === 'cash' && receivedAmount < payableAmount) {
+        // ✅ 1. แปลงเป็นตัวเลขให้ชัวร์ก่อนเริ่มคำนวณ (แก้ปัญหา String เทียบ Number ผิดเพี้ยน)
+        const safePayable = Number(payableAmount);
+        const safeReceived = Number(receivedAmount);
+
+        if (safePayable <= 0) return;
+
+        // ✅ 2. เช็คยอดเงินด้วยตัวแปรที่แปลงเป็นตัวเลขแล้ว
+        if (paymentMethod === 'cash' && safeReceived < safePayable) {
             setStatusModal({ show: true, type: 'error', title: 'ยอดเงินไม่พอ', message: 'กรุณารับเงินเพิ่มจากลูกค้า' });
             return;
         }
         
-        const change = paymentMethod === 'promptpay' ? 0 : receivedAmount - payableAmount;
+        // ✅ 3. คำนวณเงินทอน
+        const change = paymentMethod === 'promptpay' ? 0 : (safeReceived - safePayable);
 
         const payload = {
             brandId,
             userId: currentUser?.id,
-            totalAmount: payableAmount,
-            receivedAmount: paymentMethod === 'promptpay' ? payableAmount : receivedAmount,
-            changeAmount: change,
+            totalAmount: safePayable,
+            // ถ้า PromptPay ให้ยอดรับ = ยอดต้องจ่าย, ถ้าเงินสด = ยอดที่รับมาจริง
+            receivedAmount: paymentMethod === 'promptpay' ? safePayable : safeReceived,
+            changeAmount: Number(change.toFixed(2)), // ✅ ปัดเศษทศนิยมให้เรียบร้อยป้องกัน Database Error
             paymentMethod,
             type: activeTab,
             selectedOrder,
@@ -300,9 +308,9 @@ export function usePayment() {
             setCompletedReceipt({
                 id: res.payRecord.id, 
                 created_at: new Date().toISOString(), 
-                total_amount: payableAmount,
-                received_amount: paymentMethod === 'promptpay' ? payableAmount : receivedAmount,
-                change_amount: change, 
+                total_amount: safePayable,
+                received_amount: payload.receivedAmount, // ✅ ใช้ค่าจาก payload ที่ชัวร์แล้ว
+                change_amount: payload.changeAmount,     // ✅ ใช้ค่าจาก payload ที่ชัวร์แล้ว
                 payment_method: paymentMethod, 
                 cashier: currentProfile, 
                 brand: currentBrand,
@@ -318,12 +326,11 @@ export function usePayment() {
             
             refreshOrders();
             refreshQuota();
-            refreshTables(); // ✅ 4. สั่งรีเฟรชโต๊ะทันทีที่จ่ายเงินสำเร็จ
+            refreshTables(); 
         } else {
             setStatusModal({ show: true, type: 'error', title: 'ผิดพลาด', message: res.error });
         }
     };
-
     const handleSelectTableForQR = async (table: any) => {
         // 🔥 โหลดสถานะโต๊ะล่าสุดก่อนเปิด Modal เสมอ (Double Check)
         const { success, data } = await getLatestTableDataAction(table.id);

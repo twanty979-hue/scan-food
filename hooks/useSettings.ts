@@ -76,21 +76,25 @@ export function useSettings() {
     };
 
     const createOmiseToken = (amount: number): Promise<string> => {
-        return new Promise((resolve, reject) => {
-            if (!window.OmiseCard) return reject(new Error("Payment System Loading..."));
-            window.OmiseCard.configure({
-                publicKey: process.env.NEXT_PUBLIC_OMISE_PUBLIC_KEY!,
-                frameLabel: 'Spring POS',
-                submitLabel: `PAY ฿${(amount/100).toLocaleString()}`,
-                currency: 'thb',
-            });
-            window.OmiseCard.open({
-                amount: amount,
-                onCreateTokenSuccess: (token: string) => resolve(token),
-                onFormClosed: () => reject(new Error("Payment cancelled")),
-            });
+    return new Promise((resolve, reject) => {
+        if (!window.OmiseCard) return reject(new Error("Payment System Loading..."));
+        
+        window.OmiseCard.configure({
+            publicKey: process.env.NEXT_PUBLIC_OMISE_PUBLIC_KEY!,
+            frameLabel: 'Spring POS',
+            // ❌ เดิม: submitLabel: `PAY ฿${(amount/100).toLocaleString()}`,
+            // ✅ แก้เป็น:
+            submitLabel: 'Pay', 
+            currency: 'thb',
         });
-    };
+
+        window.OmiseCard.open({
+            amount: amount,
+            onCreateTokenSuccess: (token: string) => resolve(token),
+            onFormClosed: () => reject(new Error("Payment cancelled")),
+        });
+    });
+};
 
     const createPromptPaySource = (amount: number): Promise<string> => {
         return new Promise((resolve, reject) => {

@@ -1,31 +1,31 @@
 'use client';
-import { useEffect, useRef } from 'react';
+
+import { useEffect, useRef, Suspense } from 'react'; // ✅ เพิ่ม Suspense
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
-export default function AuthCallbackPage() {
+// 1. ย้าย Logic เดิมทั้งหมดมาไว้ใน Component ย่อย
+function AuthCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const runOnce = useRef(false);
 
   useEffect(() => {
     const handleAuthCallback = async () => {
-      // กันรันซ้ำ 2 รอบ
+      // กันรันซ้ำ
       if (runOnce.current) return;
       runOnce.current = true;
 
       const code = searchParams.get('code');
-      const next = searchParams.get('next') || '/dashboard/pai_order';
+      const next = searchParams.get('next') || '/dashboard/pai_order'; // ถ้าไม่มี next ให้ไปหน้าขาย
 
       if (code) {
         try {
-          // พยายามแลก Code เป็น Session
+          // แลก Code เป็น Session
           const { error } = await supabase.auth.exchangeCodeForSession(code);
           
           if (error) {
-            // ⚠️ ดักจับ Error ตรงนี้! ถ้าเจอปัญหา (เช่น กุญแจหาย, โค้ดเก่า)
             console.warn('Auth Error (Code Exchange):', error.message);
-            // ดีดกลับไปหน้า Login ทันที ไม่ต้องโชว์ Error
             router.replace('/login');
             return;
           }
@@ -36,7 +36,7 @@ export default function AuthCallbackPage() {
         }
       }
 
-      // ถ้าแลกผ่าน หรือมี Session อยู่แล้ว -> ไปต่อ
+      // ตรวจสอบว่ามี Session ไหม
       const { data: { session } } = await supabase.auth.getSession();
       
       if (session) {
@@ -66,5 +66,14 @@ export default function AuthCallbackPage() {
       <div className="w-12 h-12 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
       <p className="text-slate-500">กำลังเข้าสู่ระบบ...</p>
     </div>
+  );
+}
+
+// 2. Component หลัก (ตัวจริง) มีหน้าที่แค่เอา Suspense มาครอบ
+export default function AuthCallbackPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <AuthCallbackContent />
+    </Suspense>
   );
 }

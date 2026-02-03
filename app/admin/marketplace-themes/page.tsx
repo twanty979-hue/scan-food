@@ -17,6 +17,8 @@ const IconImage = ({ size = 24, className = "" }: IconProps) => <svg width={size
 const IconPlus = ({ size = 20, className = "" }: IconProps) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
 const IconX = ({ size = 24, className = "" }: IconProps) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
 const IconFilter = ({ size = 16, className = "" }: IconProps) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>;
+// ✅ เพิ่มไอคอนค้นหา
+const IconSearch = ({ size = 16, className = "" }: IconProps) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
 
 const BUCKET_NAME = 'theme-images';
 
@@ -54,6 +56,8 @@ export default function AdminThemesPage() {
     // Filters
     const [filterCategory, setFilterCategory] = useState<string>('all');
     const [filterPlan, setFilterPlan] = useState<string>('all');
+    // ✅ เพิ่ม State สำหรับคำค้นหา
+    const [searchQuery, setSearchQuery] = useState<string>('');
 
     const [uploadingState, setUploadingState] = useState<'cover' | 'mobile' | 'ipad' | null>(null);
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -88,7 +92,10 @@ export default function AdminThemesPage() {
     const filteredThemes = themes.filter(theme => {
         const matchesCategory = filterCategory === 'all' || theme.category_id === filterCategory;
         const matchesPlan = filterPlan === 'all' || (theme.min_plan || 'ultimate') === filterPlan;
-        return matchesCategory && matchesPlan;
+        // ✅ เพิ่ม Logic กรองตามชื่อ
+        const matchesSearch = theme.name.toLowerCase().includes(searchQuery.toLowerCase());
+        
+        return matchesCategory && matchesPlan && matchesSearch;
     });
 
     const getImageUrl = (fileName: string | null) => {
@@ -219,16 +226,29 @@ export default function AdminThemesPage() {
 
             {/* --- Filter Bar --- */}
             <div className="mb-8 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4 items-center">
+                
+                {/* ✅ ส่วน Search Input */}
+                <div className="relative w-full md:w-auto flex-grow md:flex-grow-0">
+                    <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                    <input 
+                        type="text" 
+                        placeholder="Search themes..." 
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-10 pr-4 py-2 w-full md:w-64 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                </div>
+
+                <div className="h-6 w-px bg-slate-200 hidden md:block"></div>
+
                 <div className="flex items-center gap-2 text-slate-400 font-bold text-sm uppercase tracking-wider">
-                    <IconFilter /> Filters:
+                    <IconFilter />
                 </div>
                 
                 <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <option value="all">All Categories</option>
                     {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
                 </select>
-
-                <div className="h-6 w-px bg-slate-200 hidden md:block"></div>
 
                 <div className="flex gap-2">
                     {['all', 'free', 'basic', 'pro', 'ultimate'].map(plan => (

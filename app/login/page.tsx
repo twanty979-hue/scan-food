@@ -11,12 +11,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null); // ✅ เพิ่มแจ้งเตือนสำเร็จ
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // ✅ State สำหรับสลับหน้า (Login vs Forgot Password)
+  // State สำหรับสลับหน้า (Login vs Forgot Password)
   const [isRecovery, setIsRecovery] = useState(false); 
 
-  // เช็ค Session (โค้ดเดิม)
+  // เช็ค Session (Logic เดิม)
   useEffect(() => {
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -38,7 +38,26 @@ export default function LoginPage() {
     if (!email.includes('@')) setEmail((prev) => prev + '@gmail.com');
   };
 
-  // ✅ ฟังก์ชัน Login ปกติ
+  // ✅ 1. เพิ่มฟังก์ชัน Google Login (เอามาจากโค้ดแรกของคุณ)
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    setErrorMsg(null);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          // ให้เด้งกลับมาที่หน้า Auth Callback ของเรา
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (error) throw error;
+    } catch (error: any) {
+      setErrorMsg(error.message);
+      setLoading(false);
+    }
+  };
+
+  // ฟังก์ชัน Login ปกติ (Logic เดิม)
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -68,7 +87,7 @@ export default function LoginPage() {
     }
   };
 
-  // ✅ ฟังก์ชันส่งอีเมลรีเซ็ตรหัสผ่าน
+  // ฟังก์ชันส่งอีเมลรีเซ็ตรหัสผ่าน (Logic เดิม)
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -77,7 +96,6 @@ export default function LoginPage() {
 
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        // 🔥 สำคัญ: ลิงก์นี้คือหน้าที่จะให้ลูกค้าไปตั้งรหัสใหม่ (เราจะสร้างในขั้นตอนที่ 2)
         redirectTo: `${window.location.origin}/auth/reset-password`,
       });
 
@@ -116,7 +134,6 @@ export default function LoginPage() {
              <i className="fa-solid fa-store text-4xl text-brand-500 hidden fallback-icon:block absolute"></i>
           </div>
           
-          {/* เปลี่ยนหัวข้อตามโหมด */}
           <h1 className="text-3xl font-bold text-slate-800">
             {isRecovery ? 'กู้คืนรหัสผ่าน' : 'ยินดีต้อนรับกลับ!'}
           </h1>
@@ -140,6 +157,8 @@ export default function LoginPage() {
             {successMsg}
           </div>
         )}
+
+        
 
         {/* Form (สลับฟังก์ชันตามโหมด) */}
         <form onSubmit={isRecovery ? handleResetPassword : handleLogin} className="space-y-5">
@@ -196,7 +215,29 @@ export default function LoginPage() {
             >
               {isRecovery ? 'กลับไปหน้าเข้าสู่ระบบ' : 'ลืมรหัสผ่าน?'}
             </button>
+            
           </div>
+          <div className="relative flex py-2 items-center mt-6">
+              <div className="flex-grow border-t border-slate-200"></div>
+              <span className="flex-shrink-0 mx-4 text-slate-400 text-xs font-medium uppercase">หรือเข้าสู่ระบบด้วยอีเมล</span>
+              <div className="flex-grow border-t border-slate-200"></div>
+            </div>
+          {/* ✅ 2. ส่วน Google Login (แสดงเฉพาะตอน Login ไม่แสดงตอนกู้รหัสผ่าน) */}
+        {!isRecovery && (
+          <div className="mb-6">
+            <button 
+              onClick={handleGoogleLogin}
+              type="button"
+              className="w-full bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold py-3.5 rounded-xl shadow-sm hover:shadow transition-all flex items-center justify-center gap-3 active:scale-95 group"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none"><path d="M23.766 12.2764C23.766 11.4607 23.6999 10.6406 23.5588 9.83807H12.24V14.4591H18.7217C18.4528 15.9494 17.5885 17.2678 16.323 18.1056V21.1039H20.19C22.4608 19.0139 23.766 15.9274 23.766 12.2764Z" fill="#4285F4"/><path d="M12.2401 24.0008C15.4766 24.0008 18.2059 22.9382 20.1945 21.1039L16.3275 18.1055C15.2517 18.8375 13.8627 19.252 12.2445 19.252C9.11388 19.252 6.45946 17.1399 5.50705 14.3003H1.5166V17.3912C3.55371 21.4434 7.7029 24.0008 12.2401 24.0008Z" fill="#34A853"/><path d="M5.50253 14.3003C5.00236 12.8099 5.00236 11.1961 5.50253 9.70575V6.61481H1.51649C-0.18551 10.0056 -0.18551 14.0004 1.51649 17.3912L5.50253 14.3003Z" fill="#FBBC05"/><path d="M12.2401 4.74966C13.9509 4.7232 15.6044 5.36697 16.8434 6.54867L20.2695 3.12262C18.1001 1.0855 15.2208 -0.0344664 12.2401 0.000808666C7.7029 0.000808666 3.55371 2.55822 1.5166 6.61481L5.50264 9.70575C6.45064 6.86173 9.10947 4.74966 12.2401 4.74966Z" fill="#EA4335"/></svg>
+              เข้าสู่ระบบด้วย Google
+            </button>
+
+            {/* เส้นคั่น Or */}
+            
+          </div>
+        )}
 
           <button 
             type="submit" 

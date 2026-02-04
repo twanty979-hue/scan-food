@@ -1,22 +1,29 @@
 'use client';
 import { IconStore, IconX, IconUser, IconFileText, IconTag } from './Icons';
 
-// Helper function (ก๊อปมาเพื่อให้ไฟล์นี้ทำงานได้ หรือจะแยกไฟล์ utils ก็ได้)
+// Helper function
 const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('th-TH', { 
         style: 'currency', currency: 'THB', minimumFractionDigits: 2, maximumFractionDigits: 2 
     }).format(amount || 0);
 };
 
-export default function ReceiptModal({ receipt, onClose }: { receipt: any; onClose: () => void }) {
+export default function ReceiptModal({ receipt, items, onClose }: { receipt: any; items?: any[]; onClose: () => void }) {
     if (!receipt) return null;
 
-    const calculateTotalSaved = (items: any[]) => {
-        return items.reduce((sum, item) => {
+    // ✅ สร้างตัวแปรกลาง เพื่อกันค่า items เป็น undefined หรือ null
+    // ถ้ามี items (จาก props) ให้ใช้ก่อน -> ถ้าไม่มีให้หาใน receipt.items -> ถ้าไม่มีเลยให้เป็น array ว่าง []
+    const displayItems = items || receipt?.items || [];
+
+    const calculateTotalSaved = (itemList: any[]) => {
+        return itemList.reduce((sum, item) => {
             const promo = item.promotion_snapshot;
             return sum + (promo ? (promo.savedAmount || 0) * item.quantity : 0);
         }, 0);
     };
+
+    // คำนวณยอดประหยัดรอไว้เลย
+    const totalSaved = calculateTotalSaved(displayItems);
 
     return (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
@@ -58,7 +65,8 @@ export default function ReceiptModal({ receipt, onClose }: { receipt: any; onClo
                 {/* Items */}
                 <div className="flex-1 overflow-y-auto p-8 space-y-4 bg-slate-50">
                     <div className="space-y-3">
-                        {receipt.items.map((item: any, idx: number) => {
+                        {/* ✅ เปลี่ยนมาใช้ displayItems แทนการเขียนยาวๆ */}
+                        {displayItems.map((item: any, idx: number) => {
                             const promo = item.promotion_snapshot;
                             const saved = promo ? (promo.savedAmount || 0) : 0;
                             const originalPrice = promo ? (item.price + saved) : item.price;
@@ -82,10 +90,11 @@ export default function ReceiptModal({ receipt, onClose }: { receipt: any; onClo
                     </div>
 
                     <div className="border-t-2 border-slate-900 pt-4 mt-4 space-y-2">
-                        {calculateTotalSaved(receipt.items) > 0 && (
+                        {/* ✅ ใช้ totalSaved ที่คำนวณจาก displayItems ปลอดภัยกว่า */}
+                        {totalSaved > 0 && (
                             <div className="flex justify-between text-sm text-red-500 bg-red-50 p-2 rounded-lg border border-red-100">
                                 <span className="font-bold uppercase flex items-center gap-1"><IconTag /> ประหยัดไป</span>
-                                <span className="font-black">- {formatCurrency(calculateTotalSaved(receipt.items))}</span>
+                                <span className="font-black">- {formatCurrency(totalSaved)}</span>
                             </div>
                         )}
                         <div className="flex justify-between text-sm"><span className="font-bold text-slate-400 uppercase">ยอดรวมสุทธิ</span><span className="font-black text-slate-900 text-xl">{formatCurrency(receipt.total_amount)}</span></div>

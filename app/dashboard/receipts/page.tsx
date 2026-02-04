@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useReceipts } from '@/hooks/useReceipts';
+// ✅ Import Modal ตัวกลางเข้ามาใช้
+import ReceiptModal from '@/app/dashboard/pai_order/components/ReceiptModal'; 
 
 // ... (Icons เดิมทั้งหมด เก็บไว้เหมือนเดิม) ...
 const IconHistory = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"/></svg>;
@@ -36,7 +38,6 @@ export default function ReceiptsPage() {
     const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'cancelled'>('all');
     const [searchText, setSearchText] = useState('');
 
-    // ✅ Helper คำนวณ Start/End Date ส่งให้ Server
     const getDateRange = (date: Date, mode: 'day' | 'month' | 'year') => {
         const start = new Date(date);
         const end = new Date(date);
@@ -51,23 +52,19 @@ export default function ReceiptsPage() {
             start.setMonth(0, 1); start.setHours(0, 0, 0, 0);
             end.setMonth(11, 31); end.setHours(23, 59, 59, 999);
         }
-        // แปลงเป็น ISO String เพื่อส่งให้ Supabase
         return { start: start.toISOString(), end: end.toISOString() };
     };
 
-    // ✅ Effect: โหลดข้อมูลใหม่เมื่อ วันที่/โหมด เปลี่ยน (Server-Side Filtering)
     useEffect(() => {
         const { start, end } = getDateRange(currentDate, viewMode);
-        fetchReceipts(start, end, false); // false = โหลดใหม่ทับของเดิม
+        fetchReceipts(start, end, false);
     }, [currentDate, viewMode]);
 
-    // ✅ Function: โหลดเพิ่ม (Pagination)
     const handleLoadMore = () => {
         const { start, end } = getDateRange(currentDate, viewMode);
-        fetchReceipts(start, end, true); // true = ต่อท้าย (Append)
+        fetchReceipts(start, end, true);
     };
 
-    // --- Logic การเปลี่ยนวันที่ ---
     const shiftDate = (amount: number) => {
         const newDate = new Date(currentDate);
         if (viewMode === 'day') newDate.setDate(newDate.getDate() + amount);
@@ -76,18 +73,15 @@ export default function ReceiptsPage() {
         setCurrentDate(newDate);
     };
 
-    // ✅ Client-Side Filter (ใช้กรอง Status/Search จากข้อมูล 50 ตัวที่โหลดมาแล้ว เพื่อความไวในการตอบสนอง)
     const displayedReceipts = receipts.filter((rpt: any) => {
         const isCancelled = rpt.orders?.status === 'cancelled';
         const tableName = rpt.orders?.table_label || '';
         const brandName = rpt.brand?.name || '';
 
-        // Status Filter
         let statusMatch = true;
         if (statusFilter === 'completed') statusMatch = !isCancelled;
         if (statusFilter === 'cancelled') statusMatch = isCancelled;
 
-        // Search Filter
         const searchLower = searchText.toLowerCase();
         const searchMatch = !searchText || 
                             tableName.toLowerCase().includes(searchLower) ||
@@ -174,7 +168,7 @@ export default function ReceiptsPage() {
                                     className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap border-2 transition-all
                                         ${statusFilter === s.id 
                                             ? `${s.id === 'all' ? 'bg-slate-900 text-white border-slate-900' : ''} 
-                                               ${s.id === 'completed' ? 'bg-green-500 text-white border-green-500' : ''}
+                                               ${s.id === 'completed' ? 'bg-green-50 text-white border-green-500' : ''}
                                                ${s.id === 'cancelled' ? 'bg-red-500 text-white border-red-500' : ''}`
                                             : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
                                         }
@@ -221,9 +215,11 @@ export default function ReceiptsPage() {
                 )}
             </div>
 
+            {/* ✅ เรียกใช้ Modal ตัวกลาง (Shared Component) */}
             {selectedReceipt && (
                 <ReceiptModal 
                     receipt={selectedReceipt} 
+                    // ส่ง items เข้าไปตรงๆ (เพราะ ReceiptModal ตัวกลางเราเขียนให้รองรับทั้งแบบส่ง items และแบบหาเอง)
                     items={getFlattenedItems(selectedReceipt)}
                     onClose={() => setSelectedReceipt(null)} 
                 />
@@ -232,8 +228,7 @@ export default function ReceiptsPage() {
     );
 }
 
-// ... (ReceiptCard และ ReceiptModal ใช้ของเดิมได้เลยครับ ไม่ต้องแก้) ...
-
+// ReceiptCard (การ์ดรายการเล็กๆ ยังคงเก็บไว้ที่หน้า Page นี้ได้ครับ เพราะใช้เฉพาะหน้านี้)
 function ReceiptCard({ rpt, onClick }: { rpt: any, onClick: () => void }) {
     const isCancelled = rpt.orders && (Array.isArray(rpt.orders) ? rpt.orders[0]?.status === 'cancelled' : rpt.orders?.status === 'cancelled');
 
@@ -242,9 +237,7 @@ function ReceiptCard({ rpt, onClick }: { rpt: any, onClick: () => void }) {
             ${isCancelled ? 'bg-red-50 border-red-100 opacity-80 hover:opacity-100' : 'bg-white border-slate-200'}
         `}>
             {isCancelled && (
-                <div className="absolute -right-4 -top-4 text-6xl font-black text-red-100 -rotate-12 pointer-events-none select-none">
-                    VOID
-                </div>
+                <div className="absolute -right-4 -top-4 text-6xl font-black text-red-100 -rotate-12 pointer-events-none select-none">VOID</div>
             )}
 
             <div className="flex gap-4 items-center relative z-10">
@@ -276,77 +269,6 @@ function ReceiptCard({ rpt, onClick }: { rpt: any, onClick: () => void }) {
                 <p className={`text-[10px] font-black uppercase ${isCancelled ? 'text-red-400' : 'text-slate-400'}`}>
                     {isCancelled ? 'CANCELLED' : rpt.payment_method}
                 </p>
-            </div>
-        </div>
-    );
-}
-
-function ReceiptModal({ receipt, items, onClose }: { receipt: any, items: any[], onClose: () => void }) {
-    const orderData = Array.isArray(receipt.orders) ? receipt.orders[0] : receipt.orders;
-    const isBillCancelled = orderData?.status === 'cancelled';
-
-    return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-            <div className={`bg-white w-full max-w-md rounded-[40px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] ${isBillCancelled ? 'ring-4 ring-red-500/30' : ''}`}>
-                <div className={`p-8 shrink-0 ${isBillCancelled ? 'bg-red-600 text-white' : 'bg-slate-900 text-white'}`}>
-                    <div className="flex justify-between items-start">
-                        <div>
-                            <h2 className="text-2xl font-black uppercase flex items-center gap-2">
-                                {isBillCancelled ? '🚫 รายการถูกยกเลิก' : 'ใบเสร็จรับเงิน'}
-                            </h2>
-                            <p className={`${isBillCancelled ? 'text-red-100' : 'text-orange-400'} text-sm font-bold flex items-center gap-2 mt-1`}>
-                                <IconStore /> {receipt.brand?.name}
-                            </p>
-                        </div>
-                        <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full"><IconX /></button>
-                    </div>
-                </div>
-                <div className="flex-1 overflow-y-auto p-8 space-y-4 bg-slate-50">
-                    {isBillCancelled && (
-                        <div className="bg-red-50 border border-red-200 p-4 rounded-2xl mb-4 text-center">
-                            <p className="text-red-600 font-bold text-sm">บิลนี้ถูกยกเลิกโดย</p>
-                            <p className="text-red-800 font-black text-lg mt-1">{orderData?.cancelled_by_user?.full_name || 'Admin / Manager'}</p>
-                            <p className="text-red-400 text-xs font-bold mt-1">เมื่อ {new Date(orderData?.cancelled_at || receipt.created_at).toLocaleString('th-TH')}</p>
-                        </div>
-                    )}
-                    {items.map((item, idx) => {
-                        const isItemVoid = isBillCancelled || item.status === 'cancelled';
-                        const promo = item.promotion_snapshot;
-                        return (
-                            <div key={idx} className={`flex justify-between border-b border-dashed pb-3 transition-all ${isItemVoid ? 'opacity-50 border-slate-300' : 'border-slate-200'}`}>
-                                <div className="flex gap-3">
-                                    <span className={`font-black text-sm ${isItemVoid ? 'text-slate-300' : 'text-slate-700'}`}>{item.quantity}x</span>
-                                    <div>
-                                        <p className={`text-sm font-black ${isItemVoid ? 'text-slate-400 line-through decoration-slate-400' : 'text-slate-700'}`}>{item.product_name}</p>
-                                        {item.variant !== 'normal' && <p className={`text-[10px] font-bold uppercase italic ${isItemVoid ? 'text-slate-300' : 'text-orange-400'}`}>{item.variant}</p>}
-                                        {isItemVoid && <span className="inline-block mt-1 text-[10px] bg-slate-200 text-slate-500 font-black px-1.5 py-0.5 rounded">{isBillCancelled ? 'VOIDED' : 'CANCELLED ITEM'}</span>}
-                                        {!isItemVoid && promo && <div className="flex items-center gap-1 mt-1 text-[10px] text-red-500 font-bold bg-red-50 px-1.5 py-0.5 rounded w-fit"><IconTag /> SAVE {formatCurrency((promo.savedAmount || 0) * item.quantity)}</div>}
-                                    </div>
-                                </div>
-                                <p className={`font-black ${isItemVoid ? 'text-slate-300 line-through' : 'text-slate-900'}`}>{formatCurrency(item.price * item.quantity)}</p>
-                            </div>
-                        );
-                    })}
-                    <div className="pt-4 border-t-2 border-slate-900 space-y-2">
-                        <div className="flex justify-between font-black text-xl">
-                            <span>ยอดสุทธิ</span>
-                            <span className={`${isBillCancelled ? 'text-red-500 line-through decoration-2 decoration-red-300' : 'text-slate-900'}`}>{formatCurrency(receipt.total_amount)}</span>
-                        </div>
-                    </div>
-                </div>
-                <div className="p-8 bg-white border-t">
-    {!isBillCancelled ? (
-        <button onClick={() => window.print()} className="...">
-             {/* แก้ตรงนี้: ลบ @ts-ignore ออก และใช้ได้เลยเพราะเราแก้ตัวแม่แล้ว */}
-             <IconFileText size={20} /> พิมพ์ใบเสร็จ
-        </button>
-    ) : (
-        <button disabled className="...">
-             {/* แก้ตรงนี้: เปลี่ยนจาก width={20} height={20} เป็น size={20} */}
-             <IconX size={20} /> ไม่สามารถพิมพ์ได้
-        </button>
-    )}
-</div>
             </div>
         </div>
     );

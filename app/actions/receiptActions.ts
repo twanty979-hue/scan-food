@@ -3,7 +3,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
-// เพิ่ม params เพื่อรับค่าวันที่และหน้า
 export async function getReceiptsAction(
     startDate: string, 
     endDate: string, 
@@ -26,41 +25,46 @@ export async function getReceiptsAction(
 
         if (!profile?.brand_id) throw new Error("No brand assigned");
 
-        // คำนวณ Range สำหรับ Pagination
         const from = (page - 1) * limit;
         const to = from + limit - 1;
 
+        // ✅ แก้ไข Query: ระบุ FK (!pai_orders_cashier_id_fkey) ให้ชัดเจน
         const { data, error } = await supabase
             .from('orders')
             .select(`
                 *,
                 brand:brands ( name ),
                 order_items ( * ),
-                pai_orders!orders_payment_id_fkey (
+                pai_orders!pai_orders_order_id_fkey (
                     payment_method,
                     cashier_id,
-                    cashier:profiles ( full_name )
+                    cashier:profiles!pai_orders_cashier_id_fkey ( full_name ) 
                 )
             `) 
             .eq('brand_id', profile.brand_id)
             .in('status', ['paid', 'cancelled'])
-            // ✅ เพิ่ม Filter ระดับ Database (ประหยัดทรัพยากรสุดๆ)
-            .gte('created_at', startDate) // มากกว่าหรือเท่ากับเวลาเริ่ม
-            .lte('created_at', endDate)   // น้อยกว่าหรือเท่ากับเวลาจบ
+            .gte('created_at', startDate)
+            .lte('created_at', endDate)
             .order('created_at', { ascending: false })
-            .range(from, to); // ✅ ดึงแค่ 50 ตัวแรก
+            .range(from, to);
 
         if (error) throw error;
 
-        // Mapping Data เหมือนเดิม
+        // ✅ Mapping Data
         const formattedData = data?.map(order => {
             const paymentInfo = Array.isArray(order.pai_orders) ? order.pai_orders[0] : order.pai_orders;
+            
             return {
                 id: order.id,
                 created_at: order.created_at,
                 total_amount: order.total_price, 
                 payment_method: paymentInfo?.payment_method || (order.status === 'cancelled' ? 'CANCELLED' : '-'),
-                cashier: paymentInfo?.cashier || { full_name: 'System/Admin' },
+                
+                // ตรวจสอบ: ถ้ามี cashier และมี full_name ให้ใช้ชื่อนั้น ถ้าไม่มีให้ใช้ System/Admin
+                cashier: (paymentInfo?.cashier && paymentInfo.cashier.full_name) 
+                    ? paymentInfo.cashier 
+                    : { full_name: 'System/Admin' },
+                    
                 brand: order.brand,
                 orders: order 
             };
@@ -69,6 +73,7 @@ export async function getReceiptsAction(
         return { success: true, data: formattedData || [], hasMore: (data?.length || 0) === limit };
 
     } catch (error: any) {
+        console.error("Fetch Error:", error);
         return { success: false, error: error.message };
     }
 }

@@ -58,11 +58,15 @@ function calculateNewExpiryForTier(currentExpiry: string | null, period: 'monthl
         }
     }
 
-    const amountToAdd = 1;
-    const unitToAdd = period === 'yearly' ? 'year' : 'month';
-    return baseDate.add(amountToAdd, unitToAdd).toISOString();
+    if (period === 'monthly') {
+        // 🌙 รายเดือน: เอา 30 วันเป๊ะๆ (ตัดปัญหากุมภามี 28 วัน)
+        return baseDate.add(30, 'day').toISOString();
+    } else {
+        // ☀️ รายปี: เอา 1 ปีปฏิทิน (365 หรือ 366 วัน อัตโนมัติ)
+        // dayjs ฉลาดพอที่จะรู้ว่าปีไหนมี 366 วันครับ
+        return baseDate.add(1, 'year').toISOString();
+    }
 }
-
 function calculatePrice(plan: string, period: 'monthly' | 'yearly') {
     const base = BASE_PRICES[plan] || 0;
     return period === 'yearly' ? Math.floor((base * 12) * 0.8) : base;
@@ -229,47 +233,70 @@ export async function createPromptPayChargeAction(
 
 // 3. PromptPay (Check Status)
 export async function checkPaymentStatusAction(
-    brandId: string, 
-    chargeId: string, 
-    newPlan: string,
-    period: 'monthly' | 'yearly'
+  brandId: string, 
+  chargeId: string, 
+  newPlan: string,
+  period: 'monthly' | 'yearly'
 ) {
-    const supabase = await getSupabase();
-    try {
-        const charge = await new Promise<any>((resolve, reject) => {
-            omise.charges.retrieve(chargeId, (err, resp) => err ? reject(err) : resolve(resp));
-        });
+  const supabase = await getSupabase();
+  try {
+      // 1. ดึงข้อมูล Charge จาก Omise
+      const charge = await new Promise<any>((resolve, reject) => {
+          omise.charges.retrieve(chargeId, (err, resp) => err ? reject(err) : resolve(resp));
+      });
 
-        if (charge.status === 'successful') {
-            const { data: brand } = await supabase.from('brands').select('*').eq('id', brandId).single();
-            let updateData: any = { updated_at: new Date().toISOString() };
+      if (charge.status === 'successful') {
+          
+          // 🛡️ ป้องกันการเบิ้ล: เช็คว่า Charge นี้เคยถูก Process ไปหรือยัง?
+          // ถ้ามี metadata ว่า is_processed = 'true' ให้จบเลย ไม่ต้องเติมวันซ้ำ
+          if (charge.metadata && charge.metadata.is_processed === 'true') {
+              return { status: 'successful' }; 
+          }
 
-            if (newPlan === 'basic') updateData.expiry_basic = calculateNewExpiryForTier(brand.expiry_basic, period);
-            else if (newPlan === 'pro') updateData.expiry_pro = calculateNewExpiryForTier(brand.expiry_pro, period);
-            else if (newPlan === 'ultimate') updateData.expiry_ultimate = calculateNewExpiryForTier(brand.expiry_ultimate, period);
+          // -------------------------------------------------------
+          // เริ่มกระบวนการอัปเกรด (ทำแค่ครั้งเดียว)
+          // -------------------------------------------------------
+          const { data: brand } = await supabase.from('brands').select('*').eq('id', brandId).single();
+          let updateData: any = { updated_at: new Date().toISOString() };
 
-            await supabase.from('brands').update(updateData).eq('id', brandId);
+          if (newPlan === 'basic') updateData.expiry_basic = calculateNewExpiryForTier(brand.expiry_basic, period);
+          else if (newPlan === 'pro') updateData.expiry_pro = calculateNewExpiryForTier(brand.expiry_pro, period);
+          else if (newPlan === 'ultimate') updateData.expiry_ultimate = calculateNewExpiryForTier(brand.expiry_ultimate, period);
 
-            // Recalculate & Sync
-            const { data: updatedBrand } = await supabase.from('brands').select('*').eq('id', brandId).single();
-            const effectivePlan = calculateEffectivePlan(updatedBrand);
-            
-            await supabase.from('brands').update({ plan: effectivePlan }).eq('id', brandId);
+          await supabase.from('brands').update(updateData).eq('id', brandId);
 
-            // ------------------------------------------------------------------
-            // ✅ เรียกใช้ Sync Theme ตัวเทพ (แก้ไขตรงนี้ด้วย)
-            // ------------------------------------------------------------------
-            let activeExpiry = null;
-            if (effectivePlan === 'ultimate') activeExpiry = updatedBrand.expiry_ultimate;
-            else if (effectivePlan === 'pro') activeExpiry = updatedBrand.expiry_pro;
-            else if (effectivePlan === 'basic') activeExpiry = updatedBrand.expiry_basic;
+          // Recalculate & Sync
+          const { data: updatedBrand } = await supabase.from('brands').select('*').eq('id', brandId).single();
+          const effectivePlan = calculateEffectivePlan(updatedBrand);
+          
+          await supabase.from('brands').update({ plan: effectivePlan }).eq('id', brandId);
 
-            await syncThemesWithPlan(supabase, brandId, effectivePlan, activeExpiry);
+          // Sync Theme
+          let activeExpiry = null;
+          if (effectivePlan === 'ultimate') activeExpiry = updatedBrand.expiry_ultimate;
+          else if (effectivePlan === 'pro') activeExpiry = updatedBrand.expiry_pro;
+          else if (effectivePlan === 'basic') activeExpiry = updatedBrand.expiry_basic;
 
-            return { status: 'successful' };
-        } else if (charge.status === 'failed') return { status: 'failed' };
-        return { status: 'pending' };
-    } catch (error: any) {
-        return { status: 'error', error: error.message };
-    }
+          await syncThemesWithPlan(supabase, brandId, effectivePlan, activeExpiry);
+
+          // -------------------------------------------------------
+          // ✅ หัวใจสำคัญ: ประทับตราว่า "ใช้ไปแล้ว" กลับไปที่ Omise
+          // -------------------------------------------------------
+          await new Promise((resolve) => {
+              omise.charges.update(chargeId, {
+    metadata: { ...charge.metadata, is_processed: 'true' }
+} as any, resolve);
+          });
+
+          return { status: 'successful' };
+
+      } else if (charge.status === 'failed') {
+          return { status: 'failed' };
+      }
+      
+      return { status: 'pending' };
+
+  } catch (error: any) {
+      return { status: 'error', error: error.message };
+  }
 }

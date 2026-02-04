@@ -1,4 +1,3 @@
-// hooks/useSettings.ts
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { 
@@ -26,7 +25,7 @@ export function useSettings() {
     const [isOwner, setIsOwner] = useState(false);
     const [brandId, setBrandId] = useState<string | null>(null);
     
-    // ✅ เพิ่ม State
+    // ✅ เพิ่ม State Period & AutoRenew
     const [period, setPeriod] = useState<'monthly' | 'yearly'>('monthly');
     const [isAutoRenew, setIsAutoRenew] = useState(true); 
 
@@ -36,22 +35,38 @@ export function useSettings() {
 
     const [formData, setFormData] = useState({
         name: '', phone: '', address: '', promptpay_number: '', 
-        logo_url: '', qr_image_url: '', plan: 'free', vat: 0, service_charge: 0
+        logo_url: '', qr_image_url: '', plan: 'free', vat: 0, service_charge: 0, // ✅ แก้ไข: เติม Comma ตรงนี้ให้แล้วครับ
+        expiry: null as string | null // ✅ เพิ่ม field expiry เข้าไป
     });
 
-    useEffect(() => {
+   useEffect(() => {
         const init = async () => {
             const res = await getBrandSettingsAction();
             if (res.success) {
                 setBrandId(res.brandId || '');
                 setIsOwner(res.isOwner || false);
+                
                 if (res.brand) {
+                    // ✅ Logic เลือกวันหมดอายุ (Expiry Logic)
+                    let currentExpiry = null;
+                    const p = res.brand.plan;
+                    if (p === 'basic') currentExpiry = res.brand.expiry_basic;
+                    else if (p === 'pro') currentExpiry = res.brand.expiry_pro;
+                    else if (p === 'ultimate') currentExpiry = res.brand.expiry_ultimate;
+
                     setFormData({
-                        name: res.brand.name || '', phone: res.brand.phone || '', address: res.brand.address || '',
-                        promptpay_number: res.brand.promptpay_number || '', logo_url: res.brand.logo_url || '',
-                        qr_image_url: res.brand.qr_image_url || '', plan: res.brand.plan || 'free',
-                        vat: res.brand.config?.vat || 0, service_charge: res.brand.config?.service_charge || 0
+                        name: res.brand.name || '', 
+                        phone: res.brand.phone || '', 
+                        address: res.brand.address || '',
+                        promptpay_number: res.brand.promptpay_number || '', 
+                        logo_url: res.brand.logo_url || '',
+                        qr_image_url: res.brand.qr_image_url || '', 
+                        plan: res.brand.plan || 'free',
+                        vat: res.brand.config?.vat || 0, 
+                        service_charge: res.brand.config?.service_charge || 0,
+                        expiry: currentExpiry // ✅ เก็บวันหมดอายุลง State
                     });
+                    
                     if (res.brand.is_auto_renew !== undefined) setIsAutoRenew(res.brand.is_auto_renew);
                 }
             } else {
@@ -76,25 +91,23 @@ export function useSettings() {
     };
 
     const createOmiseToken = (amount: number): Promise<string> => {
-    return new Promise((resolve, reject) => {
-        if (!window.OmiseCard) return reject(new Error("Payment System Loading..."));
-        
-        window.OmiseCard.configure({
-            publicKey: process.env.NEXT_PUBLIC_OMISE_PUBLIC_KEY!,
-            frameLabel: 'Spring POS',
-            // ❌ เดิม: submitLabel: `PAY ฿${(amount/100).toLocaleString()}`,
-            // ✅ แก้เป็น:
-            submitLabel: 'Pay', 
-            currency: 'thb',
-        });
+        return new Promise((resolve, reject) => {
+            if (!window.OmiseCard) return reject(new Error("Payment System Loading..."));
+            
+            window.OmiseCard.configure({
+                publicKey: process.env.NEXT_PUBLIC_OMISE_PUBLIC_KEY!,
+                frameLabel: 'Spring POS',
+                submitLabel: 'Pay', 
+                currency: 'thb',
+            });
 
-        window.OmiseCard.open({
-            amount: amount,
-            onCreateTokenSuccess: (token: string) => resolve(token),
-            onFormClosed: () => reject(new Error("Payment cancelled")),
+            window.OmiseCard.open({
+                amount: amount,
+                onCreateTokenSuccess: (token: string) => resolve(token),
+                onFormClosed: () => reject(new Error("Payment cancelled")),
+            });
         });
-    });
-};
+    };
 
     const createPromptPaySource = (amount: number): Promise<string> => {
         return new Promise((resolve, reject) => {
@@ -128,7 +141,10 @@ export function useSettings() {
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!isOwner || !brandId) return;
+        
+        // ✅ ปล่อยให้ปุ่มทำงานแม้ Frontend จะมองว่าไม่ใช่ Owner (ไปตายที่ Backend แทน ถ้าไม่มีสิทธิ์)
+        if (!brandId) return; 
+
         setSubmitting(true);
         try {
             const res = await updateBrandSettingsAction(brandId, {
@@ -144,15 +160,12 @@ export function useSettings() {
         }
     };
 
-    // ✅ Upgrade Function (Updated with Period)
     const handleUpgradePlan = async (newPlan: string, method: 'credit_card' | 'promptpay') => {
         if (!isOwner || !brandId) return;
         
-        // ราคารายเดือน (ใช้เพื่อคำนวณเบื้องต้นโชว์ Alert)
         const basePrices: Record<string, number> = { free: 0, basic: 39900, pro: 129900, ultimate: 199900 };
         let amount = basePrices[newPlan] || 0;
 
-        // ถ้าเลือกรายปี คำนวณส่วนลด 20%
         if (period === 'yearly') {
             amount = Math.floor((amount * 12) * 0.8);
         }
@@ -200,7 +213,6 @@ export function useSettings() {
         }
     };
 
-    // ✅ Check Status Loop (Updated with Period)
     useEffect(() => {
         let interval: NodeJS.Timeout;
         if (paymentModal.isOpen && paymentModal.chargeId && brandId) {
@@ -228,6 +240,6 @@ export function useSettings() {
         getImageUrl, copyBrandId, handleUpload, handleSave, 
         handleUpgradePlan, paymentModal, closePaymentModal,
         isAutoRenew, setIsAutoRenew,
-        period, setPeriod // ✅ ส่ง period ออกไป
+        period, setPeriod 
     };
 }

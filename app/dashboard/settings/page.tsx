@@ -6,6 +6,7 @@ import Script from 'next/script';
 import Link from 'next/link';
 import { useSettings } from '@/hooks/useSettings';
 
+// ✅ สังเกตการ Import: ต้องมี /components/
 import { IconShop, IconSave, IconUsers, IconLock, IconCrown } from './components/Icons'; 
 import ShopSettingsForm from './components/ShopSettingsForm';
 import CurrentPlanCard from './components/CurrentPlanCard';
@@ -23,7 +24,6 @@ export default function SettingsPage() {
   const [showUpgradePanel, setShowUpgradePanel] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'credit_card' | 'promptpay'>('promptpay');
 
-  // ✅ 1. สร้าง Logic เช็คสิทธิ์ (เข้าได้เฉพาะ Pro และ Ultimate)
   const currentPlan = formData.plan || 'free';
   const canManageStaff = ['pro', 'ultimate'].includes(currentPlan);
 
@@ -38,8 +38,8 @@ export default function SettingsPage() {
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col selection:bg-indigo-100 selection:text-indigo-900">
       <Script src="https://cdn.omise.co/omise.js" strategy="lazyOnload" />
 
-      {/* --- Header --- */}
-      <header className=" px-6 lg:px-10 h-20 flex items-center justify-between">
+      {/* Header */}
+      <header className="px-6 lg:px-10 h-20 flex items-center justify-between">
           <Link href="/dashboard" className="flex items-center gap-4 hover:opacity-80 transition-opacity cursor-pointer group">
               <div className="w-11 h-11 bg-slate-900 rounded-xl flex items-center justify-center text-white shadow-lg shadow-slate-900/10 group-hover:scale-105 transition-transform">
                   <IconShop size={20} />
@@ -50,96 +50,50 @@ export default function SettingsPage() {
               </div>
           </Link>
 
-          {/* Right Actions */}
           <div className="flex items-center gap-3">
-              
-              {/* ✅ 2. เช็คเงื่อนไขตรงปุ่มนี้ */}
               {canManageStaff ? (
-                  // 👉 กรณี: เข้าได้ (Pro/Ultimate) -> เป็น Link ปกติ
-                  <Link 
-                    href="/dashboard/settingss" 
-                    className="flex items-center gap-2 bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 px-5 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 shadow-sm hover:border-indigo-200 hover:text-indigo-600 group"
-                  >
+                  <Link href="/dashboard/settingss" className="flex items-center gap-2 bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 px-5 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 shadow-sm hover:border-indigo-200 hover:text-indigo-600 group">
                     <IconUsers size={18} className="text-slate-400 group-hover:text-indigo-500 transition-colors" />
                     <span>จัดการพนักงาน</span>
                   </Link>
               ) : (
-                  // 🔒 กรณี: เข้าไม่ได้ (Free/Basic) -> เป็นปุ่ม Lock กดแล้วเปิดหน้าจ่ายเงิน
-                  <button 
-                    onClick={() => setShowUpgradePanel(true)} // กดแล้วเด้งหน้าเลือกแพ็กเกจ
-                    className="flex items-center gap-2 bg-slate-50 text-slate-400 border border-slate-200 px-5 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 hover:bg-slate-100 hover:text-slate-500 group relative overflow-hidden"
-                  >
-                    {/* แถบ PRO คาดมุม (Optional) */}
+                  <button onClick={() => setShowUpgradePanel(true)} className="flex items-center gap-2 bg-slate-50 text-slate-400 border border-slate-200 px-5 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 hover:bg-slate-100 hover:text-slate-500 group relative overflow-hidden">
                     <div className="absolute top-0 right-0 -mr-2 -mt-2 w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-500 rotate-45 transform translate-x-2 translate-y-[-50%]"></div>
-                    
                     <IconLock size={16} className="text-slate-400 group-hover:text-slate-600" />
                     <span>จัดการพนักงาน</span>
-                    <span className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-[9px] px-1.5 py-0.5 rounded ml-1 flex items-center gap-0.5 shadow-sm">
-                        <IconCrown size={10} /> PRO
-                    </span>
+                    <span className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-[9px] px-1.5 py-0.5 rounded ml-1 flex items-center gap-0.5 shadow-sm"><IconCrown size={10} /> PRO</span>
                   </button>
               )}
 
-              {isOwner && (
-                  <button 
-                    onClick={handleSave} 
-                    disabled={submitting} 
-                    className="flex items-center gap-2 bg-slate-900 hover:bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 disabled:opacity-50 shadow-md shadow-slate-200 hover:shadow-indigo-500/20"
-                  >
-                    {submitting ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/> : <IconSave size={18} />}
-                    <span>บันทึก</span>
-                  </button>
-              )}
+              <button onClick={handleSave} disabled={submitting} className="flex items-center gap-2 bg-slate-900 hover:bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 disabled:opacity-50 shadow-md shadow-slate-200 hover:shadow-indigo-500/20">
+                {submitting ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/> : <IconSave size={18} />}
+                <span>บันทึก</span>
+              </button>
           </div>
       </header>
 
-      {/* --- Main Content --- */}
+      {/* Content */}
       <main className="flex-1 p-6 lg:p-10">
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
-            
-            {/* Left: Shop Form */}
             <div className="lg:col-span-8 flex flex-col gap-6">
                 <ShopSettingsForm 
-                    formData={formData} 
-                    setFormData={setFormData} 
-                    isOwner={isOwner}
-                    qrInputRef={qrInputRef}
-                    getImageUrl={getImageUrl}
-                    // ✅ แก้ไข: ใส่ as any เพื่อ bypass Type Error
-                    handleUpload={handleUpload as any}
+                    formData={formData} setFormData={setFormData} isOwner={isOwner} 
+                    qrInputRef={qrInputRef} getImageUrl={getImageUrl} handleUpload={handleUpload as any}
                 />
             </div>
-
-            {/* Right: Plan Card */}
             <div className="lg:col-span-4 h-full">
-                <CurrentPlanCard 
-                    currentPlanKey={formData.plan || 'free'}
-                    setShowUpgradePanel={setShowUpgradePanel}
-                />
+                <CurrentPlanCard currentPlanKey={formData.plan || 'free'} setShowUpgradePanel={setShowUpgradePanel} expiryDate={formData.expiry} />
             </div>
-
         </div>
       </main>
 
-      {/* --- Modals --- */}
+      {/* Modals */}
       <UpgradePlanModal 
-        show={showUpgradePanel}
-        onClose={() => setShowUpgradePanel(false)}
-        period={period}
-        // ✅ แก้ตรงนี้ครับ
-        setPeriod={setPeriod as any}
-        paymentMethod={paymentMethod}
-        setPaymentMethod={setPaymentMethod}
-        currentPlanKey={formData.plan || 'free'}
-        submitting={submitting}
-        handleUpgradePlan={handleUpgradePlan as any}
+        show={showUpgradePanel} onClose={() => setShowUpgradePanel(false)} period={period} setPeriod={setPeriod as any}
+        paymentMethod={paymentMethod} setPaymentMethod={setPaymentMethod} currentPlanKey={formData.plan || 'free'}
+        submitting={submitting} handleUpgradePlan={handleUpgradePlan as any}
       />
-
-      <PaymentQrModal 
-        isOpen={paymentModal.isOpen}
-        onClose={closePaymentModal}
-        qrImage={paymentModal.qrImage}
-      />
+      <PaymentQrModal isOpen={paymentModal.isOpen} onClose={closePaymentModal} qrImage={paymentModal.qrImage} />
     </div>
   );
 }

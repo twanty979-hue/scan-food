@@ -141,7 +141,7 @@ export default function ShopSettingsForm({ formData, setFormData, isOwner, qrInp
                             <div className="absolute right-2 top-1/2 -translate-y-1/2">
                                 {isLocked ? (
                                     <button 
-                                        onClick={() => setShowPasswordModal(true)}
+                                        onClick={() => setIsLocked(false)}
                                         className="bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-md transition-all active:scale-95 flex items-center gap-2"
                                     >
                                         <IconLock size={14}/> แก้ไข

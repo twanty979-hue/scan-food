@@ -132,72 +132,90 @@ export function usePayment() {
         setUnpaidOrders(orders);
         refreshQuota(); 
     }, [brandId, refreshQuota]);
+// =========================================================================
+// ✅ 3. Realtime Listener (แก้ใหม่: แยก Channel เพื่อความเสถียร 100%)
+// =========================================================================
+useEffect(() => {
+    if (!brandId) return;
 
-    // =========================================================================
-    // ✅ 3. Realtime Listener (ฟังทั้ง Orders และ Tables)
-    // =========================================================================
-    useEffect(() => {
-        if (!brandId) return;
+    // ฟังก์ชันจบงาน (Logic เดิมของคุณ)
+    const finishOrder = async (orderId: string) => {
+        if (processedOrdersRef.current.has(orderId)) return;
+        await updateOrderStatusAction(orderId, 'done');
+        console.log(`🤖 Auto: Done (Finished) ${orderId}`);
+        processedOrdersRef.current.add(orderId);
+        refreshOrders();
+    };
 
-        // ฟังก์ชันจบงาน (แยกออกมาเพื่อเรียกใช้ซ้ำ)
-        const finishOrder = async (orderId: string) => {
-             if (processedOrdersRef.current.has(orderId)) return;
-             await updateOrderStatusAction(orderId, 'done');
-             console.log(`🤖 Auto: Done (Finished) ${orderId}`);
-             processedOrdersRef.current.add(orderId);
-             refreshOrders();
-        };
-
-        const processOrder = async (order: any) => {
-            if (!autoKitchen) return;
-            if (order.status === 'pending') {
-                await updateOrderStatusAction(order.id, 'preparing');
-                console.log(`🤖 Auto: Accepted New Order ${order.id}`);
-                playSound();
-                setTimeout(() => finishOrder(order.id), 5 * 60 * 1000);
-            } else if (order.status === 'preparing') {
-                const lastUpdate = dayjs(order.updated_at);
-                const now = dayjs();
-                const diffMins = now.diff(lastUpdate, 'minute', true);
-                console.log(`🤖 Auto: Resuming ${order.id}, Passed: ${diffMins.toFixed(2)} mins`);
-                if (diffMins >= 5) {
-                    finishOrder(order.id);
-                } else {
-                    const remainingMs = (5 - diffMins) * 60 * 1000;
-                    console.log(`🤖 Auto: Waiting remaining ${remainingMs} ms`);
-                    setTimeout(() => finishOrder(order.id), remainingMs);
-                }
+    const processOrder = async (order: any) => {
+        if (!autoKitchen) return;
+        if (order.status === 'pending') {
+            await updateOrderStatusAction(order.id, 'preparing');
+            console.log(`🤖 Auto: Accepted New Order ${order.id}`);
+            playSound();
+            setTimeout(() => finishOrder(order.id), 5 * 60 * 1000);
+        } else if (order.status === 'preparing') {
+            const lastUpdate = dayjs(order.updated_at);
+            const now = dayjs();
+            const diffMins = now.diff(lastUpdate, 'minute', true);
+            console.log(`🤖 Auto: Resuming ${order.id}, Passed: ${diffMins.toFixed(2)} mins`);
+            if (diffMins >= 5) {
+                finishOrder(order.id);
+            } else {
+                const remainingMs = (5 - diffMins) * 60 * 1000;
+                console.log(`🤖 Auto: Waiting remaining ${remainingMs} ms`);
+                setTimeout(() => finishOrder(order.id), remainingMs);
             }
-        };
-
-        if (autoKitchen) {
-            getPendingAndPreparingOrdersAction(brandId).then(orders => {
-                orders.forEach(o => processOrder(o));
-            });
         }
+    };
 
-        // 🔥 สร้าง Channel เดียว ฟังหลาย Table ได้เลย
-        const channel = supabase.channel('payment_page_combined_channel')
-            // ฟัง Orders (เหมือนเดิม)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `brand_id=eq.${brandId}` }, 
-            (payload) => {
+    if (autoKitchen) {
+        getPendingAndPreparingOrdersAction(brandId).then(orders => {
+            orders.forEach(o => processOrder(o));
+        });
+    }
+
+    // 🔴 แก้ไขจุดนี้: แยก Channel ออกเป็น 2 ตัว ไม่ใช้ตัวเดียวกัน
+    
+    // Channel 1: ฟัง Orders (เหมือนโค้ดเก่าที่เคยทำงานได้)
+    const orderChannel = supabase.channel('payment_realtime_orders_v3')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `brand_id=eq.${brandId}` }, 
+        (payload) => {
+            console.log('🔔 Order Update:', payload);
+            // หน่วงเวลานิดนึงเพื่อให้ Database บันทึกข้อมูลเสร็จชัวร์ๆ (แก้ Race Condition)
+            setTimeout(() => {
                 refreshOrders();
-                refreshTables(); // ✅ รีเฟรชโต๊ะด้วยเมื่อออเดอร์เปลี่ยน
-                if (autoKitchen && payload.eventType === 'INSERT') {
-                    const newOrder = payload.new;
-                    if (newOrder.status === 'pending') processOrder(newOrder);
-                }
-            })
-            // 🔥 ฟัง Tables (เพิ่มใหม่): พอสถานะโต๊ะเปลี่ยน -> โหลดโต๊ะใหม่ทันที
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'tables', filter: `brand_id=eq.${brandId}` }, 
-            () => {
-                console.log('⚡ Table status changed! Refreshing tables...');
-                refreshTables();
-            })
-            .subscribe();
+                refreshTables(); 
+            }, 500);
 
-        return () => { supabase.removeChannel(channel); };
-    }, [brandId, autoKitchen, refreshOrders, refreshTables]); // ✅ ใส่ refreshTables ใน dependency
+            if (autoKitchen && payload.eventType === 'INSERT') {
+                const newOrder = payload.new;
+                if (newOrder.status === 'pending') processOrder(newOrder);
+            }
+        })
+        .subscribe((status) => {
+             if (status === 'SUBSCRIBED') console.log('✅ Connected to Orders');
+        });
+
+    // Channel 2: ฟัง Tables (แยกออกมาต่างหาก)
+    const tableChannel = supabase.channel('payment_realtime_tables_v3')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'tables', filter: `brand_id=eq.${brandId}` }, 
+        () => {
+            console.log('🪑 Table Update');
+            setTimeout(() => {
+                refreshTables();
+            }, 500);
+        })
+        .subscribe((status) => {
+             if (status === 'SUBSCRIBED') console.log('✅ Connected to Tables');
+        });
+
+    return () => { 
+        // ลบทั้ง 2 channel เมื่อออกจากหน้า
+        supabase.removeChannel(orderChannel); 
+        supabase.removeChannel(tableChannel);
+    };
+}, [brandId, autoKitchen, refreshOrders, refreshTables]);
 
     // --- Logic: Pricing ---
     const calculatePrice = useCallback((product: any, variant: string = 'normal') => {

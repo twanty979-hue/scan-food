@@ -160,7 +160,7 @@ export async function getThemesDataAction() {
         .select(`
           id, purchase_type, expires_at, marketplace_theme_id,
           marketplace_themes ( 
-            name, slug, image_url, theme_mode, category_id, 
+            name, slug, image_url, theme_mode, category_id, description,
             marketplace_categories ( name ) 
           )
         `)

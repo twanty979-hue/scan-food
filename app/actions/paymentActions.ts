@@ -1,3 +1,4 @@
+// app/actions/paymentActions.ts
 'use server'
 
 import { createServerClient } from '@supabase/ssr';
@@ -70,14 +71,12 @@ export async function getPaymentInitialDataAction() {
         }
     }
 
-    // ✅ แก้ไขตรงนี้: ให้ดึง Categories, Products, Discounts ปกติ แต่ "Tables" ให้ไปเรียกฟังก์ชันด้านล่าง
     const [cats, prods, discs] = await Promise.all([
       supabase.from('categories').select('*').eq('brand_id', brandId).order('sort_order'),
       supabase.from('products').select('*').eq('brand_id', brandId).eq('is_available', true).order('created_at', { ascending: false }),
       supabase.from('discounts').select(`*, discount_products(product_id)`).eq('brand_id', brandId).eq('is_active', true),
     ]);
 
-    // ✅ เรียก getAllTablesAction เพื่อให้ได้สถานะ (ว่าง/ไม่ว่าง) ที่ถูกต้องจากออเดอร์
     const tables = await getAllTablesAction(brandId);
 
     return { 
@@ -89,7 +88,7 @@ export async function getPaymentInitialDataAction() {
         categories: cats.data || [],
         products: prods.data || [],
         discounts: discs.data || [],
-        tables: tables || [] // ส่ง tables ที่ process แล้วกลับไป
+        tables: tables || [] 
     };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -99,6 +98,7 @@ export async function getPaymentInitialDataAction() {
 // --- 2. Fetch Unpaid Orders ---
 export async function getUnpaidOrdersAction(brandId: string) {
     const supabase = await getSupabase();
+    // ✅ เพิ่มการดึง id, status ให้ชัดเจน
     const { data: rawOrders } = await supabase.from('orders')
         .select(`*, order_items(*)`)
         .eq('brand_id', brandId)
@@ -140,7 +140,7 @@ export async function getUnpaidOrdersAction(brandId: string) {
     return Object.values(grouped).filter((g: any) => g.order_items.length > 0);
 }
 
-// --- 3. Process Payment ---
+// --- 3. Process Payment (✅ แก้ไขจุดบัคตรงนี้) ---
 export async function processPaymentAction(payload: any) {
     const supabase = await getSupabase();
     const { brandId, userId, totalAmount, receivedAmount, changeAmount, paymentMethod, type, selectedOrder, cart } = payload;
@@ -153,7 +153,7 @@ export async function processPaymentAction(payload: any) {
         let tableLabel = 'Walk-in';
 
         if (type === 'tables' && selectedOrder) {
-            finalOrderId = selectedOrder.id;
+            finalOrderId = selectedOrder.id; // ใช้ ID ตัวแทนสักตัวเพื่อผูกกับ pai_orders
             tableLabel = selectedOrder.table_label;
             receiptItems = selectedOrder.order_items.filter((i: any) => i.status !== 'cancelled');
         } 
@@ -194,10 +194,15 @@ export async function processPaymentAction(payload: any) {
         if (payError) throw payError;
 
         if (type === 'tables') {
+            // ✅✅✅ แก้ไขจุดตาย: เปลี่ยนจากการใช้ .in('id', ...) มาเป็นการอัปเดตทั้งโต๊ะแทน
+            // เพื่อกวาดออเดอร์ทั้งหมดของโต๊ะนี้ที่เป็นสถานะ 'done' ให้กลายเป็น 'paid'
             await supabase.from('orders')
                 .update({ status: 'paid', payment_id: payRecord.id })
-                .in('id', selectedOrder.original_ids);
+                .eq('brand_id', brandId)
+                .eq('table_label', selectedOrder.table_label) // หาตามชื่อโต๊ะ
+                .eq('status', 'done'); // เอาเฉพาะที่เสร็จแล้ว (กันพลาดไปโดนตัวที่เพิ่งสั่ง)
             
+            // เคลียร์สถานะโต๊ะให้ว่าง
             const newToken = Math.random().toString(36).substring(2, 6).toUpperCase();
             await supabase.from('tables')
                 .update({ status: 'available', access_token: newToken })
@@ -249,11 +254,9 @@ export async function cancelOrderItemAction(itemId: string) {
     return { success: !error, error: error?.message };
 }
 
-// ✅✅✅ แก้ไขฟังก์ชันนี้: เช็คสถานะโต๊ะจาก Order เพื่อเปลี่ยนสีจุด
 export async function getAllTablesAction(brandId: string) {
     const supabase = await getSupabase();
 
-    // 1. ดึงโต๊ะทั้งหมด
     const { data: tables } = await supabase
         .from('tables')
         .select('*')
@@ -262,16 +265,13 @@ export async function getAllTablesAction(brandId: string) {
 
     if (!tables) return [];
 
-    // 2. ดึง Order ที่ถือว่า "ไม่ว่าง" (Occupied)
-    // เงื่อนไข: status ต้องไม่ใช่ paid, completed, cancelled
-    // (หมายความว่า: pending, preparing, cooking, served, done ถือว่า "ไม่ว่าง" หมด)
+    // เช็คว่าโต๊ะไหนมีออเดอร์ค้างอยู่บ้าง (ที่ไม่ใช่ paid/cancelled)
     const { data: activeOrders } = await supabase
         .from('orders')
         .select('table_id, table_label, status')
         .eq('brand_id', brandId)
         .in('status', ['pending', 'preparing', 'cooking', 'served', 'done']); 
 
-    // 3. จับคู่: ถ้าโต๊ะไหนมีชื่ออยู่ใน Active Order -> ให้สถานะเป็น "occupied" (จุดสีเทา)
     const tablesWithStatus = tables.map(table => {
         const isOccupied = activeOrders?.some(order => 
             (order.table_id && order.table_id === table.id) || 
@@ -280,7 +280,6 @@ export async function getAllTablesAction(brandId: string) {
 
         return {
             ...table,
-            // ถ้าไม่ว่าง -> occupied (เทา), ถ้าว่าง -> available (เขียว)
             status: isOccupied ? 'occupied' : 'available' 
         };
     });

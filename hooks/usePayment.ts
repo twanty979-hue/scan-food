@@ -1,3 +1,5 @@
+// hooks/usePayment.ts
+
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import dayjs from 'dayjs';
@@ -7,13 +9,12 @@ import {
     processPaymentAction,
     updateOrderStatusAction,
     getPendingAndPreparingOrdersAction,
-    getAllTablesAction, // ✅ 1. เพิ่ม Import นี้
+    getAllTablesAction, 
     cancelOrderAction,
     cancelOrderItemAction
 } from '@/app/actions/paymentActions';
 import { getLatestTableDataAction } from '@/app/actions/tableActions';
 import { getOrderUsage } from '@/app/actions/limitGuard';
-
 
 export function usePayment() {
     // --- State ---
@@ -51,8 +52,10 @@ export function usePayment() {
     const [qrTableData, setQrTableData] = useState<any>(null);
     const [showTableSelector, setShowTableSelector] = useState(false);
 
-    // ✅ เพิ่ม Ref เพื่อกันยิงซ้ำ (Race Condition)
     const processedOrdersRef = useRef<Set<string>>(new Set());
+    
+    // ✅ เพิ่ม Ref เพื่อเก็บสถานะล่าสุดของออเดอร์ (แก้ปัญหา Closure ใน setTimeout)
+    const unpaidOrdersRef = useRef(unpaidOrders);
 
     // --- Helpers ---
     const roundForCash = (amount: number) => Math.ceil(amount * 4) / 4;
@@ -71,7 +74,6 @@ export function usePayment() {
         setLimitStatus(usage);
     }, [brandId]);
 
-    // ✅ 2. เพิ่มฟังก์ชันโหลดโต๊ะใหม่ (Refresh Tables)
     const refreshTables = useCallback(async () => {
         if (!brandId) return;
         const tables = await getAllTablesAction(brandId);
@@ -113,6 +115,7 @@ export function usePayment() {
 
                 const orders = await getUnpaidOrdersAction(res.brandId!);
                 setUnpaidOrders(orders);
+                unpaidOrdersRef.current = orders; // Sync Ref
             }
             setLoading(false);
         };
@@ -126,96 +129,110 @@ export function usePayment() {
         }
     }, [cart, autoKitchen]);
 
+    // ✅ Sync Ref ทุกครั้งที่ unpaidOrders เปลี่ยน
+    useEffect(() => {
+        unpaidOrdersRef.current = unpaidOrders;
+    }, [unpaidOrders]);
+
     const refreshOrders = useCallback(async () => {
         if (!brandId) return;
         const orders = await getUnpaidOrdersAction(brandId);
         setUnpaidOrders(orders);
         refreshQuota(); 
     }, [brandId, refreshQuota]);
-// =========================================================================
-// ✅ 3. Realtime Listener (แก้ใหม่: แยก Channel เพื่อความเสถียร 100%)
-// =========================================================================
-useEffect(() => {
-    if (!brandId) return;
 
-    // ฟังก์ชันจบงาน (Logic เดิมของคุณ)
-    const finishOrder = async (orderId: string) => {
-        if (processedOrdersRef.current.has(orderId)) return;
-        await updateOrderStatusAction(orderId, 'done');
-        console.log(`🤖 Auto: Done (Finished) ${orderId}`);
-        processedOrdersRef.current.add(orderId);
-        refreshOrders();
-    };
+    // =========================================================================
+    // ✅ 3. Realtime Listener (แก้ใหม่: เช็คสถานะก่อนยิง Done)
+    // =========================================================================
+    useEffect(() => {
+        if (!brandId) return;
 
-    const processOrder = async (order: any) => {
-        if (!autoKitchen) return;
-        if (order.status === 'pending') {
-            await updateOrderStatusAction(order.id, 'preparing');
-            console.log(`🤖 Auto: Accepted New Order ${order.id}`);
-            playSound();
-            setTimeout(() => finishOrder(order.id), 5 * 60 * 1000);
-        } else if (order.status === 'preparing') {
-            const lastUpdate = dayjs(order.updated_at);
-            const now = dayjs();
-            const diffMins = now.diff(lastUpdate, 'minute', true);
-            console.log(`🤖 Auto: Resuming ${order.id}, Passed: ${diffMins.toFixed(2)} mins`);
-            if (diffMins >= 5) {
-                finishOrder(order.id);
-            } else {
-                const remainingMs = (5 - diffMins) * 60 * 1000;
-                console.log(`🤖 Auto: Waiting remaining ${remainingMs} ms`);
-                setTimeout(() => finishOrder(order.id), remainingMs);
+        const finishOrder = async (orderId: string) => {
+            if (processedOrdersRef.current.has(orderId)) return;
+
+            // 🛑 เช็คสถานะล่าสุดจาก Database ก่อนยิง (กันเหนียวสุดๆ)
+            const { data: currentOrder } = await supabase
+                .from('orders')
+                .select('status')
+                .eq('id', orderId)
+                .single();
+
+            // ถ้าออเดอร์ไม่อยู่แล้ว หรือสถานะเป็น cancelled -> จบข่าว ไม่ต้องทำอะไร
+            if (!currentOrder || currentOrder.status === 'cancelled' || currentOrder.status === 'done') {
+                console.log(`🚫 Auto Skipped: Order ${orderId} is ${currentOrder?.status}`);
+                return;
             }
+
+            // ถ้าสถานะยังปกติ ค่อยอัปเดตเป็น done
+            await updateOrderStatusAction(orderId, 'done');
+            console.log(`🤖 Auto: Done (Finished) ${orderId}`);
+            processedOrdersRef.current.add(orderId);
+            refreshOrders();
+        };
+
+        const processOrder = async (order: any) => {
+            if (!autoKitchen) return;
+            if (order.status === 'pending') {
+                await updateOrderStatusAction(order.id, 'preparing');
+                console.log(`🤖 Auto: Accepted New Order ${order.id}`);
+                playSound();
+                setTimeout(() => finishOrder(order.id), 5 * 60 * 1000);
+            } else if (order.status === 'preparing') {
+                const lastUpdate = dayjs(order.updated_at);
+                const now = dayjs();
+                const diffMins = now.diff(lastUpdate, 'minute', true);
+                console.log(`🤖 Auto: Resuming ${order.id}, Passed: ${diffMins.toFixed(2)} mins`);
+                if (diffMins >= 5) {
+                    finishOrder(order.id);
+                } else {
+                    const remainingMs = (5 - diffMins) * 60 * 1000;
+                    console.log(`🤖 Auto: Waiting remaining ${remainingMs} ms`);
+                    setTimeout(() => finishOrder(order.id), remainingMs);
+                }
+            }
+        };
+
+        if (autoKitchen) {
+            getPendingAndPreparingOrdersAction(brandId).then(orders => {
+                orders.forEach(o => processOrder(o));
+            });
         }
-    };
 
-    if (autoKitchen) {
-        getPendingAndPreparingOrdersAction(brandId).then(orders => {
-            orders.forEach(o => processOrder(o));
-        });
-    }
+        const orderChannel = supabase.channel('payment_realtime_orders_v3')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `brand_id=eq.${brandId}` }, 
+            (payload) => {
+                console.log('🔔 Order Update:', payload);
+                setTimeout(() => {
+                    refreshOrders();
+                    refreshTables(); 
+                }, 500);
 
-    // 🔴 แก้ไขจุดนี้: แยก Channel ออกเป็น 2 ตัว ไม่ใช้ตัวเดียวกัน
-    
-    // Channel 1: ฟัง Orders (เหมือนโค้ดเก่าที่เคยทำงานได้)
-    const orderChannel = supabase.channel('payment_realtime_orders_v3')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `brand_id=eq.${brandId}` }, 
-        (payload) => {
-            console.log('🔔 Order Update:', payload);
-            // หน่วงเวลานิดนึงเพื่อให้ Database บันทึกข้อมูลเสร็จชัวร์ๆ (แก้ Race Condition)
-            setTimeout(() => {
-                refreshOrders();
-                refreshTables(); 
-            }, 500);
+                if (autoKitchen && payload.eventType === 'INSERT') {
+                    const newOrder = payload.new;
+                    if (newOrder.status === 'pending') processOrder(newOrder);
+                }
+            })
+            .subscribe((status) => {
+                 if (status === 'SUBSCRIBED') console.log('✅ Connected to Orders');
+            });
 
-            if (autoKitchen && payload.eventType === 'INSERT') {
-                const newOrder = payload.new;
-                if (newOrder.status === 'pending') processOrder(newOrder);
-            }
-        })
-        .subscribe((status) => {
-             if (status === 'SUBSCRIBED') console.log('✅ Connected to Orders');
-        });
+        const tableChannel = supabase.channel('payment_realtime_tables_v3')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'tables', filter: `brand_id=eq.${brandId}` }, 
+            () => {
+                console.log('🪑 Table Update');
+                setTimeout(() => {
+                    refreshTables();
+                }, 500);
+            })
+            .subscribe((status) => {
+                 if (status === 'SUBSCRIBED') console.log('✅ Connected to Tables');
+            });
 
-    // Channel 2: ฟัง Tables (แยกออกมาต่างหาก)
-    const tableChannel = supabase.channel('payment_realtime_tables_v3')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'tables', filter: `brand_id=eq.${brandId}` }, 
-        () => {
-            console.log('🪑 Table Update');
-            setTimeout(() => {
-                refreshTables();
-            }, 500);
-        })
-        .subscribe((status) => {
-             if (status === 'SUBSCRIBED') console.log('✅ Connected to Tables');
-        });
-
-    return () => { 
-        // ลบทั้ง 2 channel เมื่อออกจากหน้า
-        supabase.removeChannel(orderChannel); 
-        supabase.removeChannel(tableChannel);
-    };
-}, [brandId, autoKitchen, refreshOrders, refreshTables]);
+        return () => { 
+            supabase.removeChannel(orderChannel); 
+            supabase.removeChannel(tableChannel);
+        };
+    }, [brandId, autoKitchen, refreshOrders, refreshTables]);
 
     // --- Logic: Pricing ---
     const calculatePrice = useCallback((product: any, variant: string = 'normal') => {
@@ -286,34 +303,31 @@ useEffect(() => {
     // --- Logic: Payment ---
     const rawTotal = useMemo(() => activeTab === 'tables' ? (selectedOrder?.total_price || 0) : cart.reduce((s, i) => s + (i.price * i.quantity), 0), [activeTab, selectedOrder, cart]);
     
+    // ✅✅✅ เพิ่มบรรทัดนี้ที่หายไปกลับมาครับ
     const payableAmount = useMemo(() => {
         if (paymentMethod === 'cash') return roundForCash(rawTotal);
         return Number(rawTotal.toFixed(2));
     }, [rawTotal, paymentMethod]);
 
     const handlePayment = async () => {
-        // ✅ 1. แปลงเป็นตัวเลขให้ชัวร์ก่อนเริ่มคำนวณ (แก้ปัญหา String เทียบ Number ผิดเพี้ยน)
         const safePayable = Number(payableAmount);
         const safeReceived = Number(receivedAmount);
 
         if (safePayable <= 0) return;
 
-        // ✅ 2. เช็คยอดเงินด้วยตัวแปรที่แปลงเป็นตัวเลขแล้ว
         if (paymentMethod === 'cash' && safeReceived < safePayable) {
             setStatusModal({ show: true, type: 'error', title: 'ยอดเงินไม่พอ', message: 'กรุณารับเงินเพิ่มจากลูกค้า' });
             return;
         }
         
-        // ✅ 3. คำนวณเงินทอน
         const change = paymentMethod === 'promptpay' ? 0 : (safeReceived - safePayable);
 
         const payload = {
             brandId,
             userId: currentUser?.id,
             totalAmount: safePayable,
-            // ถ้า PromptPay ให้ยอดรับ = ยอดต้องจ่าย, ถ้าเงินสด = ยอดที่รับมาจริง
             receivedAmount: paymentMethod === 'promptpay' ? safePayable : safeReceived,
-            changeAmount: Number(change.toFixed(2)), // ✅ ปัดเศษทศนิยมให้เรียบร้อยป้องกัน Database Error
+            changeAmount: Number(change.toFixed(2)), 
             paymentMethod,
             type: activeTab,
             selectedOrder,
@@ -327,8 +341,8 @@ useEffect(() => {
                 id: res.payRecord.id, 
                 created_at: new Date().toISOString(), 
                 total_amount: safePayable,
-                received_amount: payload.receivedAmount, // ✅ ใช้ค่าจาก payload ที่ชัวร์แล้ว
-                change_amount: payload.changeAmount,     // ✅ ใช้ค่าจาก payload ที่ชัวร์แล้ว
+                received_amount: payload.receivedAmount, 
+                change_amount: payload.changeAmount, 
                 payment_method: paymentMethod, 
                 cashier: currentProfile, 
                 brand: currentBrand,
@@ -349,8 +363,8 @@ useEffect(() => {
             setStatusModal({ show: true, type: 'error', title: 'ผิดพลาด', message: res.error });
         }
     };
+
     const handleSelectTableForQR = async (table: any) => {
-        // 🔥 โหลดสถานะโต๊ะล่าสุดก่อนเปิด Modal เสมอ (Double Check)
         const { success, data } = await getLatestTableDataAction(table.id);
         const updatedTable = (success && data) ? data : table;
         setQrTableData(updatedTable);
@@ -383,6 +397,6 @@ useEffect(() => {
         calculatePrice,
         formatCurrency: (amt: number) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', minimumFractionDigits: 2 }).format(amt || 0),
         
-        refreshTables // ✅✅✅ เติมบรรทัดนี้เข้าไปครับ แล้วหาย Error ทันที!
+        refreshTables 
     };
 }

@@ -92,18 +92,22 @@ export function useThemes() {
     };
 
     // --- Logic: Apply Theme ---
-    const handleApplyTheme = async (theme: any) => {
+   const handleApplyTheme = async (theme: any) => {
         if (!isOwner) return alert('เฉพาะเจ้าของร้านเท่านั้นที่เปลี่ยนธีมได้');
+        
+        // ❌ ลบส่วนนี้ออกครับ
+        // const mkt = theme.marketplace_themes;
+        // const confirmChange = confirm(`ยืนยันการใช้ธีม...`);
+        // if (!confirmChange) return;
+        
+        // ✅ เหลือไว้แค่นี้ (Logic การยิง API ล้วนๆ)
         const mkt = theme.marketplace_themes;
-        const confirmChange = confirm(`ยืนยันการใช้ธีม "${mkt.name}"?\n- URL: /${mkt.slug}\n- Mode: ${mkt.theme_mode}`);
-        if (!confirmChange) return;
-    
         setApplyingId(theme.id);
         try {
             const res = await applyThemeAction(mkt.slug, mkt.theme_mode);
             if (res.success) {
                 setCurrentConfig({ slug: mkt.slug, mode: mkt.theme_mode });
-                alert('เปิดใช้งานธีมสำเร็จ!');
+                // alert('เปิดใช้งานธีมสำเร็จ!'); // จะลบ alert นี้ออกด้วยก็ได้ถ้าอยากให้ Modal ปิดเองเงียบๆ
             } else {
                 throw new Error(res.error);
             }

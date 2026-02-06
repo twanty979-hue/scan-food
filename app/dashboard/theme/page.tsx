@@ -5,6 +5,8 @@ import { useMemo, useState } from 'react';
 import ThemeHeader from './components/ThemeHeader';
 import ActiveView from './components/ActiveView';
 import HistoryView from './components/HistoryView';
+// ✅ Import Modal เข้ามา
+import ThemeConfirmationModal from './components/ThemeConfirmationModal';
 
 export default function ThemePage() {
   const {
@@ -12,54 +14,60 @@ export default function ThemePage() {
     applyingId, currentThemes, currentPage, totalPages,
     changePage, handleApplyTheme, getImageUrl,
     categories, selectedCategory, handleCategoryChange,
-    // ✅ 1. เพิ่ม: ดึงค่า Filter Lifetime มาจาก Hook
     filterLifetime, toggleLifetimeFilter
   } = useThemes();
 
   const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
 
+  // ✅ เพิ่ม State สำหรับ Modal
+  const [themeToApply, setThemeToApply] = useState<any | null>(null);
+
   const { activeThemesDisplay, expiredThemesList, lifetimeCount } = useMemo(() => {
-     // currentThemes ในที่นี้คือข้อมูลที่ผ่านการกรอง (Category + Lifetime) และตัดหน้า (Pagination) มาแล้วจาก Hook
      const active = currentThemes.filter((t: any) => !t.is_expired);
      const expired = themes.filter((t: any) => t.is_expired);
-     
-     // ✅ นับจำนวน Lifetime ทั้งหมดจากข้อมูลดิบ (themes) เพื่อโชว์ตัวเลขที่ปุ่ม (ไม่สนใจว่ากรองอยู่ไหม)
      const lifetime = themes.filter((t: any) => t.purchase_type === 'lifetime').length;
-
      return { activeThemesDisplay: active, expiredThemesList: expired, lifetimeCount: lifetime };
   }, [currentThemes, themes]);
 
+  // ✅ ฟังก์ชันเมื่อกดปุ่ม Apply ใน Card (ยังไม่ยิง API แค่เปิด Modal)
+  const onApplyClick = (theme: any) => {
+    setThemeToApply(theme);
+  };
+
+  // ✅ ฟังก์ชันเมื่อกดยืนยันใน Modal (ค่อยยิง API)
+  const onConfirmApply = async () => {
+    if (themeToApply) {
+      await handleApplyTheme(themeToApply);
+      setThemeToApply(null); // ปิด Modal เมื่อเสร็จ
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#f8fafc] font-sans pb-24">
-      {/* 1. Header & Tabs */}
+      {/* ... Header Code เดิม ... */}
       <ThemeHeader 
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
         expiredCount={expiredThemesList.length}
         lifetimeCount={lifetimeCount}
-        // ✅ 2. เพิ่ม: ส่ง Props ไปให้ Header ใช้ทำปุ่ม Toggle
         filterLifetime={filterLifetime}
         toggleLifetimeFilter={toggleLifetimeFilter}
       />
 
       <div className="max-w-[1920px] mx-auto px-6 md:px-10 mt-8 min-h-[60vh]">
         {loading ? (
-          <div className="flex justify-center py-40">
-             <div className="flex flex-col items-center gap-4">
-                <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                <span className="text-slate-400 font-bold text-xs uppercase tracking-[0.2em] animate-pulse">Syncing Inventory...</span>
-             </div>
-          </div>
+          /* ... Loading Code เดิม ... */
+          <div className="flex justify-center py-40">Loading...</div>
         ) : (
           <>
-            {/* 2. Active Themes View */}
             {activeTab === 'active' && (
                 <ActiveView 
                     themes={activeThemesDisplay}
                     currentConfig={currentConfig}
                     applyingId={applyingId}
                     isOwner={isOwner}
-                    onApply={handleApplyTheme}
+                    // ❌ เปลี่ยนจาก handleApplyTheme เป็น onApplyClick
+                    onApply={onApplyClick} 
                     getImageUrl={getImageUrl}
                     currentPage={currentPage}
                     totalPages={totalPages}
@@ -70,7 +78,6 @@ export default function ThemePage() {
                 />
             )}
 
-            {/* 3. History Themes View */}
             {activeTab === 'history' && (
                 <HistoryView 
                     themes={expiredThemesList}
@@ -80,6 +87,18 @@ export default function ThemePage() {
           </>
         )}
       </div>
+
+      {/* ✅ วาง Modal ไว้ตรงนี้ (นอกสุด) */}
+      <ThemeConfirmationModal 
+        isOpen={!!themeToApply}
+        theme={themeToApply}
+        onClose={() => setThemeToApply(null)}
+        onConfirm={onConfirmApply}
+        isApplying={!!applyingId}
+        
+        // ⭐ สำคัญมาก: ต้องเพิ่มบรรทัดนี้ครับ ⭐
+        getImageUrl={getImageUrl} 
+      />
     </div>
   );
 }

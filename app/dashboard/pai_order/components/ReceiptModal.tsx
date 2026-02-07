@@ -1,4 +1,3 @@
-// D:\startup\scan_food\app\dashboard\pai_order\components\ReceiptModal.tsx
 'use client';
 
 import React, { useRef } from 'react';
@@ -26,15 +25,29 @@ const formatDateReceipt = (dateString: string) => {
 
 interface ReceiptModalProps {
     receipt: any;
-    items?: any[]; // items อาจจะเป็น undefined ได้
+    items?: any[];
     onClose: () => void;
 }
 
 export default function ReceiptModal({ receipt, items, onClose }: ReceiptModalProps) {
     const printRef = useRef<HTMLDivElement>(null);
 
-    // ✅ 1. สร้างตัวแปร displayItems เพื่อกันเหนียว (ถ้า items ไม่มี ให้ใช้ receipt.items แทน)
+    // 1. เตรียมข้อมูล items
     const displayItems = items || receipt?.items || [];
+
+    // 2. ฟังก์ชันช่วยดึงค่ายอดลด (รองรับทั้ง key เก่าและใหม่)
+    const getDiscountValue = (promo: any) => {
+        if (!promo) return 0;
+        // ✅ เช็คทั้ง savedAmount (POS) และ discount_amount (Database)
+        return Number(promo.savedAmount || promo.discount_amount || 0);
+    };
+
+    // 3. คำนวณยอดประหยัดรวม (Total Saved)
+    const totalSaved = displayItems.reduce((sum: number, item: any) => {
+        if (item.status === 'cancelled') return sum;
+        const savedPerUnit = getDiscountValue(item.promotion_snapshot);
+        return sum + (savedPerUnit * item.quantity);
+    }, 0);
 
     const handlePrint = () => {
         const content = printRef.current?.innerHTML;
@@ -67,13 +80,6 @@ export default function ReceiptModal({ receipt, items, onClose }: ReceiptModalPr
             printWindow.document.close();
         }
     };
-
-    // ✅ 2. ใช้ displayItems ในการคำนวณแทน items ตรงๆ
-    const totalSaved = displayItems.reduce((sum: number, item: any) => {
-        if (item.status === 'cancelled') return sum;
-        const promo = item.promotion_snapshot;
-        return sum + (promo ? (promo.savedAmount || 0) * item.quantity : 0);
-    }, 0);
 
     if (!receipt) return null;
 
@@ -110,14 +116,19 @@ export default function ReceiptModal({ receipt, items, onClose }: ReceiptModalPr
 
                         <div className="border-b border-dashed border-slate-300 my-4"></div>
 
-                        {/* ✅ 3. ใช้ displayItems ในการ Loop แสดงผล */}
+                        {/* 2. รายการสินค้า */}
                         <div className="space-y-3 mb-4">
                             {displayItems.length > 0 ? (
                                 displayItems.map((item: any, index: number) => {
                                     const isCancelled = item.status === 'cancelled';
                                     const promo = item.promotion_snapshot;
-                                    const saved = promo ? (promo.savedAmount || 0) : 0;
-                                    const originalPrice = promo ? (item.price + saved) : item.price;
+                                    
+                                    // ✅ เรียกใช้ฟังก์ชันที่รองรับทั้ง 2 ชื่อ
+                                    const savedPerUnit = getDiscountValue(promo);
+                                    const isDiscounted = !isCancelled && savedPerUnit > 0;
+                                    
+                                    // คำนวณราคาเต็ม (เฉพาะเมื่อมีส่วนลดจริงๆ)
+                                    const originalPrice = isDiscounted ? (item.price + savedPerUnit) : item.price;
 
                                     return (
                                         <div key={index} className={`flex justify-between items-start ${isCancelled ? 'text-red-400' : ''}`}>
@@ -131,13 +142,16 @@ export default function ReceiptModal({ receipt, items, onClose }: ReceiptModalPr
                                                             {item.variant}
                                                         </span>
                                                     )}
-                                                    {/* แสดงป้าย SAVE ส่วนลด */}
-                                                    {!isCancelled && promo && (
+                                                    
+                                                    {/* ✅ แสดงป้าย SAVE (แก้เรื่องชื่อโปรโมชั่นหายด้วย) */}
+                                                    {isDiscounted && (
                                                         <div className="flex items-center gap-1 text-[10px] text-red-500 font-bold bg-red-50 px-1.5 py-0.5 rounded w-fit">
-                                                            <IconTag /> SAVE {formatCurrency(saved * item.quantity)} ({promo.name})
+                                                            <IconTag /> SAVE {formatCurrency(savedPerUnit * item.quantity)}
+                                                            {/* ถ้ามีชื่อโชว์ชื่อ ถ้าไม่มีไม่ต้องโชว์วงเล็บว่างๆ */}
+                                                            {promo.name ? ` (${promo.name})` : ''}
                                                         </div>
                                                     )}
-                                                    {/* แสดงป้าย ยกเลิก */}
+                                                    
                                                     {isCancelled && (
                                                         <span className="text-[10px] font-bold bg-red-100 text-red-600 px-1.5 rounded">
                                                             ยกเลิก
@@ -146,8 +160,13 @@ export default function ReceiptModal({ receipt, items, onClose }: ReceiptModalPr
                                                 </div>
                                             </div>
                                             <div className="text-right">
-                                                {!isCancelled && promo && <p className="text-[10px] text-slate-400 line-through font-bold">{formatCurrency(originalPrice * item.quantity)}</p>}
-                                                <p className={`font-black ${isCancelled ? 'line-through text-red-300' : (promo ? 'text-red-500' : 'text-slate-900')}`}>
+                                                {/* ✅ แสดงราคาเต็มขีดฆ่า */}
+                                                {isDiscounted && (
+                                                    <p className="text-[10px] text-slate-400 line-through font-bold">
+                                                        {formatCurrency(originalPrice * item.quantity)}
+                                                    </p>
+                                                )}
+                                                <p className={`font-black ${isCancelled ? 'line-through text-red-300' : (isDiscounted ? 'text-red-500' : 'text-slate-900')}`}>
                                                     {formatCurrency(item.price * item.quantity)}
                                                 </p>
                                             </div>
@@ -163,6 +182,7 @@ export default function ReceiptModal({ receipt, items, onClose }: ReceiptModalPr
 
                         {/* 3. ยอดรวม & ส่วนลด */}
                         <div className="space-y-1 text-slate-600">
+                            {/* ✅ แสดงยอดรวมประหยัด (ถ้ามี) */}
                             {totalSaved > 0 && (
                                 <div className="flex justify-between text-sm text-red-500 bg-red-50 p-2 rounded-lg border border-red-100 mb-2">
                                     <span className="font-bold uppercase flex items-center gap-1"><IconTag /> ประหยัดไป</span>
@@ -177,7 +197,7 @@ export default function ReceiptModal({ receipt, items, onClose }: ReceiptModalPr
 
                         <div className="border-b border-dashed border-slate-300 my-4"></div>
 
-                        {/* 4. รายละเอียดการชำระเงิน (รับ/ทอน) */}
+                        {/* 4. รายละเอียดการชำระเงิน */}
                         <div className="space-y-2">
                             <div className="flex justify-between items-center">
                                 <span className="font-bold">ชำระโดย</span>
@@ -186,7 +206,6 @@ export default function ReceiptModal({ receipt, items, onClose }: ReceiptModalPr
                                 </span>
                             </div>
                             
-                            {/* แสดงยอดรับจริงและเงินทอนเสมอ ถ้ามีข้อมูล */}
                             {(receipt.received_amount > 0 || receipt.change_amount > 0) && (
                                 <>
                                     <div className="flex justify-between items-center">

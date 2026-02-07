@@ -1,4 +1,3 @@
-// app/dashboard/settings/components/UpgradePlanModal.tsx
 import { PLANS } from '../constants';
 import { IconCrown, IconClose, IconQr, IconCreditCard, IconCheck } from './Icons';
 
@@ -57,7 +56,8 @@ export default function UpgradePlanModal({
                    {(['free', 'basic', 'pro', 'ultimate'] as const).map((planKey) => {
                       const plan = PLANS[planKey];
                       const isCurrent = currentPlanKey === planKey;
-                      const basePrice = planKey === 'free' ? 0 : parseInt(plan.price.replace(/,/g, ''));
+                      const isFree = planKey === 'free';
+                      const basePrice = isFree ? 0 : parseInt(plan.price.replace(/,/g, ''));
                       const fullPricePerYear = basePrice * 12;
                       const discountedPricePerYear = fullPricePerYear * 0.8;
                       const monthlyAverage = Math.floor(discountedPricePerYear / 12);
@@ -71,18 +71,18 @@ export default function UpgradePlanModal({
                                
                                {period === 'yearly' && planKey !== 'free' ? (
                                    <div className="flex flex-col items-center">
-                                       <div className="flex items-baseline gap-1 text-slate-900">
-                                           <span className="text-3xl font-black">{monthlyAverage.toLocaleString()}</span>
-                                           <span className="text-xs font-bold text-slate-400">บ./เดือน</span>
-                                       </div>
-                                       <div className="mt-1 text-[10px] font-bold text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100">
-                                           ประหยัด {(fullPricePerYear - discountedPricePerYear).toLocaleString()} บาท/ปี
-                                       </div>
+                                        <div className="flex items-baseline gap-1 text-slate-900">
+                                            <span className="text-3xl font-black">{monthlyAverage.toLocaleString()}</span>
+                                            <span className="text-xs font-bold text-slate-400">บ./เดือน</span>
+                                        </div>
+                                        <div className="mt-1 text-[10px] font-bold text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100">
+                                            ประหยัด {(fullPricePerYear - discountedPricePerYear).toLocaleString()} บาท/ปี
+                                        </div>
                                    </div>
                                ) : (
                                    <div className="flex items-baseline justify-center gap-1 text-slate-900">
-                                       <span className="text-3xl font-black">{plan.price}</span>
-                                       {planKey !== 'free' && <span className="text-xs font-bold text-slate-400">บ./เดือน</span>}
+                                        <span className="text-3xl font-black">{plan.price}</span>
+                                        {planKey !== 'free' && <span className="text-xs font-bold text-slate-400">บ./เดือน</span>}
                                    </div>
                                )}
                            </div>
@@ -90,20 +90,33 @@ export default function UpgradePlanModal({
                            <div className="flex-1 space-y-3 mb-8">
                                {plan.features.map((feat, i) => (
                                    <div key={i} className="flex items-start gap-2.5">
-                                       <div className="mt-0.5 w-4 h-4 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
-                                           <IconCheck size={10} strokeWidth={4}/>
-                                       </div>
-                                       <span className="text-xs font-medium text-slate-600 leading-tight">{feat}</span>
+                                        <div className="mt-0.5 w-4 h-4 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+                                            <IconCheck size={10} strokeWidth={4}/>
+                                        </div>
+                                        <span className="text-xs font-medium text-slate-600 leading-tight">{feat}</span>
                                    </div>
                                ))}
                            </div>
 
+                           {/* ✅ แก้ไขตรงนี้: ปุ่มกด */}
                            <button 
-                             disabled={isCurrent || submitting} 
+                             // ถ้าเป็น Free Plan และใช้อยู่ = กดไม่ได้
+                             // ถ้าเป็น Paid Plan และใช้อยู่ = กดได้ (เพื่อต่ออายุ)
+                             disabled={(isCurrent && isFree) || submitting} 
+                             
                              onClick={() => { onClose(); handleUpgradePlan(planKey, paymentMethod); }} 
-                             className={`w-full py-3 rounded-xl font-bold text-xs transition-all ${isCurrent ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : plan.btnColor + ' shadow-md'}`}
+                             
+                             className={`w-full py-3 rounded-xl font-bold text-xs transition-all 
+                                ${(isCurrent && isFree) 
+                                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed' // ปุ่มเทา เฉพาะตอนใช้ Free
+                                    : plan.btnColor + ' shadow-md hover:opacity-90 active:scale-95' // สีตามแพ็กเกจ (รวมถึงตอนต่ออายุด้วย)
+                                }
+                             `}
                            >
-                             {isCurrent ? 'ใช้งานอยู่' : 'เลือกแพ็กเกจนี้'}
+                             {isCurrent 
+                                ? (isFree ? 'ใช้งานอยู่' : 'ต่ออายุแพ็กเกจ') // ถ้าใช้อยู่และไม่ใช่ Free ให้ขึ้น "ต่ออายุ"
+                                : 'เลือกแพ็กเกจนี้'
+                             }
                            </button>
                         </div>
                       );

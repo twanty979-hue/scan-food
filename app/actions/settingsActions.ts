@@ -140,7 +140,7 @@ export async function upgradeBrandPlanAction(
     if (!user) throw new Error("Unauthorized");
 
     // ดึงวันหมดอายุแยก Tier
-    const { data: brand } = await supabase
+   const { data: brand } = await supabase
         .from('brands')
         .select('omise_customer_id, expiry_basic, expiry_pro, expiry_ultimate')
         .eq('id', brandId)
@@ -154,7 +154,19 @@ export async function upgradeBrandPlanAction(
        let description = `Upgrade ${newPlan.toUpperCase()} (${period}) - Brand: ${brandId}`;
        
        const charge = await new Promise<any>((resolve, reject) => {
-          omise.charges.create({ amount, currency: 'thb', description, card: token }, (err, resp) => err ? reject(err) : resolve(resp));
+          omise.charges.create({ 
+              amount, 
+              currency: 'thb', 
+              description, 
+              card: token,
+              // ✅ เพิ่มก้อนนี้เข้าไปครับ
+              metadata: {
+                  brand_id: brandId,
+                  new_plan: newPlan,
+                  period: period,
+                  type: 'upgrade_plan'
+              }
+          }, (err, resp) => err ? reject(err) : resolve(resp));
        });
        if (charge.status !== 'successful') throw new Error(`Payment Failed: ${charge.failure_message || 'Declined'}`);
     }
@@ -208,7 +220,6 @@ export async function createPromptPayChargeAction(
     period: 'monthly' | 'yearly', 
     sourceId: string
 ) {
-    // ... Logic เดิม ...
     const supabase = await getSupabase();
     try {
         const amount = calculatePrice(newPlan, period);
@@ -216,8 +227,17 @@ export async function createPromptPayChargeAction(
 
         const charge = await new Promise<any>((resolve, reject) => {
             omise.charges.create({
-                amount, currency: 'thb', source: sourceId,
-                description: `Upgrade ${newPlan.toUpperCase()} (${period}) - PromptPay`
+                amount, 
+                currency: 'thb', 
+                source: sourceId,
+                description: `Upgrade ${newPlan.toUpperCase()} (${period}) - PromptPay`,
+                // ✅🔥 เพิ่มก้อนนี้เข้าไปครับ สำคัญมาก!
+                metadata: {
+                    brand_id: brandId,
+                    new_plan: newPlan,
+                    period: period,
+                    type: 'upgrade_plan'
+                }
             }, (err, resp) => err ? reject(err) : resolve(resp));
         });
 
@@ -230,7 +250,6 @@ export async function createPromptPayChargeAction(
         return { success: false, error: error.message };
     }
 }
-
 // 3. PromptPay (Check Status)
 export async function checkPaymentStatusAction(
   brandId: string, 

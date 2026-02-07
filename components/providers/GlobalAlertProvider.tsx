@@ -1,143 +1,169 @@
 'use client';
 
-import React, { createContext, useContext, useState, useRef } from 'react';
+import React, { createContext, useContext, useState, useRef, ReactNode } from 'react';
 
 // --- Icons ---
-const IconCheck = () => <svg className="w-12 h-12 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>;
-const IconX = () => <svg className="w-12 h-12 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>;
-const IconInfo = () => <svg className="w-12 h-12 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
-const IconQuestion = () => <svg className="w-12 h-12 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
-
-type AlertType = 'success' | 'error' | 'info' | 'confirm';
-
-interface AlertOptions {
-  title: string;
-  message: string;
-  confirmText?: string;
-  cancelText?: string;
-}
+const IconCheck = () => <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-500"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>;
+const IconAlert = () => <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
+const IconInfo = () => <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>;
+const IconWallet = () => <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-indigo-500"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>;
 
 interface AlertContextType {
-  showAlert: (type: 'success' | 'error' | 'info', title: string, message?: string) => Promise<void>;
-  showConfirm: (title: string, message?: string, confirmText?: string, cancelText?: string) => Promise<boolean>;
+  showAlert: (type: 'success' | 'error' | 'info' | 'warning', title: string, message?: string) => Promise<void>;
+  showConfirm: (title: string, message: string, confirmText?: string, cancelText?: string) => Promise<boolean>;
 }
 
 const AlertContext = createContext<AlertContextType | undefined>(undefined);
 
-export function GlobalAlertProvider({ children }: { children: React.ReactNode }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [type, setType] = useState<AlertType>('info');
-  const [config, setConfig] = useState<AlertOptions>({ title: '', message: '' });
-  
-  // ใช้เก็บ Promise resolve function เพื่อให้รอคำตอบได้ (เหมือน window.confirm)
-  const resolveRef = useRef<(value: boolean) => void>(() => {});
+export function useGlobalAlert() {
+  const context = useContext(AlertContext);
+  if (!context) throw new Error('useGlobalAlert must be used within a GlobalAlertProvider');
+  return context;
+}
 
-  const showAlert = (type: 'success' | 'error' | 'info', title: string, message: string = '') => {
+export default function GlobalAlertProvider({ children }: { children: ReactNode }) {
+  const [state, setState] = useState<{
+    isOpen: boolean;
+    mode: 'alert' | 'confirm';
+    type: 'success' | 'error' | 'info' | 'warning';
+    title: string;
+    message: string;
+    confirmText: string;
+    cancelText: string;
+    resolve?: (value: boolean) => void;
+  }>({
+    isOpen: false,
+    mode: 'alert',
+    type: 'info',
+    title: '',
+    message: '',
+    confirmText: 'ตกลง',
+    cancelText: 'ยกเลิก',
+  });
+
+  const showAlert = async (type: 'success' | 'error' | 'info' | 'warning', title: string, message: string = '') => {
     return new Promise<void>((resolve) => {
-      setType(type);
-      setConfig({ title, message });
-      setIsOpen(true);
-      resolveRef.current = () => {
-        setIsOpen(false);
-        resolve();
-      };
+      setState({
+        isOpen: true,
+        mode: 'alert',
+        type,
+        title,
+        message,
+        confirmText: 'ตกลง',
+        cancelText: '',
+        resolve: () => resolve(),
+      });
     });
   };
 
-  const showConfirm = (title: string, message: string = '', confirmText = 'ยืนยัน', cancelText = 'ยกเลิก') => {
+  const showConfirm = async (title: string, message: string, confirmText: string = 'ยืนยัน', cancelText: string = 'ยกเลิก') => {
     return new Promise<boolean>((resolve) => {
-      setType('confirm');
-      setConfig({ title, message, confirmText, cancelText });
-      setIsOpen(true);
-      resolveRef.current = (result: boolean) => {
-        setIsOpen(false);
-        resolve(result);
-      };
+      setState({
+        isOpen: true,
+        mode: 'confirm',
+        type: 'info', // Default type for confirm
+        title,
+        message,
+        confirmText,
+        cancelText,
+        resolve,
+      });
     });
   };
 
   const handleClose = (result: boolean) => {
-    if (resolveRef.current) {
-      resolveRef.current(result);
+    setState((prev) => ({ ...prev, isOpen: false }));
+    if (state.resolve) {
+      if (state.mode === 'confirm') state.resolve(result);
+      else state.resolve(true);
     }
   };
+
+  // --- Logic ตรวจจับว่าเป็น "การชำระเงิน" หรือไม่ ---
+  const isPayment = state.title.includes('ชำระ') || state.message.includes('บาท');
+  
+  // ดึงตัวเลขเงินออกมา (ถ้ามี)
+  const extractPrice = (text: string) => {
+    const match = text.match(/([\d,]+\.?\d*)\s*บาท/);
+    return match ? match[1] : null;
+  };
+  const price = extractPrice(state.message);
+  
+  // ตัดข้อความส่วนที่เป็นราคาออก เพื่อไม่ให้ซ้ำซ้อน
+  const displayMessage = state.message.replace(/ยอดชำระ:.*บาท/, '').trim();
 
   return (
     <AlertContext.Provider value={{ showAlert, showConfirm }}>
       {children}
       
-      {/* --- UI Modal --- */}
-      {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 font-sans">
-          {/* Backdrop Blur */}
+      {state.isOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div 
-            className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200" 
-            onClick={() => type !== 'confirm' && handleClose(false)} // ถ้าไม่ใช่ confirm กดพื้นหลังปิดได้
-          ></div>
-
-          {/* Card */}
-          <div className="relative bg-white rounded-[2rem] shadow-2xl w-full max-w-md p-8 text-center animate-in zoom-in-95 duration-200 border-4 border-white">
-            
-            {/* Icon */}
-            <div className={`mx-auto w-20 h-20 flex items-center justify-center rounded-full mb-6 border-4 shadow-sm ${
-                type === 'success' ? 'bg-green-50 border-green-100' :
-                type === 'error' ? 'bg-red-50 border-red-100' :
-                type === 'info' ? 'bg-blue-50 border-blue-100' :
-                'bg-indigo-50 border-indigo-100'
-            }`}>
-                {type === 'success' && <IconCheck />}
-                {type === 'error' && <IconX />}
-                {type === 'info' && <IconInfo />}
-                {type === 'confirm' && <IconQuestion />}
+            className="bg-white w-full max-w-[360px] rounded-[32px] shadow-2xl overflow-hidden flex flex-col relative animate-in zoom-in-95 duration-300"
+            role="dialog"
+            aria-modal="true"
+          >
+            {/* Header / Icon Area */}
+            <div className={`pt-8 pb-4 flex justify-center ${isPayment ? 'bg-indigo-50/50' : ''}`}>
+               <div className={`w-20 h-20 rounded-full flex items-center justify-center shadow-lg border-4 border-white
+                 ${isPayment ? 'bg-indigo-100 text-indigo-600' : 
+                   (state.type === 'success' ? 'bg-emerald-100' : 
+                   state.type === 'error' ? 'bg-red-100 text-red-500' : 
+                   state.type === 'warning' ? 'bg-amber-100' : 'bg-slate-100')}
+               `}>
+                 {isPayment ? <IconWallet /> : 
+                   (state.type === 'success' ? <IconCheck /> : 
+                   state.type === 'error' ? <IconAlert className="text-red-500" /> : 
+                   state.type === 'warning' ? <IconAlert /> : <IconInfo />)
+                 }
+               </div>
             </div>
 
-            {/* Content */}
-            <h3 className="text-2xl font-black text-slate-800 mb-2">{config.title}</h3>
-            <p className="text-slate-500 text-lg leading-relaxed mb-8">{config.message}</p>
+            {/* Content Area */}
+            <div className="px-6 pb-6 text-center">
+              <h3 className="text-xl font-black text-slate-900 mb-2 tracking-tight">
+                {state.title}
+              </h3>
+              
+              {/* ถ้ามีราคา ให้โชว์ตัวใหญ่ๆ */}
+              {isPayment && price && (
+                <div className="my-4 py-3 bg-indigo-50 rounded-2xl border border-indigo-100">
+                    <p className="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-1">ยอดชำระ (Total)</p>
+                    <p className="text-3xl font-black text-indigo-600 tracking-tight">฿{price}</p>
+                </div>
+              )}
 
-            {/* Buttons */}
-            <div className={`flex gap-4 justify-center ${type === 'confirm' ? '' : ''}`}>
-                {type === 'confirm' ? (
-                    <>
-                        <button 
-                            onClick={() => handleClose(false)}
-                            className="flex-1 py-4 rounded-2xl font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors"
-                        >
-                            {config.cancelText}
-                        </button>
-                        <button 
-                            onClick={() => handleClose(true)}
-                            className="flex-1 py-4 rounded-2xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-transform active:scale-95"
-                        >
-                            {config.confirmText}
-                        </button>
-                    </>
-                ) : (
-                    <button 
-                        onClick={() => handleClose(true)}
-                        className={`w-full py-4 rounded-2xl font-bold text-white shadow-lg transition-transform active:scale-95 ${
-                            type === 'success' ? 'bg-green-500 hover:bg-green-600 shadow-green-200' :
-                            type === 'error' ? 'bg-red-500 hover:bg-red-600 shadow-red-200' :
-                            'bg-blue-500 hover:bg-blue-600 shadow-blue-200'
-                        }`}
-                    >
-                        รับทราบ
-                    </button>
-                )}
+              <p className="text-slate-500 font-medium text-sm leading-relaxed whitespace-pre-line">
+                {isPayment && price ? displayMessage : state.message}
+              </p>
             </div>
 
+            {/* Actions Area */}
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-3">
+              {state.mode === 'confirm' && (
+                <button
+                  onClick={() => handleClose(false)}
+                  className="flex-1 py-3.5 rounded-xl bg-white border border-slate-200 text-slate-600 font-bold hover:bg-slate-100 hover:text-slate-800 transition-all active:scale-95 shadow-sm"
+                >
+                  {state.cancelText}
+                </button>
+              )}
+              
+              <button
+                onClick={() => handleClose(true)}
+                className={`flex-1 py-3.5 rounded-xl font-bold text-white shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2
+                  ${isPayment 
+                    ? 'bg-gradient-to-r from-indigo-600 to-indigo-500 shadow-indigo-200 hover:shadow-indigo-300' 
+                    : (state.type === 'error' ? 'bg-red-500 hover:bg-red-600 shadow-red-200' : 'bg-slate-900 hover:bg-slate-800 shadow-slate-200')
+                  }
+                `}
+              >
+                {state.confirmText}
+              </button>
+            </div>
           </div>
         </div>
       )}
     </AlertContext.Provider>
   );
-}
-
-// Custom Hook เพื่อเรียกใช้
-export function useGlobalAlert() {
-  const context = useContext(AlertContext);
-  if (context === undefined) {
-    throw new Error('useGlobalAlert must be used within a GlobalAlertProvider');
-  }
-  return context;
 }

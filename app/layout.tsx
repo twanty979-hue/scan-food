@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 // ✅ 1. นำเข้า Provider
-import { GlobalAlertProvider } from "@/components/providers/GlobalAlertProvider";
+import GlobalAlertProvider from '@/components/providers/GlobalAlertProvider';
 
 export const metadata: Metadata = {
   title: "Spring - Fresh Bloom System",

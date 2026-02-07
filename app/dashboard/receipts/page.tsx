@@ -14,6 +14,7 @@ const IconSearch = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="n
 const IconChevronLeft = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>;
 const IconChevronRight = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>;
 const IconPrinter = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>;
+const IconTag = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>;
 
 const formatCurrency = (amount: number) => 
     new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', minimumFractionDigits: 2 }).format(amount);
@@ -87,13 +88,11 @@ export default function ReceiptsPage() {
     };
 
     const displayedReceipts = receipts.filter((rpt: any) => {
-        // ✅ 1. เช็คว่าเป็นบิลยกเลิกหรือไม่ (ครอบคลุมทุกกรณี)
         const isCancelled = rpt.status === 'cancelled' || 
                             rpt.payment_method === 'CANCELLED' ||
                             (rpt.orders && Array.isArray(rpt.orders) && rpt.orders[0]?.status === 'cancelled') ||
                             (rpt.orders && !Array.isArray(rpt.orders) && rpt.orders.status === 'cancelled');
 
-        // ✅ 2. เช็คชื่อโต๊ะ (ครอบคลุมทั้ง Array และ Object)
         let tableName = rpt.table_label || '';
         if (!tableName && rpt.orders) {
             tableName = Array.isArray(rpt.orders) 
@@ -102,15 +101,12 @@ export default function ReceiptsPage() {
         }
         tableName = tableName || 'Walk-in';
 
-        // ✅ 3. เช็คชื่อแบรนด์
         const brandName = rpt.brand?.name || '';
 
-        // ✅ 4. กรองตาม Tab (ทั้งหมด / สำเร็จ / ยกเลิก)
         let statusMatch = true;
         if (statusFilter === 'completed') statusMatch = !isCancelled;
         if (statusFilter === 'cancelled') statusMatch = isCancelled;
 
-        // ✅ 5. กรองตามคำค้นหา
         const searchLower = searchText.toLowerCase();
         const searchMatch = !searchText || 
                             tableName.toLowerCase().includes(searchLower) ||
@@ -256,7 +252,7 @@ export default function ReceiptsPage() {
                 )}
             </div>
 
-            {/* ✅ ใช้ Local Receipt Modal ที่เขียนแทรกไว้ด้านล่าง */}
+            {/* ✅ ใช้ Local Receipt Modal ที่อัปเกรดแล้ว */}
             {selectedReceipt && (
                 <LocalReceiptModal 
                     receipt={selectedReceipt} 
@@ -270,7 +266,6 @@ export default function ReceiptsPage() {
 
 // ReceiptCard (การ์ดรายการเล็ก)
 function ReceiptCard({ rpt, onClick }: { rpt: any, onClick: () => void }) {
-    // ✅ Logic ที่ครอบคลุมทุกกรณี (Array, Object, Status, Payment Method)
     const isCancelled = rpt.status === 'cancelled' || 
                         rpt.payment_method === 'CANCELLED' ||
                         (rpt.orders && Array.isArray(rpt.orders) && rpt.orders[0]?.status === 'cancelled') ||
@@ -318,9 +313,22 @@ function ReceiptCard({ rpt, onClick }: { rpt: any, onClick: () => void }) {
     );
 }
 
-// ✅ Local Receipt Modal (เหมือนเดิม ไม่ต้องแก้)
+// ✅ Local Receipt Modal (อัปเกรดให้เหมือน ReceiptModal.tsx เป๊ะๆ)
 function LocalReceiptModal({ receipt, items, onClose }: { receipt: any, items: any[], onClose: () => void }) {
     const printRef = useRef<HTMLDivElement>(null);
+
+    // 1. ฟังก์ชันช่วยดึงค่ายอดลด (รองรับทั้ง savedAmount และ discount_amount)
+    const getDiscountValue = (promo: any) => {
+        if (!promo) return 0;
+        return Number(promo.savedAmount || promo.discount_amount || 0);
+    };
+
+    // 2. คำนวณยอดประหยัดรวม
+    const totalSaved = items.reduce((sum, item) => {
+        if (item.status === 'cancelled') return sum;
+        const savedPerUnit = getDiscountValue(item.promotion_snapshot);
+        return sum + (savedPerUnit * item.quantity);
+    }, 0);
 
     const handlePrint = () => {
         const content = printRef.current?.innerHTML;
@@ -360,7 +368,11 @@ function LocalReceiptModal({ receipt, items, onClose }: { receipt: any, items: a
                 
                 {/* Header Actions */}
                 <div className="flex justify-between items-center p-4 border-b border-slate-100">
-                    <h3 className="font-bold text-slate-700">รายละเอียดใบเสร็จ</h3>
+                    <div className="flex items-center gap-2">
+                        {/* ✅ เพิ่มหัวข้อตามที่ขอ */}
+                        <h3 className="font-bold text-slate-700">ใบเสร็จย้อนหลัง</h3>
+                        <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full border border-slate-200">History</span>
+                    </div>
                     <div className="flex gap-2">
                         <button onClick={handlePrint} className="p-2 hover:bg-slate-100 rounded-full text-slate-600" title="พิมพ์">
                             <IconPrinter />
@@ -387,11 +399,20 @@ function LocalReceiptModal({ receipt, items, onClose }: { receipt: any, items: a
 
                         <div className="border-b border-dashed border-slate-300 my-4"></div>
 
-                        {/* ✅ 2. รายการสินค้า (โชว์ทั้งหมด + ขีดฆ่ายกเลิก) */}
+                        {/* ✅ 2. รายการสินค้า (ใช้ Logic ใหม่) */}
                         <div className="space-y-3 mb-4">
                             {items.length > 0 ? (
                                 items.map((item: any, index: number) => {
                                     const isCancelled = item.status === 'cancelled';
+                                    const promo = item.promotion_snapshot;
+                                    
+                                    // ✅ เรียกใช้ฟังก์ชันที่รองรับทั้ง 2 ชื่อ
+                                    const savedPerUnit = getDiscountValue(promo);
+                                    const isDiscounted = !isCancelled && savedPerUnit > 0;
+                                    
+                                    // คำนวณราคาเต็ม (เฉพาะเมื่อมีส่วนลดจริงๆ)
+                                    const originalPrice = isDiscounted ? (item.price + savedPerUnit) : item.price;
+
                                     return (
                                         <div key={index} className={`flex justify-between items-start ${isCancelled ? 'text-red-400' : ''}`}>
                                             <div className="flex-1 pr-2">
@@ -404,6 +425,16 @@ function LocalReceiptModal({ receipt, items, onClose }: { receipt: any, items: a
                                                             {item.variant}
                                                         </span>
                                                     )}
+                                                    
+                                                    {/* ✅ แสดงป้าย SAVE (แก้เรื่องชื่อโปรโมชั่นหายด้วย) */}
+                                                    {isDiscounted && (
+                                                        <div className="flex items-center gap-1 text-[10px] text-red-500 font-bold bg-red-50 px-1.5 py-0.5 rounded w-fit">
+                                                            <IconTag /> SAVE {formatCurrency(savedPerUnit * item.quantity)}
+                                                            {/* ถ้ามีชื่อโชว์ชื่อ ถ้าไม่มีไม่ต้องโชว์วงเล็บว่างๆ */}
+                                                            {promo?.name ? ` (${promo.name})` : ''}
+                                                        </div>
+                                                    )}
+                                                    
                                                     {isCancelled && (
                                                         <span className="text-[10px] font-bold bg-red-100 text-red-600 px-1.5 rounded">
                                                             ยกเลิก
@@ -411,8 +442,16 @@ function LocalReceiptModal({ receipt, items, onClose }: { receipt: any, items: a
                                                     )}
                                                 </div>
                                             </div>
-                                            <div className={`whitespace-nowrap font-bold ${isCancelled ? 'line-through text-red-300' : ''}`}>
-                                                {formatCurrency(item.price * item.quantity)}
+                                            <div className="text-right">
+                                                {/* ✅ แสดงราคาเต็มขีดฆ่า */}
+                                                {isDiscounted && (
+                                                    <p className="text-[10px] text-slate-400 line-through font-bold">
+                                                        {formatCurrency(originalPrice * item.quantity)}
+                                                    </p>
+                                                )}
+                                                <p className={`font-black ${isCancelled ? 'line-through text-red-300' : (isDiscounted ? 'text-red-500' : 'text-slate-900')}`}>
+                                                    {formatCurrency(item.price * item.quantity)}
+                                                </p>
                                             </div>
                                         </div>
                                     );
@@ -424,8 +463,15 @@ function LocalReceiptModal({ receipt, items, onClose }: { receipt: any, items: a
 
                         <div className="border-b border-dashed border-slate-300 my-4"></div>
 
-                        {/* 3. ยอดรวม */}
+                        {/* 3. ยอดรวม & ส่วนลด */}
                         <div className="space-y-1 text-slate-600">
+                            {/* ✅ แสดงยอดรวมประหยัด (ถ้ามี) */}
+                            {totalSaved > 0 && (
+                                <div className="flex justify-between text-sm text-red-500 bg-red-50 p-2 rounded-lg border border-red-100 mb-2">
+                                    <span className="font-bold uppercase flex items-center gap-1"><IconTag /> ประหยัดไป</span>
+                                    <span className="font-black">- {formatCurrency(totalSaved)}</span>
+                                </div>
+                            )}
                             <div className="flex justify-between items-center text-lg font-black text-slate-900">
                                 <span>ยอดรวมสุทธิ</span>
                                 <span>{formatCurrency(receipt.total_amount)}</span>
@@ -434,7 +480,7 @@ function LocalReceiptModal({ receipt, items, onClose }: { receipt: any, items: a
 
                         <div className="border-b border-dashed border-slate-300 my-4"></div>
 
-                        {/* ✅ 4. รายละเอียดการชำระเงิน (รับ/ทอน) */}
+                        {/* 4. รายละเอียดการชำระเงิน */}
                         <div className="space-y-2">
                             <div className="flex justify-between items-center">
                                 <span className="font-bold">ชำระโดย</span>
@@ -443,15 +489,18 @@ function LocalReceiptModal({ receipt, items, onClose }: { receipt: any, items: a
                                 </span>
                             </div>
                             
-                            <div className="flex justify-between items-center">
-                                <span>รับเงิน (Received)</span>
-                                <span>{formatCurrency(receipt.received_amount || receipt.total_amount)}</span>
-                            </div>
-                            
-                            <div className="flex justify-between items-center text-slate-900">
-                                <span>เงินทอน (Change)</span>
-                                <span className="font-bold">{formatCurrency(receipt.change_amount || 0)}</span>
-                            </div>
+                            {(receipt.received_amount > 0 || receipt.change_amount > 0) && (
+                                <>
+                                    <div className="flex justify-between items-center">
+                                        <span>รับเงิน (Received)</span>
+                                        <span>{formatCurrency(receipt.received_amount || receipt.total_amount)}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-slate-900">
+                                        <span>เงินทอน (Change)</span>
+                                        <span className="font-bold">{formatCurrency(receipt.change_amount || 0)}</span>
+                                    </div>
+                                </>
+                            )}
                         </div>
 
                         <div className="border-b border-dashed border-slate-300 my-6"></div>

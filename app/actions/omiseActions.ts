@@ -1,38 +1,69 @@
-// app/actions/omiseActions.ts
 'use server'
 
 import Omise from 'omise';
-console.log("Secret Key:", process.env.OMISE_SECRET_KEY);
-// สร้าง Client เชื่อมต่อ Omise
+import { createServerClient } from '@supabase/ssr'; // ✅ เพิ่ม
+import { cookies } from 'next/headers';          // ✅ เพิ่ม
+
 const omise = Omise({
   publicKey: process.env.NEXT_PUBLIC_OMISE_PUBLIC_KEY!,
   secretKey: process.env.OMISE_SECRET_KEY!,
 });
 
-// --- 1. สร้าง QR Code PromptPay ---
-export async function createPromptPayQRCode(amount: number) {
-  try {
-    // Omise รับหน่วยเป็น "สตางค์" (เช่น 100 บาท = 10000 สตางค์)
-    const amountInSatang = Math.round(amount * 100);
+// ✅ Helper ดึง Supabase (เหมือนไฟล์อื่น)
+async function getSupabase() {
+  const cookieStore = await cookies();
+  return createServerClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_ANON_KEY!,
+    { cookies: { get(name) { return cookieStore.get(name)?.value } } }
+  );
+}
 
-    // 1. สร้าง Source (ต้นทางเงิน: PromptPay)
+// --- 1. สร้าง QR Code PromptPay ---
+// ✅ รับแค่ amount กับ themeId พอ (brandId เดี๋ยวหาเอง)
+export async function createPromptPayQRCode(amount: number, themeId?: string) {
+  try {
+    
+    // 1. หา Brand ID ของคนกดซื้อ (Server-side Secure Check)
+    const supabase = await getSupabase();
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    let brandId = '';
+    
+    if (user) {
+        const { data: profile } = await supabase.from('profiles').select('brand_id').eq('id', user.id).single();
+        if (profile?.brand_id) {
+            brandId = profile.brand_id;
+        }
+    }
+
+    // 2. เตรียม Metadata
+    let metadata = {};
+    if (themeId && brandId) {
+        metadata = {
+            type: 'buy_theme',
+            brand_id: brandId,
+            theme_id: themeId
+        };
+    }
+
+    // 3. สร้าง Source & Charge
+    const amountInSatang = Math.round(amount * 100);
     const source = await omise.sources.create({
       amount: amountInSatang,
       currency: 'thb',
       type: 'promptpay',
     });
 
-    // 2. สร้าง Charge (ใบแจ้งหนี้)
     const charge = await omise.charges.create({
       amount: amountInSatang,
       currency: 'thb',
       source: source.id,
-      return_uri: 'http://localhost:3000', // ใส่ URL หลอกๆ ไว้ก่อนได้ (เพราะเราเช็ค status เอง)
+      return_uri: process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000',
+      metadata: metadata // ✅ ยัด Metadata ที่มี brandId จาก Server
     });
 
-    // 3. ดึงลิงก์รูป QR Code
-// ✅ ของใหม่
-const qrImage = charge.source?.scannable_code?.image?.download_uri;
+    const qrImage = charge.source?.scannable_code?.image?.download_uri;
 
     return { 
       success: true, 
@@ -47,15 +78,13 @@ const qrImage = charge.source?.scannable_code?.image?.download_uri;
   }
 }
 
-// --- 2. เช็คสถานะว่าลูกค้าจ่ายยัง ---
+// ... checkOmisePaymentStatus เหมือนเดิม
 export async function checkOmisePaymentStatus(chargeId: string) {
-  try {
-    const charge = await omise.charges.retrieve(chargeId);
-    return { 
-      success: true, 
-      status: charge.status // 'pending', 'successful', 'failed'
-    };
-  } catch (error: any) {
-    return { success: false, error: error.message };
-  }
+    // ... (โค้ดเดิม)
+    try {
+        const charge = await omise.charges.retrieve(chargeId);
+        return { success: true, status: charge.status };
+    } catch (error: any) {
+        return { success: false, error: error.message };
+    }
 }

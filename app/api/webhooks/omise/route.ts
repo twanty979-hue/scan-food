@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import dayjs from 'dayjs';
-import Omise from 'omise'; 
+import Omise from 'omise';
 
 // Config Omise
 const omise = Omise({
@@ -10,7 +10,7 @@ const omise = Omise({
 });
 
 // ----------------------------------------------------------------------
-// Helper Functions
+// Helper Functions (สำหรับการคำนวณวันหมดอายุ)
 // ----------------------------------------------------------------------
 
 function calculateNewExpiryForTier(currentExpiry: string | null, period: string) {
@@ -59,20 +59,23 @@ export async function POST(req: NextRequest) {
 
             const metadata = charge.metadata || {};
 
+            // 🛡️ ป้องกันการทำงานซ้ำ: ถ้าทำไปแล้ว ให้จบเลย
+            if (metadata.is_processed === 'true') {
+                console.log(`⚠️ Transaction ${charge.id} already processed.`);
+                return NextResponse.json({ message: 'Already processed' });
+            }
+
+            // ⚠️ ใช้ SERVICE_ROLE_KEY เพื่อแก้ไข DB ได้โดยไม่ต้อง Login
+            const supabaseAdmin = createClient(
+                process.env.SUPABASE_URL!,
+                process.env.SUPABASE_SERVICE_ROLE_KEY! 
+            );
+
+            // =================================================================
+            // CASE 1: UPGRADE PLAN (สมัครแพ็กเกจ)
+            // =================================================================
             if (metadata.type === 'upgrade_plan' && metadata.brand_id) {
                 
-                // 🛡️ ป้องกันการทำงานซ้ำ
-                if (metadata.is_processed === 'true') {
-                    console.log(`⚠️ Transaction ${charge.id} already processed.`);
-                    return NextResponse.json({ message: 'Already processed' });
-                }
-
-                // ⚠️ ใช้ SERVICE_ROLE_KEY เพื่อแก้ไข DB
-                const supabaseAdmin = createClient(
-                    process.env.SUPABASE_URL!,
-                    process.env.SUPABASE_SERVICE_ROLE_KEY! 
-                );
-
                 const { brand_id, new_plan, period } = metadata;
 
                 // 1. ดึงข้อมูล Brand
@@ -94,19 +97,35 @@ export async function POST(req: NextRequest) {
                 const effectivePlan = calculateEffectivePlan(updatedBrand);
                 await supabaseAdmin.from('brands').update({ plan: effectivePlan }).eq('id', brand_id);
 
-                console.log(`✅ Webhook Success (Verified): Upgraded brand ${brand_id} to ${new_plan}`);
+                console.log(`✅ Webhook Success: Upgraded brand ${brand_id} to ${new_plan}`);
 
-                // 5. แจ้งกลับ Omise ว่ารายการนี้ Process แล้ว
-                try {
-                    await new Promise((resolve) => {
-                        omise.charges.update(charge.id, {
-                            metadata: { ...metadata, is_processed: 'true' }
-                        } as any, resolve);
-                    });
-                    console.log('✅ Marked as processed in Omise');
-                } catch (omiseError) {
-                    console.error('⚠️ Failed to update Omise metadata:', omiseError);
-                }
+                // Mark as processed
+                await markAsProcessed(charge.id, metadata);
+            }
+
+            // =================================================================
+            // CASE 2: BUY THEME (ซื้อธีม)
+            // =================================================================
+            else if (metadata.type === 'buy_theme' && metadata.brand_id && metadata.theme_id) {
+                
+                const { brand_id, theme_id } = metadata;
+
+                // 1. เพิ่มธีมให้ร้านค้า (Upsert)
+                // Default ให้เป็น 'lifetime' (ซื้อขาด) หรือถ้าอยากได้แบบอื่นแก้ตรงนี้ได้
+                const { error } = await supabaseAdmin.from('themes').upsert({
+                    brand_id: brand_id,
+                    marketplace_theme_id: theme_id,
+                    purchase_type: 'lifetime', 
+                    expires_at: null,          
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'brand_id, marketplace_theme_id' });
+
+                if (error) throw error;
+
+                console.log(`✅ Webhook Success: Bought theme ${theme_id} for brand ${brand_id}`);
+
+                // Mark as processed
+                await markAsProcessed(charge.id, metadata);
             }
         }
 
@@ -115,5 +134,19 @@ export async function POST(req: NextRequest) {
     } catch (error: any) {
         console.error('❌ Webhook Error:', error.message);
         return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+}
+
+// Helper: แจ้งกลับ Omise ว่ารายการนี้ Process แล้ว
+async function markAsProcessed(chargeId: string, metadata: any) {
+    try {
+        await new Promise((resolve) => {
+            omise.charges.update(chargeId, {
+                metadata: { ...metadata, is_processed: 'true' }
+            } as any, resolve);
+        });
+        console.log('✅ Marked as processed in Omise');
+    } catch (omiseError) {
+        console.error('⚠️ Failed to update Omise metadata:', omiseError);
     }
 }

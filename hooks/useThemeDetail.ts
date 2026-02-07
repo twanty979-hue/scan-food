@@ -188,7 +188,7 @@ export function useThemeDetail() {
 
         // ✅ CASE 2: ของเสียเงิน -> เปิด QR Code เลย (ถือว่ากดปุ่มคือยืนยันแล้ว)
         setProcessing(true);
-        const res = await createPromptPayQRCode(currentPrice);
+        const res = await createPromptPayQRCode(currentPrice, theme.id);
 
         if (res.success && res.qrImage) {
             setQrCode(res.qrImage);

@@ -1,15 +1,14 @@
 'use server'
 
 import Omise from 'omise';
-import { createServerClient } from '@supabase/ssr'; // ✅ เพิ่ม
-import { cookies } from 'next/headers';          // ✅ เพิ่ม
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 
 const omise = Omise({
   publicKey: process.env.NEXT_PUBLIC_OMISE_PUBLIC_KEY!,
   secretKey: process.env.OMISE_SECRET_KEY!,
 });
 
-// ✅ Helper ดึง Supabase (เหมือนไฟล์อื่น)
 async function getSupabase() {
   const cookieStore = await cookies();
   return createServerClient(
@@ -19,35 +18,30 @@ async function getSupabase() {
   );
 }
 
-// --- 1. สร้าง QR Code PromptPay ---
-// ✅ รับแค่ amount กับ themeId พอ (brandId เดี๋ยวหาเอง)
-export async function createPromptPayQRCode(amount: number, themeId?: string) {
+// ✅ แก้ไข: รับ parameter 'plan' เพิ่ม
+export async function createPromptPayQRCode(amount: number, themeId?: string, plan?: string) {
   try {
     
-    // 1. หา Brand ID ของคนกดซื้อ (Server-side Secure Check)
     const supabase = await getSupabase();
     const { data: { user } } = await supabase.auth.getUser();
     
     let brandId = '';
-    
     if (user) {
         const { data: profile } = await supabase.from('profiles').select('brand_id').eq('id', user.id).single();
-        if (profile?.brand_id) {
-            brandId = profile.brand_id;
-        }
+        if (profile?.brand_id) brandId = profile.brand_id;
     }
 
-    // 2. เตรียม Metadata
+    // ✅ เพิ่ม plan ลงใน metadata
     let metadata = {};
     if (themeId && brandId) {
         metadata = {
             type: 'buy_theme',
             brand_id: brandId,
-            theme_id: themeId
+            theme_id: themeId,
+            plan: plan || 'lifetime' // ส่งประเภทแผนไปด้วย (monthly / lifetime)
         };
     }
 
-    // 3. สร้าง Source & Charge
     const amountInSatang = Math.round(amount * 100);
     const source = await omise.sources.create({
       amount: amountInSatang,
@@ -60,7 +54,7 @@ export async function createPromptPayQRCode(amount: number, themeId?: string) {
       currency: 'thb',
       source: source.id,
       return_uri: process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000',
-      metadata: metadata // ✅ ยัด Metadata ที่มี brandId จาก Server
+      metadata: metadata // ✅ ส่ง Metadata ที่มี plan ไป
     });
 
     const qrImage = charge.source?.scannable_code?.image?.download_uri;
@@ -80,7 +74,6 @@ export async function createPromptPayQRCode(amount: number, themeId?: string) {
 
 // ... checkOmisePaymentStatus เหมือนเดิม
 export async function checkOmisePaymentStatus(chargeId: string) {
-    // ... (โค้ดเดิม)
     try {
         const charge = await omise.charges.retrieve(chargeId);
         return { success: true, status: charge.status };

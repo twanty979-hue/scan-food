@@ -106,25 +106,32 @@ export async function POST(req: NextRequest) {
             // =================================================================
             // CASE 2: BUY THEME (ซื้อธีม)
             // =================================================================
-            else if (metadata.type === 'buy_theme' && metadata.brand_id && metadata.theme_id) {
+           else if (metadata.type === 'buy_theme' && metadata.brand_id && metadata.theme_id) {
                 
-                const { brand_id, theme_id } = metadata;
+                const { brand_id, theme_id, plan } = metadata; // ✅ รับค่า plan มาด้วย
 
-                // 1. เพิ่มธีมให้ร้านค้า (Upsert)
-                // Default ให้เป็น 'lifetime' (ซื้อขาด) หรือถ้าอยากได้แบบอื่นแก้ตรงนี้ได้
+                // คำนวณวันหมดอายุ
+                let finalPurchaseType = plan || 'lifetime'; // ถ้าไม่มีให้เป็น lifetime ไว้ก่อน (กันเหนียว)
+                let finalExpiresAt = null;
+
+                // ✅ ถ้าเป็น monthly ให้บวกไป 30 วัน
+                if (finalPurchaseType === 'monthly') {
+                    finalExpiresAt = dayjs().add(30, 'day').toISOString();
+                } 
+                // ถ้าเป็น lifetime ค่า finalExpiresAt จะเป็น null (ถูกต้องแล้ว)
+
                 const { error } = await supabaseAdmin.from('themes').upsert({
                     brand_id: brand_id,
                     marketplace_theme_id: theme_id,
-                    purchase_type: 'lifetime', 
-                    expires_at: null,          
+                    purchase_type: finalPurchaseType, // ✅ บันทึกประเภทที่ถูกต้อง
+                    expires_at: finalExpiresAt,       // ✅ บันทึกวันหมดอายุ (หรือ null)
                     updated_at: new Date().toISOString()
                 }, { onConflict: 'brand_id, marketplace_theme_id' });
 
                 if (error) throw error;
 
-                console.log(`✅ Webhook Success: Bought theme ${theme_id} for brand ${brand_id}`);
+                console.log(`✅ Webhook Success: Bought theme ${theme_id} (${finalPurchaseType}) for brand ${brand_id}`);
 
-                // Mark as processed
                 await markAsProcessed(charge.id, metadata);
             }
         }

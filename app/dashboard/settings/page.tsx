@@ -6,8 +6,8 @@ import Script from 'next/script';
 import Link from 'next/link';
 import { useSettings } from '@/hooks/useSettings';
 
-// ✅ สังเกตการ Import: ต้องมี /components/
-import { IconShop, IconSave, IconUsers, IconLock, IconCrown } from './components/Icons'; 
+// ✅ เพิ่ม IconHistory เข้าไปใน import
+import { IconShop, IconSave, IconUsers, IconLock, IconCrown, IconHistory } from './components/Icons'; 
 import ShopSettingsForm from './components/ShopSettingsForm';
 import CurrentPlanCard from './components/CurrentPlanCard';
 import UpgradePlanModal from './components/UpgradePlanModal';
@@ -51,8 +51,15 @@ export default function SettingsPage() {
           </Link>
 
           <div className="flex items-center gap-3">
+              {/* ✅ 1. ปุ่มประวัติการชำระเงิน (เพิ่มใหม่ตรงนี้) */}
+              <Link href="/dashboard/settings/billing" className="hidden md:flex items-center gap-2 bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 px-5 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 shadow-sm hover:border-indigo-200 hover:text-indigo-600 group">
+                <IconHistory size={18} className="text-slate-400 group-hover:text-indigo-500 transition-colors" />
+                <span>ประวัติการชำระเงิน</span>
+              </Link>
+
+              {/* ปุ่มจัดการพนักงาน (Logic เดิม) */}
               {canManageStaff ? (
-                  <Link href="/dashboard/settingss" className="flex items-center gap-2 bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 px-5 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 shadow-sm hover:border-indigo-200 hover:text-indigo-600 group">
+                  <Link href="/dashboard/settings/staff" className="flex items-center gap-2 bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 px-5 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 shadow-sm hover:border-indigo-200 hover:text-indigo-600 group">
                     <IconUsers size={18} className="text-slate-400 group-hover:text-indigo-500 transition-colors" />
                     <span>จัดการพนักงาน</span>
                   </Link>

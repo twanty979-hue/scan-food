@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-// 1️⃣ โซนห้ามเข้า: เฉพาะ Owner เท่านั้น
+// 1️⃣ โซนห้ามเข้า: เฉพาะ Owner เท่านั้น (Path ย่อย)
 const OWNER_ONLY_PATHS = [
   '/dashboard/tables',
   '/dashboard/discounts',
@@ -9,7 +9,7 @@ const OWNER_ONLY_PATHS = [
   '/dashboard/categories',
   '/dashboard/banners',
   '/dashboard/settings',
-  '/dashboard/settingss',
+  '/dashboard/settingss', // เผื่อพิมพ์ผิดใน array เดิม
 ];
 
 // 2️⃣ โซนพนักงานพรีเมียม: เข้าได้เฉพาะร้าน Pro/Ultimate
@@ -36,7 +36,6 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          // ✅ แก้ไข: Loop set cookies ทีเดียว เพื่อไม่ให้ response ถูกทับ
           cookiesToSet.forEach(({ name, value, options }) => {
             request.cookies.set(name, value)
           })
@@ -55,25 +54,24 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // ⚠️ สำคัญ: ห้ามใช้ getSession() ใน Middleware เพราะมันไม่ปลอดภัย
-  // getUser() จะช่วย Refresh Token ให้ถ้ามันหมดอายุ
+  // ดึง User (User จะถูก Refresh Token อัตโนมัติถ้าจำเป็น)
   const { data: { user } } = await supabase.auth.getUser()
 
   // -----------------------------------------------------------
-  // 👇 Logic เดิมของคุณ (Security Gate)
+  // 🚫 Logic 1: ยังไม่ล็อกอิน -> ดีดไปหน้า Login
   // -----------------------------------------------------------
-
-  // 🚫 ยังไม่ล็อกอิน -> ไป Login
   if (!user && request.nextUrl.pathname.startsWith('/dashboard')) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
-  // ✅ ล็อกอินแล้ว -> เริ่มตรวจบัตร
+  // -----------------------------------------------------------
+  // ✅ Logic 2: ล็อกอินแล้ว -> เริ่มตรวจบัตรพนักงาน/เจ้าของ
+  // -----------------------------------------------------------
   if (user && request.nextUrl.pathname.startsWith('/dashboard')) {
     
-    // ดึงข้อมูล Profile และ Plan
+    // 1. ดึงข้อมูล Role และ Plan ของร้าน
     const { data: profile } = await supabase
       .from('profiles')
       .select('role, brand_id, brands(plan)') 
@@ -92,21 +90,38 @@ export async function middleware(request: NextRequest) {
     }
 
     const isPremiumStore = ['pro', 'ultimate'].includes(brandPlan);
+    const currentPath = request.nextUrl.pathname;
 
-    // 🔒 กฎ 1: Owner Only
+    // 🔥🔥 กฎเหล็กใหม่: ห้ามพนักงานเข้าหน้า Dashboard หลัก (หน้าดูยอดขาย) 🔥🔥
+    // เช็คว่า path ปัจจุบันคือ '/dashboard' เป๊ะๆ หรือไม่ (Exact Match)
+    if (currentPath === '/dashboard' && role !== 'owner') {
+       const url = request.nextUrl.clone();
+       
+       // ถ้าไม่ใช่เจ้าของ ให้เด้งไปหน้าทำงานแทน
+       if (isPremiumStore) {
+           url.pathname = '/dashboard/pai_order'; // ส่งไปหน้า POS
+       } else {
+           url.pathname = '/dashboard/profile';   // ส่งไปหน้า Profile
+       }
+       return NextResponse.redirect(url);
+    }
+
+    // 🔒 กฎ 3: โซนห้ามเข้า (OWNER_ONLY_PATHS)
+    // เช็คว่า path ปัจจุบันขึ้นต้นด้วย path หวงห้ามหรือไม่
     const isTargetingOwnerPath = OWNER_ONLY_PATHS.some(path => 
-      request.nextUrl.pathname.startsWith(path)
+      currentPath.startsWith(path)
     );
+
     if (role !== 'owner' && isTargetingOwnerPath) {
-      // ให้ redirect กลับไปหน้าแรกของ Dashboard แทน
       const url = request.nextUrl.clone()
-      url.pathname = '/dashboard'
+      // ห้ามดีดกลับไป /dashboard เพราะจะวนลูป ให้ไปหน้า Profile แทน
+      url.pathname = '/dashboard/profile' 
       return NextResponse.redirect(url)
     }
 
-    // 🔒 กฎ 2: Premium Staff Only
+    // 🔒 กฎ 4: โซนพนักงานพรีเมียม (PREMIUM_STAFF_PATHS)
     const isTargetingStaffPath = PREMIUM_STAFF_PATHS.some(path => 
-      request.nextUrl.pathname.startsWith(path)
+      currentPath.startsWith(path)
     );
     
     if (role !== 'owner' && !isPremiumStore && isTargetingStaffPath) {
@@ -117,7 +132,6 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // ส่ง response ที่มี Cookies ใหม่กลับไป
   return response
 }
 

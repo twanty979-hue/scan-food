@@ -1,4 +1,3 @@
-// hooks/useCategories.ts
 import { useState, useEffect, useMemo } from 'react';
 import { 
     getCategoriesAction, 
@@ -6,6 +5,8 @@ import {
     deleteCategoryAction, 
     toggleCategoryStatusAction 
 } from '@/app/actions/categoryActions';
+// ✅ 1. Import ตัว Hook มาใช้
+import { useGlobalAlert } from '@/components/providers/GlobalAlertProvider';
 
 export type Category = {
     id: string;
@@ -15,6 +16,9 @@ export type Category = {
 };
 
 export function useCategories() {
+    // ✅ 2. ดึงฟังก์ชัน showAlert และ showConfirm ออกมา
+    const { showAlert, showConfirm } = useGlobalAlert();
+
     // Data States
     const [categories, setCategories] = useState<Category[]>([]);
     const [loading, setLoading] = useState(true);
@@ -44,7 +48,10 @@ export function useCategories() {
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!formData.name.trim()) return;
+        if (!formData.name.trim()) {
+            showAlert('warning', 'ข้อมูลไม่ครบ', 'กรุณาระบุชื่อหมวดหมู่');
+            return;
+        }
 
         setIsSubmitting(true);
         try {
@@ -58,39 +65,54 @@ export function useCategories() {
             
             if (!res.success) throw new Error(res.error);
 
-            await fetchCategories(); // Refresh data
+            await fetchCategories(); 
             setIsModalOpen(false);
+            
+            // ✅ 3. แจ้งเตือนเมื่อบันทึกสำเร็จ
+            showAlert('success', 'บันทึกสำเร็จ', `หมวดหมู่ "${formData.name}" ถูกจัดเก็บเรียบร้อยแล้ว`);
 
         } catch (error: any) {
-            alert('บันทึกไม่สำเร็จ: ' + error.message);
+            // ✅ 4. แจ้งเตือนเมื่อบันทึกพลาด
+            showAlert('error', 'บันทึกไม่สำเร็จ', error.message);
         } finally {
             setIsSubmitting(false);
         }
     };
 
     const handleDelete = async (id: string) => {
-        if (!confirm('ยืนยันลบหมวดหมู่นี้? เมนูอาหารข้างในจะหายไปด้วยนะ!')) return;
+        const cat = categories.find(c => c.id === id);
+
+        // ✅ 5. ใช้ showConfirm พร้อม type 'error' เพื่อโชว์ไอคอนถังขยะ
+        const isConfirmed = await showConfirm(
+            'ยืนยันการลบหมวดหมู่?',
+            `คุณแน่ใจไหมที่จะลบ "${cat?.name}"?\n**คำเตือน:** เมนูอาหารในหมวดหมู่นี้จะหายไปด้วย!`,
+            'ลบทิ้ง',
+            'ยกเลิก',
+            'error' // 🔥 ส่งค่า 'error' เข้าไปเพื่อให้ไอคอนเป็นถังขยะสีแดง
+        );
         
-        // Optimistic Update (ลบจากหน้าจอก่อน เพื่อความลื่น)
+        if (!isConfirmed) return;
+        
         const originalData = [...categories];
         setCategories(prev => prev.filter(c => c.id !== id));
 
         const res = await deleteCategoryAction(id);
         if (!res.success) {
-            alert('ลบไม่สำเร็จ: ' + res.error);
-            setCategories(originalData); // ย้อนค่าคืนถ้าพัง
+            showAlert('error', 'ลบไม่สำเร็จ', res.error || 'เกิดข้อผิดพลาดในการลบข้อมูล');
+            setCategories(originalData); 
+        } else {
+            showAlert('success', 'ลบเรียบร้อย', 'ข้อมูลหมวดหมู่ถูกนำออกจากระบบแล้ว');
         }
     };
 
     const handleToggle = async (id: string, currentStatus: boolean) => {
-        // Optimistic Update
         const originalData = [...categories];
         setCategories(prev => prev.map(c => c.id === id ? { ...c, is_active: !currentStatus } : c));
 
         const res = await toggleCategoryStatusAction(id, !currentStatus);
         if (!res.success) {
-            alert('แก้ไขสถานะไม่สำเร็จ');
-            setCategories(originalData); // ย้อนค่าคืน
+            showAlert('error', 'ผิดพลาด', 'ไม่สามารถเปลี่ยนสถานะได้ในขณะนี้');
+            setCategories(originalData); 
         }
     };
 

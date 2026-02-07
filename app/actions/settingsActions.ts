@@ -2,16 +2,28 @@
 'use server'
 
 import { createServerClient } from '@supabase/ssr';
+import { createClient } from '@supabase/supabase-js'; // ✅ เพิ่ม import นี้เพื่อสร้าง Admin Client
 import { cookies } from 'next/headers';
 import Omise from 'omise';
 import dayjs from 'dayjs';
-// ✅ 1. Import ตัวเทพมาจากไฟล์ themeActions (เพื่อให้ Logic การลบ/เพิ่ม เหมือนกันเป๊ะ)
+
+// ✅ Import Logic ธีม และ Log
 import { syncThemesWithPlan } from './themeActions'; 
+import { createPaymentLog, updatePaymentLogStatus } from './logActions'; // ✅ Import updatePaymentLogStatus มาด้วย
 
 const omise = Omise({
   publicKey: process.env.NEXT_PUBLIC_OMISE_PUBLIC_KEY!,
   secretKey: process.env.OMISE_SECRET_KEY!,
 });
+
+// ----------------------------------------------------------------------
+// 🗝️ สร้าง Admin Client (Service Role)
+// ใช้สำหรับ checkPaymentStatusAction เพื่อทะลุ RLS
+// ----------------------------------------------------------------------
+const supabaseAdmin = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY! 
+);
 
 const BASE_PRICES: Record<string, number> = {
   free: 0,
@@ -20,6 +32,7 @@ const BASE_PRICES: Record<string, number> = {
   ultimate: 199900 
 };
 
+// Client สำหรับ User ทั่วไป (ใช้ตรวจสอบสิทธิ์เจ้าของ)
 async function getSupabase() {
   const cookieStore = await cookies();
   return createServerClient(
@@ -44,7 +57,7 @@ function calculateEffectivePlan(brand: any) {
 }
 
 // ----------------------------------------------------------------------
-// 📅 HELPER: คำนวณวันหมดอายุ (แยกตาม Tier) - *Logic เดิม ห้ามแตะ*
+// 📅 HELPER: คำนวณวันหมดอายุ (แยกตาม Tier)
 // ----------------------------------------------------------------------
 function calculateNewExpiryForTier(currentExpiry: string | null, period: 'monthly' | 'yearly') {
     const now = dayjs();
@@ -59,23 +72,22 @@ function calculateNewExpiryForTier(currentExpiry: string | null, period: 'monthl
     }
 
     if (period === 'monthly') {
-        // 🌙 รายเดือน: เอา 30 วันเป๊ะๆ (ตัดปัญหากุมภามี 28 วัน)
+        // 🌙 รายเดือน
         return baseDate.add(30, 'day').toISOString();
     } else {
-        // ☀️ รายปี: เอา 1 ปีปฏิทิน (365 หรือ 366 วัน อัตโนมัติ)
-        // dayjs ฉลาดพอที่จะรู้ว่าปีไหนมี 366 วันครับ
+        // ☀️ รายปี
         return baseDate.add(1, 'year').toISOString();
     }
 }
+
 function calculatePrice(plan: string, period: 'monthly' | 'yearly') {
     const base = BASE_PRICES[plan] || 0;
     return period === 'yearly' ? Math.floor((base * 12) * 0.8) : base;
 }
 
-// ❌ ลบฟังก์ชัน syncThemesWithPlan ตัวเก่าทิ้งไปเลย (เพราะมันคือตัวที่ทำธีมหาย)
-// เราจะใช้ตัวที่ Import มาจาก themeActions แทนครับ
-
-// --- Standard Actions ---
+// ======================================================================
+// 👤 STANDARD ACTIONS (ใช้ User Context เพื่อความปลอดภัยเรื่อง Ownership)
+// ======================================================================
 
 export async function getBrandSettingsAction() {
   const supabase = await getSupabase();
@@ -105,7 +117,6 @@ export async function getBrandSettingsAction() {
 }
 
 export async function updateBrandSettingsAction(brandId: string, payload: any) {
-    // ... Logic เดิม ...
     const supabase = await getSupabase();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Unauthorized");
@@ -124,9 +135,12 @@ export async function updateBrandSettingsAction(brandId: string, payload: any) {
     return { success: true };
 }
 
-// --- Payment Actions ---
+// ======================================================================
+// 💳 PAYMENT ACTIONS
+// ======================================================================
 
 // 1. Credit Card (Upgrade)
+// ใช้ User Context เพราะต้องเช็คว่าคนกดเป็นเจ้าของ Brand จริงไหมก่อนจ่าย
 export async function upgradeBrandPlanAction(
     brandId: string, 
     newPlan: string, 
@@ -139,16 +153,12 @@ export async function upgradeBrandPlanAction(
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Unauthorized");
 
-    // ดึงวันหมดอายุแยก Tier
-   const { data: brand } = await supabase
-        .from('brands')
-        .select('omise_customer_id, expiry_basic, expiry_pro, expiry_ultimate')
-        .eq('id', brandId)
-        .single();
+    const { data: brand } = await supabase.from('brands').select('*').eq('id', brandId).single();
+    if (!brand) throw new Error("Brand not found");
 
     const amount = calculatePrice(newPlan, period);
     
-    // ... (ตัดบัตร Omise เหมือนเดิม) ...
+    // ... Process Payment ...
     if (amount > 0) {
        if (!token) throw new Error("Payment token required");
        let description = `Upgrade ${newPlan.toUpperCase()} (${period}) - Brand: ${brandId}`;
@@ -159,7 +169,6 @@ export async function upgradeBrandPlanAction(
               currency: 'thb', 
               description, 
               card: token,
-              // ✅ เพิ่มก้อนนี้เข้าไปครับ
               metadata: {
                   brand_id: brandId,
                   new_plan: newPlan,
@@ -168,42 +177,60 @@ export async function upgradeBrandPlanAction(
               }
           }, (err, resp) => err ? reject(err) : resolve(resp));
        });
-       if (charge.status !== 'successful') throw new Error(`Payment Failed: ${charge.failure_message || 'Declined'}`);
+
+       // ❌ CASE 1: จ่ายไม่ผ่าน
+       if (charge.status !== 'successful') {
+            // บันทึก Log ว่าล้มเหลว
+            await createPaymentLog({
+                brand_id: brandId,
+                charge_id: charge.id,
+                amount: amount,
+                status: 'failed',
+                payment_method: 'credit_card',
+                type: 'upgrade_plan',
+                plan_detail: newPlan,
+                period: period
+            });
+            throw new Error(`Payment Failed: ${charge.failure_message || 'Declined'}`);
+       }
+
+       // ✅ CASE 2: จ่ายผ่าน
+       await createPaymentLog({
+            brand_id: brandId,
+            charge_id: charge.id,
+            amount: amount,
+            status: 'successful',
+            payment_method: 'credit_card',
+            type: 'upgrade_plan',
+            plan_detail: newPlan,
+            period: period
+       });
     }
     
-    // ✅ คำนวณวันหมดอายุ (Logic เดิม)
+    // ... Update Logic ...
     let updateData: any = { 
         is_auto_renew: isAutoRenew, 
         updated_at: new Date().toISOString() 
     };
-    if (!brand) {
-    throw new Error("ไม่พบข้อมูลร้านค้า (Brand not found)");
-}
 
     if (newPlan === 'basic') updateData.expiry_basic = calculateNewExpiryForTier(brand.expiry_basic, period);
     else if (newPlan === 'pro') updateData.expiry_pro = calculateNewExpiryForTier(brand.expiry_pro, period);
     else if (newPlan === 'ultimate') updateData.expiry_ultimate = calculateNewExpiryForTier(brand.expiry_ultimate, period);
 
-    // อัปเดตวันหมดอายุ
     await supabase.from('brands').update(updateData).eq('id', brandId);
 
-    // คำนวณ Effective Plan ใหม่
+    // Recalculate Plan
     const { data: updatedBrand } = await supabase.from('brands').select('*').eq('id', brandId).single();
     const effectivePlan = calculateEffectivePlan(updatedBrand);
     
-    // อัปเดต Plan หลัก
     await supabase.from('brands').update({ plan: effectivePlan }).eq('id', brandId);
     
-    // ------------------------------------------------------------------
-    // ✅ เรียกใช้ Sync Theme ตัวเทพ (แก้ไขตรงนี้ให้ส่งค่าถูกต้อง)
-    // ------------------------------------------------------------------
-    // ต้องดึงวันหมดอายุของ Plan นั้นๆ ส่งไปให้ syncThemesWithPlan
+    // Sync Theme
     let activeExpiry = null;
     if (effectivePlan === 'ultimate') activeExpiry = updatedBrand.expiry_ultimate;
     else if (effectivePlan === 'pro') activeExpiry = updatedBrand.expiry_pro;
     else if (effectivePlan === 'basic') activeExpiry = updatedBrand.expiry_basic;
 
-    // เรียกฟังก์ชันที่ Import มา (ไม่ใช่ตัวเก่าในไฟล์นี้)
     await syncThemesWithPlan(supabase, brandId, effectivePlan, activeExpiry);
 
     return { success: true };
@@ -220,7 +247,8 @@ export async function createPromptPayChargeAction(
     period: 'monthly' | 'yearly', 
     sourceId: string
 ) {
-    const supabase = await getSupabase();
+    // ใช้ User Context เพื่อความปลอดภัย
+    const supabase = await getSupabase(); // ✅ Correct
     try {
         const amount = calculatePrice(newPlan, period);
         if (amount === 0) return { success: true, type: 'free' };
@@ -231,7 +259,6 @@ export async function createPromptPayChargeAction(
                 currency: 'thb', 
                 source: sourceId,
                 description: `Upgrade ${newPlan.toUpperCase()} (${period}) - PromptPay`,
-                // ✅🔥 เพิ่มก้อนนี้เข้าไปครับ สำคัญมาก!
                 metadata: {
                     brand_id: brandId,
                     new_plan: newPlan,
@@ -242,6 +269,19 @@ export async function createPromptPayChargeAction(
         });
 
         if (charge.status === 'pending') {
+            // ⏳ CASE 3: สร้าง QR เสร็จ (รอจ่าย)
+            // บันทึก Log ว่า Pending
+            await createPaymentLog({
+                brand_id: brandId,
+                charge_id: charge.id,
+                amount: amount,
+                status: 'pending',
+                payment_method: 'promptpay',
+                type: 'upgrade_plan',
+                plan_detail: newPlan,
+                period: period
+            });
+
             return { success: true, type: 'promptpay', chargeId: charge.id, qrImage: charge.source.scannable_code.image.download_uri };
         } else {
             throw new Error('Charge creation failed');
@@ -250,72 +290,97 @@ export async function createPromptPayChargeAction(
         return { success: false, error: error.message };
     }
 }
-// 3. PromptPay (Check Status)
+
+// ----------------------------------------------------------------------
+// ⚡ 3. PromptPay (Check Status) - 🛠️ ใช้ SERVICE ROLE เต็มระบบ
+// ----------------------------------------------------------------------
 export async function checkPaymentStatusAction(
   brandId: string, 
   chargeId: string, 
   newPlan: string,
   period: 'monthly' | 'yearly'
 ) {
-  const supabase = await getSupabase();
+  // ⚠️ ไม่เรียก getSupabase() เพราะเราจะใช้ supabaseAdmin แทน
+  // เพื่อแก้ปัญหา User ปิดหน้าเว็บ หรือ Session หลุด แล้ว Log ไม่บันทึก
+  
   try {
-      // 1. ดึงข้อมูล Charge จาก Omise
       const charge = await new Promise<any>((resolve, reject) => {
           omise.charges.retrieve(chargeId, (err, resp) => err ? reject(err) : resolve(resp));
       });
 
       if (charge.status === 'successful') {
           
-          // 🛡️ ป้องกันการเบิ้ล: เช็คว่า Charge นี้เคยถูก Process ไปหรือยัง?
-          // ถ้ามี metadata ว่า is_processed = 'true' ให้จบเลย ไม่ต้องเติมวันซ้ำ
+          // 🛡️ เช็คว่า Process ไปหรือยัง
           if (charge.metadata && charge.metadata.is_processed === 'true') {
               return { status: 'successful' }; 
           }
 
           // -------------------------------------------------------
-          // เริ่มกระบวนการอัปเกรด (ทำแค่ครั้งเดียว)
+          // ✅ อัปเดต Log เป็น Successful (ใช้ Admin Function)
           // -------------------------------------------------------
-          const { data: brand } = await supabase.from('brands').select('*').eq('id', brandId).single();
+          await updatePaymentLogStatus(chargeId, 'successful');
+
+          // -------------------------------------------------------
+          // ✅ เริ่มกระบวนการอัปเกรด (ใช้ supabaseAdmin ทะลุ RLS)
+          // -------------------------------------------------------
+          
+          // 1. ดึงข้อมูล Brand
+          const { data: brand, error: brandError } = await supabaseAdmin
+              .from('brands')
+              .select('*')
+              .eq('id', brandId)
+              .single();
+              
+          if (brandError || !brand) {
+             console.error("Brand not found (Admin Check):", brandError);
+             throw new Error("Brand not found");
+          }
+
+          // 2. คำนวณวันหมดอายุ
           let updateData: any = { updated_at: new Date().toISOString() };
 
           if (newPlan === 'basic') updateData.expiry_basic = calculateNewExpiryForTier(brand.expiry_basic, period);
           else if (newPlan === 'pro') updateData.expiry_pro = calculateNewExpiryForTier(brand.expiry_pro, period);
           else if (newPlan === 'ultimate') updateData.expiry_ultimate = calculateNewExpiryForTier(brand.expiry_ultimate, period);
 
-          await supabase.from('brands').update(updateData).eq('id', brandId);
+          // 3. อัปเดตวันหมดอายุ
+          await supabaseAdmin.from('brands').update(updateData).eq('id', brandId);
 
-          // Recalculate & Sync
-          const { data: updatedBrand } = await supabase.from('brands').select('*').eq('id', brandId).single();
+          // 4. Recalculate & Sync Plan
+          const { data: updatedBrand } = await supabaseAdmin.from('brands').select('*').eq('id', brandId).single();
           const effectivePlan = calculateEffectivePlan(updatedBrand);
           
-          await supabase.from('brands').update({ plan: effectivePlan }).eq('id', brandId);
+          await supabaseAdmin.from('brands').update({ plan: effectivePlan }).eq('id', brandId);
 
-          // Sync Theme
           let activeExpiry = null;
           if (effectivePlan === 'ultimate') activeExpiry = updatedBrand.expiry_ultimate;
           else if (effectivePlan === 'pro') activeExpiry = updatedBrand.expiry_pro;
           else if (effectivePlan === 'basic') activeExpiry = updatedBrand.expiry_basic;
 
-          await syncThemesWithPlan(supabase, brandId, effectivePlan, activeExpiry);
+          // ✅ ส่ง supabaseAdmin เข้าไปใน syncThemes เพื่อให้ทะลุ RLS ในตาราง themes ด้วย
+          await syncThemesWithPlan(supabaseAdmin, brandId, effectivePlan, activeExpiry);
 
           // -------------------------------------------------------
-          // ✅ หัวใจสำคัญ: ประทับตราว่า "ใช้ไปแล้ว" กลับไปที่ Omise
+          // ✅ Mark processed at Omise
           // -------------------------------------------------------
           await new Promise((resolve) => {
               omise.charges.update(chargeId, {
-    metadata: { ...charge.metadata, is_processed: 'true' }
-} as any, resolve);
+                metadata: { ...charge.metadata, is_processed: 'true' }
+              } as any, resolve);
           });
 
           return { status: 'successful' };
 
       } else if (charge.status === 'failed') {
+          // ❌ ถ้าเช็คแล้วเจอว่า Failed ก็อัปเดต Log ด้วย (ใช้ Admin Function)
+          await updatePaymentLogStatus(chargeId, 'failed', charge.failure_message);
           return { status: 'failed' };
       }
       
       return { status: 'pending' };
 
   } catch (error: any) {
+      console.error("❌ Check Status Error:", error.message);
       return { status: 'error', error: error.message };
   }
 }

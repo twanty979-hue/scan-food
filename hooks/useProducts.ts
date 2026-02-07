@@ -1,14 +1,14 @@
-// hooks/useProducts.ts
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { supabase } from '@/lib/supabase'; // ใช้ Client สำหรับ Storage Upload
+import { supabase } from '@/lib/supabase';
 import { 
     getProductsInitialDataAction, 
     upsertProductAction, 
     deleteProductAction, 
     toggleProductStatusAction 
 } from '@/app/actions/productActions';
+// ✅ 1. Import ตัว Alert มาใช้
+import { useGlobalAlert } from '@/components/providers/GlobalAlertProvider';
 
-// Config
 const CDN_URL = "https://xvhibjejvbriotfpunvv.supabase.co/storage/v1/object/public/menus/";
 
 export type Category = { id: string; name: string };
@@ -27,17 +27,17 @@ export type Product = {
 };
 
 export function useProducts() {
-  // Data States
+  // ✅ 2. ดึงฟังก์ชัน showAlert และ showConfirm ออกมา
+  const { showAlert, showConfirm } = useGlobalAlert();
+
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [brandId, setBrandId] = useState<string | null>(null);
 
-  // Filter States
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Modal & Form States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -49,14 +49,13 @@ export function useProducts() {
     category_id: '', image_name: '', is_recommended: false
   });
 
-  // --- Init ---
   const fetchAllData = async () => {
     setLoading(true);
     const res = await getProductsInitialDataAction();
     if (res.success) {
         setBrandId(res.brandId!);
-        setCategories(res.categories || []); // ถ้าไม่มีหมวดหมู่ ให้ใส่ตะกร้าเปล่า
-setProducts(res.products || []);     // ถ้าไม่มีสินค้า ให้ใส่ตะกร้าเปล่า
+        setCategories(res.categories || []);
+        setProducts(res.products || []);
     }
     setLoading(false);
   };
@@ -65,14 +64,11 @@ setProducts(res.products || []);     // ถ้าไม่มีสินค้�
     fetchAllData();
   }, []);
 
-  // --- Helper: Get Image URL ---
   const getImageUrl = (imageName: string | null) => {
     if (!imageName || !brandId) return null;
     if (imageName.startsWith('http')) return imageName;
     return `${CDN_URL}${brandId}/${imageName}`;
   };
-
-  // --- Handlers ---
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     try {
@@ -80,7 +76,6 @@ setProducts(res.products || []);     // ถ้าไม่มีสินค้�
       if (!e.target.files || e.target.files.length === 0) return;
       
       const file = e.target.files[0];
-      // WebP Compression (Client Side)
       const webpBlob = await new Promise<Blob>((resolve, reject) => {
         const img = document.createElement('img');
         img.onload = () => {
@@ -99,14 +94,14 @@ setProducts(res.products || []);     // ถ้าไม่มีสินค้�
       const fileNameOnly = `${Date.now()}.webp`; 
       const uploadPath = `${brandId}/${fileNameOnly}`; 
       
-      // Upload to Storage (Client Side)
       const { error: uploadError } = await supabase.storage.from('menus').upload(uploadPath, webpBlob, { contentType: 'image/webp', upsert: true });
       if (uploadError) throw uploadError;
 
       setFormData(prev => ({ ...prev, image_name: fileNameOnly }));
 
     } catch (error: any) { 
-        alert('Upload failed: ' + error.message); 
+        // ✅ 3. ใช้ showAlert เมื่ออัปโหลดพลาด
+        showAlert('error', 'อัปโหลดล้มเหลว', error.message); 
     } finally { 
         setUploading(false); 
     }
@@ -115,7 +110,8 @@ setProducts(res.products || []);     // ถ้าไม่มีสินค้�
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.price || !formData.category_id) { 
-        alert('กรุณากรอกข้อมูลสำคัญให้ครบ'); 
+        // ✅ 4. ใช้ showAlert เมื่อกรอกข้อมูลไม่ครบ
+        showAlert('warning', 'ข้อมูลไม่ครบถ้วน', 'กรุณากรอกชื่อเมนู ราคา และหมวดหมู่ให้ครบถ้วน'); 
         return; 
     }
     
@@ -134,46 +130,57 @@ setProducts(res.products || []);     // ถ้าไม่มีสินค้�
       };
 
       const res = await upsertProductAction(payload);
-      
       if (!res.success) throw new Error(res.error);
 
-      // Update Local State
       if (editId) {
         setProducts(prev => prev.map(p => p.id === editId ? { ...p, ...res.data } : p));
       } else {
         setProducts(prev => [res.data, ...prev]);
       }
       setIsModalOpen(false);
+      
+      // ✅ 5. แจ้งเตือนเมื่อบันทึกสำเร็จ
+      showAlert('success', 'บันทึกสำเร็จ', `เมนู ${formData.name} ได้รับการอัปเดตแล้ว`);
 
     } catch (error: any) { 
-        alert('Error: ' + error.message); 
+        showAlert('error', 'เกิดข้อผิดพลาด', error.message); 
     } finally { 
         setIsSubmitting(false); 
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('ยืนยันลบเมนูนี้?')) return;
+    const product = products.find(p => p.id === id);
     
-    // Optimistic Update
+    const isConfirmed = await showConfirm(
+    'ยืนยันการลบเมนู?',
+    'คุณต้องการลบรายการนี้ใช่หรือไม่?',
+    'ลบทิ้ง',
+    'ยกเลิก',
+    'error' // ✅ ใส่ตรงนี้เพื่อให้ไอคอนเปลี่ยนเป็นถังขยะสีแดง
+);
+
+    if (!isConfirmed) return;
+    
     const oldProducts = [...products];
     setProducts(prev => prev.filter((p: any) => p.id !== id));
 
     const res = await deleteProductAction(id);
     if (!res.success) {
-        alert('Error deleting: ' + res.error);
+        showAlert('error', 'ลบไม่สำเร็จ', res.error);
         setProducts(oldProducts);
+    } else {
+        showAlert('success', 'ลบเรียบร้อย', 'เมนูถูกนำออกจากร้านแล้ว');
     }
   };
 
   const handleToggle = async (id: string, currentStatus: boolean) => {
-    // Optimistic Update
     const oldProducts = [...products];
     setProducts(prev => prev.map(p => p.id === id ? { ...p, is_available: !currentStatus } : p));
 
     const res = await toggleProductStatusAction(id, !currentStatus);
     if (!res.success) {
-        alert('Error updating status');
+        showAlert('error', 'อัปเดตสถานะล้มเหลว', 'กรุณาลองใหม่อีกครั้ง');
         setProducts(oldProducts);
     }
   };

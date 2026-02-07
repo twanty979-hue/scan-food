@@ -1,12 +1,15 @@
-// hooks/useDiscounts.ts
 import { useState, useEffect, useMemo } from 'react';
 import { 
     getInitialDataAction, 
     upsertDiscountAction, 
     deleteDiscountAction 
 } from '@/app/actions/discountActions';
+// ✅ 1. Import Hook ตัว Alert มาใช้
+import { useGlobalAlert } from '@/components/providers/GlobalAlertProvider';
 
 export function useDiscounts() {
+  const { showAlert, showConfirm } = useGlobalAlert(); // ✅ 2. ดึงฟังก์ชันออกมา
+
   // Data States
   const [discounts, setDiscounts] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
@@ -43,8 +46,8 @@ export function useDiscounts() {
     if (res.success) {
         setBrandId(res.brandId!);
         setDiscounts(res.discounts || []);
-setProducts(res.products || []);
-setCategories(res.categories || []);
+        setProducts(res.products || []);
+        setCategories(res.categories || []);
     }
     setLoading(false);
   };
@@ -76,19 +79,32 @@ setCategories(res.categories || []);
       if (!res.success) throw new Error(res.error);
 
       closeModal();
-      // Refresh discounts only (in this simpler implementation we re-fetch all for consistency)
+      
+      // ✅ 3. ใช้ showAlert แทน alert ธรรมดา
+      showAlert('success', 'บันทึกสำเร็จ', 'โปรโมชันของคุณได้รับการอัปเดตเรียบร้อยแล้ว');
+
       const refreshRes = await getInitialDataAction();
       if (refreshRes.success) setDiscounts(refreshRes.discounts || []);
 
     } catch (err: any) {
-      alert("Error: " + err.message);
+      // ✅ 4. แสดง Error แบบสวยๆ
+      showAlert('error', 'เกิดข้อผิดพลาด', err.message);
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-      if(!confirm('ยืนยันลบโปรโมชันนี้?')) return;
+      // ✅ 5. ใช้ showConfirm แทน confirm ธรรมดา (สวยและได้มาตรฐาน)
+      const isConfirmed = await showConfirm(
+    'ยืนยันการลบเมนู?',
+    'คุณต้องการลบรายการนี้ใช่หรือไม่?',
+    'ลบทิ้ง',
+    'ยกเลิก',
+    'error' // ✅ ใส่ตรงนี้เพื่อให้ไอคอนเปลี่ยนเป็นถังขยะสีแดง
+);
+
+      if(!isConfirmed) return;
       
       // Optimistic update
       const oldDiscounts = [...discounts];
@@ -96,8 +112,11 @@ setCategories(res.categories || []);
 
       const res = await deleteDiscountAction(id);
       if (!res.success) {
-          alert("Error deleting: " + res.error);
+          // ✅ 6. แจ้งเตือนถ้าลบไม่สำเร็จ
+          showAlert('error', 'ลบไม่สำเร็จ', res.error || 'กรุณาลองใหม่อีกครั้ง');
           setDiscounts(oldDiscounts); // Revert
+      } else {
+          showAlert('success', 'ลบเรียบร้อย', 'โปรโมชันถูกนำออกจากระบบแล้ว');
       }
   };
 
@@ -110,7 +129,6 @@ setCategories(res.categories || []);
     setStartDate('');
     setEndDate('');
     setValue(0);
-    // Reset defaults
     setType('percentage');
     setApplyPriceNormal(true);
     setApplyPriceSpecial(true);

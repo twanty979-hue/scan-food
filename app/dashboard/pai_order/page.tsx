@@ -1,3 +1,4 @@
+//app/dashboard/pai_order/page.tsx
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -49,7 +50,12 @@ export default function PaymentPage() {
         getFullImageUrl, handleSelectTableForQR, handleProductClick,
         addToCart, removeFromCart, handlePayment, formatCurrency,
         limitStatus,
-        refreshTables
+        refreshTables,
+
+    // ✅✅✅ [เพิ่ม 3 ตัวนี้ต่อท้ายครับ]
+    toggleAutoKitchen, 
+    isAudioUnlocked,
+    unlockAudio
     } = usePayment();
 
     // --- State ---
@@ -57,8 +63,8 @@ export default function PaymentPage() {
 
     // ✅ State สำหรับ Popup ขออนุญาตเปิดเสียง (Sound Guard)
     // เริ่มต้นเป็น true เสมอ เพื่อบังคับให้กด
-    const [showSoundGuard, setShowSoundGuard] = useState(false);
-    const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
+  
+    
     // --- Refs for Auto Scroll ---
     const itemsRef = useRef<{[key: number]: HTMLDivElement | null}>({});
     const prevItemsRef = useRef<any[]>([]);
@@ -66,6 +72,7 @@ export default function PaymentPage() {
     const isLimitReached = limitStatus?.isLocked;
     const usageText = limitStatus ? `${limitStatus.usage}/${limitStatus.limit}` : '';
     const router = useRouter();
+    const showSoundGuard = autoKitchen && !isAudioUnlocked;
 
     // --- Effects ---
 
@@ -111,25 +118,12 @@ export default function PaymentPage() {
         }
         prevItemsRef.current = currentItems;
     }, [cart, selectedOrder, activeTab]);
-    useEffect(() => {
-        // กฎ: ถ้า "เปิด Auto Kitchen" อยู่ และ "ยังไม่เคยปลดล็อกเสียง"
-        if (autoKitchen && !isAudioUnlocked) {
-            setShowSoundGuard(true); // เด้ง Popup บังคับกดทันที
-        }
-    }, [autoKitchen, isAudioUnlocked]);
+    
 
     // --- Handlers ---
     
     // ✅ ฟังก์ชันปลดล็อกเสียง
-const handleUnlockAudio = () => {
-        const audio = new Audio('/sounds/alert.mp3');
-        audio.volume = 0.0;
-        audio.play().catch((e) => console.log("Unlock audio failed:", e));
-        
-        // ✅ 4. อัปเดตสถานะเมื่อกดปุ่ม
-        setIsAudioUnlocked(true); // จำว่าอนุญาตแล้ว
-        setShowSoundGuard(false); // ปิด Popup
-    };
+
 
     const handleNumPad = (value: number | string) => {
         // ... (เหมือนเดิม)
@@ -224,24 +218,22 @@ const confirmCashPayment = async () => {
             `}</style>
 
             {/* ===================== SOUND GUARD MODAL ===================== */}
-            {/* ✅ นี่คือส่วนที่เพิ่มเข้ามา: บังคับกดก่อนเริ่มใช้งาน */}
             {showSoundGuard && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/90 backdrop-blur-sm animate-in fade-in duration-300">
                     <div className="flex flex-col items-center justify-center p-8 max-w-md text-center">
                         <div className="w-24 h-24 bg-orange-500 rounded-full flex items-center justify-center text-white mb-8 shadow-2xl shadow-orange-500/50 pulse-btn">
                             <IconVolume2 size={48} />
                         </div>
-                        <h2 className="text-3xl font-black text-white mb-4 tracking-tight">พร้อมรับออเดอร์?</h2>
+                        <h2 className="text-3xl font-black text-white mb-4 tracking-tight">ระบบ Auto Kitchen</h2>
                         <p className="text-slate-300 mb-8 text-lg font-medium">
-                            กรุณากดปุ่มด้านล่างเพื่อเปิดการแจ้งเตือนเสียง <br/>
-                            (จำเป็นสำหรับระบบ Auto Kitchen)
+                            กดปุ่มเพื่อเริ่มทำงานและเปิดเสียงแจ้งเตือนอัตโนมัติ
                         </p>
                         <button 
-                            onClick={handleUnlockAudio}
+                            onClick={unlockAudio} // ✅✅✅ แก้แล้วครับ ใช้ unlockAudio ตรงๆ เลย
                             className="px-10 py-4 bg-white text-orange-600 rounded-[24px] font-black text-xl hover:scale-105 active:scale-95 transition-all shadow-xl shadow-orange-900/20 flex items-center gap-3"
                         >
                             <IconZap size={24} className="fill-orange-600" />
-                            เริ่มใช้งานระบบ
+                            เริ่มทำงาน
                         </button>
                     </div>
                 </div>
@@ -274,16 +266,16 @@ const confirmCashPayment = async () => {
 
                         <div className="flex gap-3 h-full">
                             <button 
-                                onClick={() => setAutoKitchen(!autoKitchen)}
-                                className={`h-full aspect-square rounded-[20px] shadow-sm flex items-center justify-center transition-all border ${
-                                    autoKitchen 
-                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-600 shadow-emerald-100' 
-                                    : 'bg-white border-slate-100 text-slate-300 hover:border-slate-300 hover:text-slate-400'
-                                }`}
-                                title="Auto Kitchen Print"
-                            >
-                                <IconZap size={22} className={autoKitchen ? 'fill-current' : ''} />
-                            </button>
+    onClick={toggleAutoKitchen} // ✅ แก้ตรงนี้จุดเดียว
+    className={`h-full aspect-square rounded-[20px] shadow-sm flex items-center justify-center transition-all border ${
+        autoKitchen 
+        ? 'bg-emerald-50 border-emerald-200 text-emerald-600 shadow-emerald-100' 
+        : 'bg-white border-slate-100 text-slate-300 hover:border-slate-300 hover:text-slate-400'
+    }`}
+    title="Auto Kitchen Print"
+>
+    <IconZap size={22} className={autoKitchen ? 'fill-current' : ''} />
+</button>
 
                             <button
                                 onClick={() => {

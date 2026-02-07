@@ -1,7 +1,8 @@
-// hooks/useBanners.ts
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase'; // ใช้ Client สำหรับ Upload Storage
+import { supabase } from '@/lib/supabase';
 import { getBannersAction, upsertBannerAction, deleteBannerAction } from '@/app/actions/bannerActions';
+// ✅ 1. Import ตัว Hook มาใช้
+import { useGlobalAlert } from '@/components/providers/GlobalAlertProvider';
 
 export type Banner = {
   id: string;
@@ -12,20 +13,20 @@ export type Banner = {
   is_active: boolean;
 };
 
-// Config Storage URL
 const CDN_URL = "https://xvhibjejvbriotfpunvv.supabase.co/storage/v1/object/public/banners/"; 
 
 export function useBanners() {
+  // ✅ 2. ดึงฟังก์ชัน showAlert และ showConfirm ออกมา
+  const { showAlert, showConfirm } = useGlobalAlert();
+
   const [banners, setBanners] = useState<Banner[]>([]);
   const [loading, setLoading] = useState(true);
   const [brandId, setBrandId] = useState<string | null>(null);
 
-  // Modal & Form State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Form Fields
   const [formData, setFormData] = useState({
     title: '',
     linkUrl: '',
@@ -33,12 +34,10 @@ export function useBanners() {
     isActive: true,
   });
   
-  // Image State
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState('');
   const [currentImageName, setCurrentImageName] = useState('');
 
-  // --- Helpers ---
   const getImageUrl = (imageName: string | null) => {
     if (!imageName || !brandId) return null;
     if (imageName.startsWith('http')) return imageName;
@@ -73,13 +72,12 @@ export function useBanners() {
     });
   };
 
-  // --- Main Actions ---
   const fetchBanners = async () => {
     setLoading(true);
     const res = await getBannersAction();
     if (res.success) {
       setBanners(res.data || []);
-      setBrandId(res.brandId); // ได้ brandId มาจาก Server Action เลย
+      setBrandId(res.brandId);
     }
     setLoading(false);
   };
@@ -98,13 +96,15 @@ export function useBanners() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!brandId || (!imageFile && !editingId)) return;
+    if (!brandId || (!imageFile && !editingId)) {
+        showAlert('warning', 'ข้อมูลไม่ครบ', 'กรุณาเลือกรูปภาพแบนเนอร์');
+        return;
+    }
 
     setIsSubmitting(true);
     try {
       let finalImageName = currentImageName;
 
-      // 1. Upload รูป (Client Side -> Storage)
       if (imageFile) {
         const webpBlob = await compressToWebP(imageFile);
         const fileNameOnly = `${Date.now()}.webp`;
@@ -115,9 +115,8 @@ export function useBanners() {
         finalImageName = fileNameOnly;
       }
 
-      // 2. Save ลง Database (Server Action)
       const payload = {
-        id: editingId, // ถ้ามี ID คือ Update
+        id: editingId,
         title: formData.title,
         link_url: formData.linkUrl,
         image_name: finalImageName,
@@ -129,21 +128,38 @@ export function useBanners() {
       if (!res.success) throw new Error(res.error);
 
       closeModal();
+      // ✅ 3. แจ้งเตือนเมื่อบันทึกสำเร็จ
+      showAlert('success', 'บันทึกสำเร็จ', 'ข้อมูลแบนเนอร์ของคุณถูกอัปเดตเรียบร้อยแล้ว');
       fetchBanners();
     } catch (err: any) {
-      alert("Error: " + err.message);
+      // ✅ 4. แจ้งเตือนเมื่อพลาด
+      showAlert('error', 'เกิดข้อผิดพลาด', err.message);
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('ยืนยันการลบแบนเนอร์นี้?')) return;
+    // ✅ 5. ใช้ showConfirm พร้อม 'error' เพื่อโชว์ถังขยะแดง
+    const isConfirmed = await showConfirm(
+        'ยืนยันการลบ?',
+        'คุณแน่ใจหรือไม่ว่าต้องการลบแบนเนอร์นี้ออกจากหน้าเว็บบริการของคุณ?',
+        'ลบทิ้ง',
+        'ยกเลิก',
+        'error' // 🔥 ถังขยะแดงมาแน่!
+    );
+
+    if (!isConfirmed) return;
+
     const res = await deleteBannerAction(id);
-    if (res.success) fetchBanners();
+    if (res.success) {
+        showAlert('success', 'ลบเรียบร้อย', 'แบนเนอร์ถูกนำออกจากระบบแล้ว');
+        fetchBanners();
+    } else {
+        showAlert('error', 'ลบไม่สำเร็จ', res.error);
+    }
   };
 
-  // --- UI Helpers ---
   const openEdit = (banner: Banner) => {
     setEditingId(banner.id);
     setFormData({

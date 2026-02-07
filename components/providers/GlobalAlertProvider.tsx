@@ -8,7 +8,11 @@ const IconCheck = ({ className = "text-emerald-500" }: { className?: string }) =
     <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
   </svg>
 );
-
+const IconTrash = ({ className = "text-rose-500" }: { className?: string }) => (
+  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+  </svg>
+);
 const IconAlert = ({ className = "text-amber-500" }: { className?: string }) => (
   <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
     <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
@@ -29,7 +33,8 @@ const IconWallet = ({ className = "text-indigo-500" }: { className?: string }) =
 
 interface AlertContextType {
   showAlert: (type: 'success' | 'error' | 'info' | 'warning', title: string, message?: string) => Promise<void>;
-  showConfirm: (title: string, message: string, confirmText?: string, cancelText?: string) => Promise<boolean>;
+  // ✅ แก้ให้รับ type เพิ่ม (เป็นตัวเลือก)
+  showConfirm: (title: string, message: string, confirmText?: string, cancelText?: string, type?: 'info' | 'error') => Promise<boolean>;
 }
 
 const AlertContext = createContext<AlertContextType | undefined>(undefined);
@@ -75,12 +80,18 @@ export default function GlobalAlertProvider({ children }: { children: ReactNode 
     });
   };
 
-  const showConfirm = async (title: string, message: string, confirmText: string = 'ยืนยัน', cancelText: string = 'ยกเลิก') => {
+  const showConfirm = async (
+    title: string, 
+    message: string, 
+    confirmText: string = 'ยืนยัน', 
+    cancelText: string = 'ยกเลิก',
+    type: 'info' | 'error' = 'info' // ✅ รับ type เข้ามา
+) => {
     return new Promise<boolean>((resolve) => {
       setState({
         isOpen: true,
         mode: 'confirm',
-        type: 'info', // Default type for confirm
+        type, // ✅ ใช้ type ที่ส่งมา
         title,
         message,
         confirmText,
@@ -88,7 +99,7 @@ export default function GlobalAlertProvider({ children }: { children: ReactNode 
         resolve,
       });
     });
-  };
+};
 
   const handleClose = (result: boolean) => {
     setState((prev) => ({ ...prev, isOpen: false }));
@@ -121,17 +132,17 @@ export default function GlobalAlertProvider({ children }: { children: ReactNode 
           >
             <div className={`pt-8 pb-4 flex justify-center ${isPayment ? 'bg-indigo-50/50' : ''}`}>
                <div className={`w-20 h-20 rounded-full flex items-center justify-center shadow-lg border-4 border-white
-                 ${isPayment ? 'bg-indigo-100 text-indigo-600' : 
-                   (state.type === 'success' ? 'bg-emerald-100' : 
-                   state.type === 'error' ? 'bg-red-100 text-red-500' : 
-                   state.type === 'warning' ? 'bg-amber-100' : 'bg-slate-100')}
-               `}>
-                 {isPayment ? <IconWallet /> : 
-                   (state.type === 'success' ? <IconCheck /> : 
-                   state.type === 'error' ? <IconAlert className="text-red-500" /> : 
-                   state.type === 'warning' ? <IconAlert /> : <IconInfo />)
-                 }
-               </div>
+  ${isPayment ? 'bg-indigo-100 text-indigo-600' : 
+    (state.type === 'success' ? 'bg-emerald-100' : 
+    state.type === 'error' ? 'bg-rose-100 text-rose-500' : // ✅ สีพื้นหลังแดงอ่อน
+    state.type === 'warning' ? 'bg-amber-100' : 'bg-slate-100')}
+`}>
+  {isPayment ? <IconWallet /> : 
+    (state.type === 'success' ? <IconCheck /> : 
+    state.type === 'error' ? <IconTrash /> : // ✅ เปลี่ยนจาก IconAlert เป็น IconTrash
+    state.type === 'warning' ? <IconAlert /> : <IconInfo />)
+  }
+</div>
             </div>
 
             <div className="px-6 pb-6 text-center">

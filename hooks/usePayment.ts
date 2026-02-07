@@ -17,6 +17,10 @@ import { getLatestTableDataAction } from '@/app/actions/tableActions';
 import { getOrderUsage } from '@/app/actions/limitGuard';
 
 export function usePayment() {
+    // --- Audio State & Ref (iPad Fix) ---
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+    const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
+
     // --- State ---
     const [activeTab, setActiveTab] = useState<'tables' | 'pos'>('tables');
     const [loading, setLoading] = useState(true);
@@ -80,10 +84,45 @@ export function usePayment() {
         setAllTables(tables);
     }, [brandId]);
 
-    const playSound = () => {
-        const audio = new Audio('/sounds/alert.mp3'); 
-        audio.volume = 1.0; 
-        audio.play().catch(e => console.error("เล่นเสียงไม่ได้: ", e));
+    // --- Audio Functions ---
+    // ✅ 2. Init Audio
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            audioRef.current = new Audio('/sounds/alert.mp3');
+        }
+    }, []);
+
+    // ✅ 3. ฟังก์ชันปลดล็อก (Unlock Trick)
+    const unlockAudio = useCallback(() => {
+        if (!audioRef.current) return;
+        const audio = audioRef.current;
+        audio.volume = 0.0; // เล่นเสียงเงียบๆ
+        audio.play().then(() => {
+            audio.pause();
+            audio.currentTime = 0;
+            audio.volume = 1.0; // คืนค่าความดัง
+            setIsAudioUnlocked(true); // จำว่าปลดแล้ว
+            console.log("🔊 Audio Context Unlocked!");
+        }).catch(e => console.error("Unlock failed:", e));
+    }, []);
+
+    // ✅ 4. ฟังก์ชันเล่นเสียงจริง (Play Sound)
+    const playSound = useCallback(() => {
+        if (!audioRef.current) return;
+        const audio = audioRef.current;
+        audio.currentTime = 0;
+        audio.play().catch(e => console.error("Playback failed:", e));
+    }, []);
+
+    // ✅ 5. ฟังก์ชันเปิด Auto Kitchen (ต้องผูกกับปุ่มกด)
+    const toggleAutoKitchen = () => {
+        const newState = !autoKitchen;
+        setAutoKitchen(newState);
+        
+        // 🔥 ถ้าเปิด Auto ให้ถือโอกาสนี้ปลดล็อกเสียงไปด้วยเลย!
+        if (newState && !isAudioUnlocked) {
+            unlockAudio();
+        }
     };
 
     // --- Init ---
@@ -175,7 +214,10 @@ export function usePayment() {
             if (order.status === 'pending') {
                 await updateOrderStatusAction(order.id, 'preparing');
                 console.log(`🤖 Auto: Accepted New Order ${order.id}`);
+                
+                // 🔥 สั่งเล่นเสียงตรงนี้ (iPad จะยอมให้เล่นถ้า unlockAudio ถูกเรียกไปแล้ว)
                 playSound();
+                
                 setTimeout(() => finishOrder(order.id), 5 * 60 * 1000);
             } else if (order.status === 'preparing') {
                 const lastUpdate = dayjs(order.updated_at);
@@ -232,7 +274,7 @@ export function usePayment() {
             supabase.removeChannel(orderChannel); 
             supabase.removeChannel(tableChannel);
         };
-    }, [brandId, autoKitchen, refreshOrders, refreshTables]);
+    }, [brandId, autoKitchen, refreshOrders, refreshTables, playSound]);
 
     // --- Logic: Pricing ---
     const calculatePrice = useCallback((product: any, variant: string = 'normal') => {
@@ -397,6 +439,9 @@ export function usePayment() {
         calculatePrice,
         formatCurrency: (amt: number) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', minimumFractionDigits: 2 }).format(amt || 0),
         
-        refreshTables 
+        refreshTables,
+        toggleAutoKitchen, // ✅ ส่งฟังก์ชันนี้ออกไปแทน setAutoKitchen
+        unlockAudio, // ✅ ส่งฟังก์ชันปลดล็อกออกไป
+        isAudioUnlocked // ✅ ส่งสถานะออกไป
     };
 }

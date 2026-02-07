@@ -1,3 +1,4 @@
+// app/api/webhooks/omise/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import dayjs from 'dayjs';
@@ -28,7 +29,7 @@ function calculateEffectivePlan(brand: any) {
     if (brand.expiry_ultimate && dayjs(brand.expiry_ultimate).isAfter(now)) return 'ultimate';
     if (brand.expiry_pro && dayjs(brand.expiry_pro).isAfter(now)) return 'pro';
     if (brand.expiry_basic && dayjs(brand.expiry_basic).isAfter(now)) return 'basic';
-    return 'free'; 
+    return 'free';
 }
 
 // ----------------------------------------------------------------------
@@ -39,43 +40,58 @@ export async function POST(req: NextRequest) {
     try {
         const event = await req.json();
 
+        // เราสนใจแค่ Event ที่บอกว่าการตัดเงิน "จบแล้ว" (ไม่ว่าจะสำเร็จหรือล้มเหลว)
         if (event.key === 'charge.complete') {
             const rawCharge = event.data;
 
-            // 🛑 SECURITY CHECKPOINT: อย่าเพิ่งเชื่อ data จาก event ทันที
-            // ✅ Double Check: เอา ID ไปถาม Omise โดยตรงว่าจ่ายจริงไหม?
+            // 🛑 SECURITY CHECKPOINT
             const charge = await new Promise<any>((resolve, reject) => {
                 omise.charges.retrieve(rawCharge.id, (err, resp) => {
                     if (err) reject(err);
                     else resolve(resp);
                 });
             });
-            
-            // ✅ ตรวจสอบสถานะจากข้อมูลที่เพิ่งดึงมาสดๆ (Real Source of Truth)
+
+            // ⚠️ ใช้ SERVICE_ROLE_KEY
+            const supabaseAdmin = createClient(
+                process.env.SUPABASE_URL!,
+                process.env.SUPABASE_SERVICE_ROLE_KEY!
+            );
+
+            // =================================================================
+            // ✅ LOGGING UPDATE
+            // =================================================================
+            const { error: logError } = await supabaseAdmin
+                .from('payment_logs')
+                .update({
+                    status: charge.status,
+                    error_message: charge.failure_message || null
+                })
+                .eq('charge_id', charge.id);
+
+            if (logError) console.error('⚠️ Failed to update payment_logs:', logError);
+            else console.log(`📝 Log updated for charge ${charge.id} -> ${charge.status}`);
+
+            // =================================================================
+            // 🛑 CHECK STATUS
+            // =================================================================
             if (charge.status !== 'successful') {
-                console.log(`⚠️ Fake or Failed Webhook attempt for ID: ${rawCharge.id}`);
-                return NextResponse.json({ message: 'Charge verification failed' });
+                console.log(`⚠️ Charge ${charge.id} failed: ${charge.failure_message}`);
+                return NextResponse.json({ message: 'Charge failed (Logged)' });
             }
 
             const metadata = charge.metadata || {};
 
-            // 🛡️ ป้องกันการทำงานซ้ำ: ถ้าทำไปแล้ว ให้จบเลย
+            // 🛡️ ป้องกันการทำงานซ้ำ
             if (metadata.is_processed === 'true') {
                 console.log(`⚠️ Transaction ${charge.id} already processed.`);
                 return NextResponse.json({ message: 'Already processed' });
             }
 
-            // ⚠️ ใช้ SERVICE_ROLE_KEY เพื่อแก้ไข DB ได้โดยไม่ต้อง Login
-            const supabaseAdmin = createClient(
-                process.env.SUPABASE_URL!,
-                process.env.SUPABASE_SERVICE_ROLE_KEY! 
-            );
-
             // =================================================================
             // CASE 1: UPGRADE PLAN (สมัครแพ็กเกจ)
             // =================================================================
             if (metadata.type === 'upgrade_plan' && metadata.brand_id) {
-                
                 const { brand_id, new_plan, period } = metadata;
 
                 // 1. ดึงข้อมูล Brand
@@ -99,34 +115,47 @@ export async function POST(req: NextRequest) {
 
                 console.log(`✅ Webhook Success: Upgraded brand ${brand_id} to ${new_plan}`);
 
-                // Mark as processed
                 await markAsProcessed(charge.id, metadata);
             }
 
             // =================================================================
             // CASE 2: BUY THEME (ซื้อธีม)
             // =================================================================
-           else if (metadata.type === 'buy_theme' && metadata.brand_id && metadata.theme_id) {
-                
-                const { brand_id, theme_id, plan } = metadata; // ✅ รับค่า plan มาด้วย
+            else if (metadata.type === 'buy_theme' && metadata.brand_id && metadata.theme_id) {
+
+                const { brand_id, theme_id, plan } = metadata;
+
+                // ✅✅✅ 1. ย้ายมาตรวจสอบตรงนี้ (หลังจากได้ brand_id, theme_id แล้ว) ✅✅✅
+                const { data: existing } = await supabaseAdmin
+                    .from('themes')
+                    .select('purchase_type')
+                    .eq('brand_id', brand_id)
+                    .eq('marketplace_theme_id', theme_id)
+                    .single();
+
+                // ✅✅✅ 2. ถ้าเขามี Lifetime อยู่แล้ว ไม่ต้องทำอะไรต่อ ✅✅✅
+                if (existing?.purchase_type === 'lifetime') {
+                    console.log(`🛡️ Brand ${brand_id} already has lifetime. Skipping update.`);
+                    await markAsProcessed(charge.id, metadata);
+                    return NextResponse.json({ message: 'Lifetime preserved' });
+                }
+                // ----------------------------------------------------------
 
                 // คำนวณวันหมดอายุ
-                let finalPurchaseType = plan || 'lifetime'; // ถ้าไม่มีให้เป็น lifetime ไว้ก่อน (กันเหนียว)
+                let finalPurchaseType = plan || 'lifetime';
                 let finalExpiresAt = null;
 
-                // ✅ ถ้าเป็น monthly ให้บวกไป 30 วัน
                 if (finalPurchaseType === 'monthly') {
                     finalExpiresAt = dayjs().add(30, 'day').toISOString();
-                } 
-                // ถ้าเป็น lifetime ค่า finalExpiresAt จะเป็น null (ถูกต้องแล้ว)
+                }
 
                 const { error } = await supabaseAdmin.from('themes').upsert({
                     brand_id: brand_id,
                     marketplace_theme_id: theme_id,
-                    purchase_type: finalPurchaseType, // ✅ บันทึกประเภทที่ถูกต้อง
-                    expires_at: finalExpiresAt,       // ✅ บันทึกวันหมดอายุ (หรือ null)
+                    purchase_type: finalPurchaseType,
+                    expires_at: finalExpiresAt,
                     updated_at: new Date().toISOString()
-                }, { onConflict: 'brand_id, marketplace_theme_id' });
+                }, { onConflict: 'brand_id, marketplace_theme_id' }); // ใช้ composite key
 
                 if (error) throw error;
 

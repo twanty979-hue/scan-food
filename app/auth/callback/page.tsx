@@ -1,3 +1,4 @@
+//app/auth/callback/page.tsx
 'use client';
 
 import { useEffect, useRef, Suspense } from 'react'; // ✅ เพิ่ม Suspense
@@ -10,22 +11,28 @@ function AuthCallbackContent() {
   const searchParams = useSearchParams();
   const runOnce = useRef(false);
 
+ // ... โค้ดส่วนบนเดิม ...
   useEffect(() => {
     const handleAuthCallback = async () => {
-      // กันรันซ้ำ
       if (runOnce.current) return;
       runOnce.current = true;
 
       const code = searchParams.get('code');
-      const next = searchParams.get('next') || '/dashboard/pai_order'; // ถ้าไม่มี next ให้ไปหน้าขาย
+      const type = searchParams.get('type'); // ✅ 1. เพิ่มการดึงค่า type
+      const next = searchParams.get('next') || '/dashboard/pai_order';
 
       if (code) {
         try {
-          // แลก Code เป็น Session
           const { error } = await supabase.auth.exchangeCodeForSession(code);
           
-          if (error) {
-            console.warn('Auth Error (Code Exchange):', error.message);
+          if (!error) {
+            // ✅ 2. เพิ่มเงื่อนไขเช็คว่าถ้าเป็น Recovery ให้ไปหน้า Reset Password
+            if (type === 'recovery') {
+              router.replace('/auth/reset-password');
+              return;
+            }
+          } else {
+            console.warn('Auth Error:', error.message);
             router.replace('/login');
             return;
           }
@@ -35,6 +42,7 @@ function AuthCallbackContent() {
           return;
         }
       }
+// ... โค้ดส่วนล่าง (ตรวจ Session/Profile) เดิม ...
 
       // ตรวจสอบว่ามี Session ไหม
       const { data: { session } } = await supabase.auth.getSession();
@@ -46,8 +54,7 @@ function AuthCallbackContent() {
           .select('brand_id')
           .eq('id', session.user.id)
           .maybeSingle();
-
-        if (profile?.brand_id) {
+       if (profile?.brand_id) {
           router.replace(next);
         } else {
           router.replace('/setup');

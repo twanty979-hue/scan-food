@@ -1,7 +1,7 @@
 // app/auth/reset-password/page.tsx
 'use client';
 import { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase'; // ตรวจสอบ path ให้ถูกต้อง
+import { supabase } from '../../../lib/supabase'; // ตรวจสอบ path ให้ถูกต้อง
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';

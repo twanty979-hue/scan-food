@@ -87,28 +87,29 @@ export default function LoginPage() {
     }
   };
 
-  // ฟังก์ชันส่งอีเมลรีเซ็ตรหัสผ่าน (Logic เดิม)
-  const handleResetPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setErrorMsg(null);
-    setSuccessMsg(null);
+ const handleResetPassword = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setLoading(true);
+  setErrorMsg(null);
+  setSuccessMsg(null);
 
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/reset-password`,
-      });
+  try {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      // ✅ แก้ไขบรรทัดนี้: ให้วิ่งไปที่หน้า callback ก่อน
+      // และส่งพารามิเตอร์ next เพื่อบอกว่าหลังจากแลก Session เสร็จให้ไปหน้าเปลี่ยนรหัส
+      redirectTo: `${window.location.origin}/auth/callback?next=/auth/reset-password&type=recovery`,
+    });
 
-      if (error) throw error;
+    if (error) throw error;
 
-      setSuccessMsg("ส่งลิงก์เปลี่ยนรหัสผ่านไปที่อีเมลแล้ว! กรุณาตรวจสอบ Inbox/Junk");
-      
-    } catch (error: any) {
-      setErrorMsg(error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+    setSuccessMsg("ส่งลิงก์เปลี่ยนรหัสผ่านไปที่อีเมลแล้ว! กรุณาตรวจสอบ Inbox/Junk");
+    
+  } catch (error: any) {
+    setErrorMsg(error.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-brand-50/50 relative overflow-hidden p-4">

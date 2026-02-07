@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '../../lib/supabase'; 
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -105,24 +105,45 @@ export default function RegisterPage() {
 
         {/* --- เงื่อนไขการแสดงผล --- */}
         {isSuccess ? (
-          // ✅ ส่วนที่ 1: แสดงเมื่อสมัครสำเร็จ (หน้าแจ้งเตือนเช็คอีเมล)
-          <div className="text-center animate-fadeIn">
-            <div className="w-16 h-16 bg-green-100 text-green-500 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl shadow-sm">
-              <i className="fa-regular fa-envelope-open"></i>
+          // ✅ ส่วนที่ 1: แสดงเมื่อสมัครสำเร็จ (หน้าแจ้งเตือนเช็คอีเมลแบบพรีเมียม)
+          <div className="text-center animate-in fade-in zoom-in duration-500">
+            {/* ไอคอนจดหมายแบบมีอนิเมชัน */}
+            <div className="relative w-24 h-24 mx-auto mb-8">
+              <div className="absolute inset-0 bg-blue-100 rounded-full animate-ping opacity-25"></div>
+              <div className="relative w-24 h-24 bg-gradient-to-tr from-[#00AEEF] to-blue-600 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/30">
+                <i className="fa-solid fa-paper-plane text-4xl text-white"></i>
+              </div>
             </div>
-            <h2 className="text-2xl font-bold text-slate-800 mb-2">ยืนยันอีเมลของคุณ</h2>
-            <p className="text-slate-600 mb-6">
-              เราได้ส่งลิงก์ยืนยันไปที่<br/>
-              <span className="font-bold text-[#00AEEF]">{email}</span><br/>
-              กรุณาตรวจสอบกล่องจดหมายของคุณ (รวมถึง Junk/Spam)
-            </p>
+
+            <h2 className="text-3xl font-black text-slate-800 mb-4 tracking-tight">เช็คกล่องจดหมายของคุณ</h2>
             
-            <Link 
-              href="/login"
-              className="block w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition-all"
-            >
-              กลับไปหน้าเข้าสู่ระบบ
-            </Link>
+            <div className="bg-slate-50/80 border border-slate-100 p-4 rounded-2xl mb-8">
+              <p className="text-slate-600 text-sm leading-relaxed text-center">
+                ระบบได้ส่งลิงก์ยืนยันตัวตนไปที่ <br />
+                <span className="font-bold text-slate-900 break-all">{email}</span>
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <Link 
+                href="/login"
+                className="block w-full bg-[#00AEEF] hover:bg-[#009ACD] text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-500/20 transition-all active:scale-95 text-center"
+              >
+                ไปที่หน้าเข้าสู่ระบบ
+              </Link>
+
+              <div className="pt-4 border-t border-slate-100">
+                <p className="text-xs text-slate-400 mb-2 font-medium uppercase tracking-widest text-center">ไม่ได้รับอีเมล?</p>
+                <button 
+                  type="button"
+                  disabled={loading}
+                  onClick={handleEmailSignup} 
+                  className="text-[#00AEEF] text-sm font-bold hover:underline disabled:opacity-50 w-full text-center"
+                >
+                  {loading ? 'กำลังส่งใหม่...' : 'คลิกที่นี่เพื่อส่งอีกครั้ง'}
+                </button>
+              </div>
+            </div>
           </div>
         ) : (
           // ✅ ส่วนที่ 2: ฟอร์มสมัครสมาชิก (แสดงตอนแรก)
@@ -145,7 +166,7 @@ export default function RegisterPage() {
 
             <form onSubmit={handleEmailSignup} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-2 ml-1">อีเมล</label>
+                <label className="block text-xs font-bold text-slate-700 mb-2 ml-1 tracking-widest uppercase">อีเมล</label>
                 <div className="relative group">
                   <i className="fa-solid fa-envelope absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#00AEEF] transition-colors"></i>
                   <input 
@@ -165,7 +186,7 @@ export default function RegisterPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-2 ml-1">รหัสผ่าน</label>
+                <label className="block text-xs font-bold text-slate-700 mb-2 ml-1 tracking-widest uppercase">รหัสผ่าน</label>
                 <div className="relative group">
                   <i className="fa-solid fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#00AEEF] transition-colors"></i>
                   <input 
@@ -182,7 +203,7 @@ export default function RegisterPage() {
               
               <div className="relative flex py-2 items-center mb-6">
                 <div className="flex-grow border-t border-slate-200"></div>
-                <span className="flex-shrink-0 mx-4 text-slate-400 text-xs font-medium uppercase">หรือสมัครด้วยอีเมล</span>
+                <span className="flex-shrink-0 mx-4 text-slate-300 text-[10px] font-bold uppercase tracking-widest">หรือสมัครด้วยวิธีอื่น</span>
                 <div className="flex-grow border-t border-slate-200"></div>
               </div>
               
@@ -205,17 +226,17 @@ export default function RegisterPage() {
               </button>
             </form>
 
-            <div className="mt-8 text-center text-sm text-slate-500">
+            <div className="mt-8 text-center text-sm text-slate-500 font-medium">
               มีบัญชีอยู่แล้ว? 
-              <Link href="/login" className="text-[#00AEEF] font-bold ml-1 hover:underline">เข้าสู่ระบบ</Link>
+              <Link href="/login" className="text-[#00AEEF] font-bold ml-1 hover:underline tracking-tight">เข้าสู่ระบบ</Link>
             </div>
           </>
         )}
 
       </div>
       
-      <p className="absolute bottom-6 text-slate-400 text-xs text-center w-full opacity-60">
-        © 2024 FoodScan System
+      <p className="absolute bottom-6 text-slate-400 text-[10px] font-bold tracking-widest text-center w-full opacity-60 uppercase">
+        © 2026 FoodScan System
       </p>
     </div>
   );

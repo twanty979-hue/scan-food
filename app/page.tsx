@@ -192,11 +192,11 @@ export default function LandingPage() {
                     หน้าแรก
                     <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-brand-500 transition-all duration-300 group-hover:w-full"></span>
                 </Link>
-                <Link href="/#features" className="hover:text-brand-500 transition-colors font-medium relative group">
+                <Link href="/features" className="hover:text-brand-500 transition-colors font-medium relative group">
                     จุดเด่น
                     <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-brand-500 transition-all duration-300 group-hover:w-full"></span>
                 </Link>
-                <Link href="/#pricing" className="hover:text-brand-500 transition-colors font-medium relative group">
+                <Link href="/pricing" className="hover:text-brand-500 transition-colors font-medium relative group">
                     ราคา
                     <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-brand-500 transition-all duration-300 group-hover:w-full"></span>
                 </Link>
@@ -220,8 +220,8 @@ export default function LandingPage() {
         {/* Mobile Menu Dropdown */}
         <div id="mobile-menu" className="hidden absolute top-full left-0 w-full bg-white/95 backdrop-blur-md text-gray-800 shadow-2xl md:hidden flex flex-col items-center py-6 gap-6 mt-0 border-t border-gray-100 transition-all duration-300">
             <a href="#home" className="text-lg font-medium hover:text-brand-600">หน้าแรก</a>
-            <a href="#features" className="text-lg font-medium hover:text-brand-600">จุดเด่น</a>
-            <a href="#pricing" className="text-lg font-medium hover:text-brand-600">ราคา</a>
+            <a href="features" className="text-lg font-medium hover:text-brand-600">จุดเด่น</a>
+            <a href="pricing" className="text-lg font-medium hover:text-brand-600">ราคา</a>
             <a href="#howitworks" className="text-lg font-medium hover:text-brand-600">วิธีใช้งาน</a>
             <Link href="/register" className="text-white bg-gradient-to-r from-brand-500 to-brand-600 px-8 py-2 rounded-full font-bold shadow-lg shadow-brand-500/30">สมัครใช้งานฟรี</Link>
         </div>
@@ -372,48 +372,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ✅ 4. Pricing Section */}
-      <section id="pricing" className="py-24 bg-white relative">
-        <div className="max-w-7xl mx-auto px-6 lg:px-12">
-            <div className="text-center mb-16 reveal">
-                <h3 className="text-brand-500 font-bold mb-2 uppercase tracking-wider text-sm">Pricing</h3>
-                <h2 className="text-3xl md:text-4xl font-bold text-slate-900">แพ็กเกจราคา</h2>
-                <p className="text-slate-500 mt-4">เลือกแผนที่เหมาะสมกับขนาดร้านของคุณ</p>
-            </div>
-
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
-                {PRICING_PLANS.map((plan, idx) => (
-                    <div key={idx} className={`relative flex flex-col p-6 rounded-[28px] border transition-all hover:shadow-xl hover:-translate-y-1 ${plan.isPopular ? 'border-indigo-500 shadow-lg ring-1 ring-indigo-500 bg-indigo-50/10' : 'border-slate-200 bg-white'}`}>
-                        {plan.isPopular && <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-tighter shadow-md">Best Value</span>}
-                        
-                        <div className="text-center mb-6 pt-2">
-                            <h3 className="text-[12px] font-black text-slate-400 uppercase tracking-widest mb-1">{plan.name}</h3>
-                            <div className="flex items-baseline justify-center gap-1 text-slate-900">
-                                <span className="text-3xl font-black">{plan.price}</span>
-                                <span className="text-xs font-bold text-slate-400">{plan.period}</span>
-                            </div>
-                            <p className="text-xs text-slate-500 mt-2 line-clamp-1">{plan.desc}</p>
-                        </div>
-
-                        <div className="flex-1 space-y-3 mb-8">
-                            {plan.features.map((feat, i) => (
-                                <div key={i} className="flex items-start gap-2.5">
-                                    <div className="mt-0.5 w-4 h-4 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
-                                        <i className="fa-solid fa-check text-[10px]"></i>
-                                    </div>
-                                    <span className="text-xs font-medium text-slate-600 leading-tight">{feat}</span>
-                                </div>
-                            ))}
-                        </div>
-
-                        <Link href="/register" className={`w-full py-3 rounded-xl font-bold text-xs transition-all text-center ${plan.btnColor}`}>
-                            {plan.btnText}
-                        </Link>
-                    </div>
-                ))}
-            </div>
-        </div>
-      </section>
+    
 
       {/* 5. Registration */}
       <section id="register" className="py-32 relative bg-white overflow-hidden">
@@ -512,11 +471,11 @@ export default function LandingPage() {
                 
                 <div className="space-y-3 text-sm text-slate-600 leading-relaxed">
                     <p className="font-bold text-slate-800">
-                        FoodScan System <span className="font-normal text-slate-500">(ดำเนินการโดย นาย ก.... นามสกุล...)</span>
+                        FoodScan System <span className="font-normal text-slate-500">(ดำเนินการโดย นาย วรธน นำทอง)</span>
                     </p>
                     <p>
-                        เลขที่ ... หมู่บ้าน/คอนโด ... ซอย ... <br/>
-                        แขวง... เขต... จังหวัด... รหัสไปรษณีย์...
+                        บ้านเลขที่78หมู่ 4 ต.นาเยีย อ.นาเยีย<br/>
+                         จังหวัด อุบลราชธานี รหัสไปรษณีย์ 34160
                     </p>
                     <p className="flex items-center gap-2">
                         <span className="font-bold text-slate-700">โทร:</span> 
@@ -534,7 +493,7 @@ export default function LandingPage() {
                 <h4 className="font-bold text-slate-900 mb-6 uppercase tracking-wider text-xs">บริการของเรา</h4>
                 <div className="flex flex-col gap-3 text-sm font-medium">
                     <Link href="/" className="hover:text-brand-500 transition-colors">หน้าแรก</Link>
-                    <Link href="/#pricing" className="hover:text-brand-500 transition-colors">แพ็กเกจราคา</Link>
+                    <Link href="/pricing" className="hover:text-brand-500 transition-colors">แพ็กเกจราคา</Link>
                     <Link href="/manual" className="hover:text-brand-500 transition-colors">คู่มือการใช้งาน</Link>
                 </div>
             </div>

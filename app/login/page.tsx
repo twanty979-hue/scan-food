@@ -103,7 +103,7 @@ export default function LoginPage() {
 
     if (error) throw error;
 
-    setSuccessMsg("ส่งลิงก์เปลี่ยนรหัสผ่านไปที่อีเมลแล้ว! กรุณาตรวจสอบ Inbox/Junk");
+    setSuccessMsg("ส่งลิงก์เปลี่ยนรหัสผ่านไปที่อีเมลแล้ว! ");
     
   } catch (error: any) {
     setErrorMsg(error.message);

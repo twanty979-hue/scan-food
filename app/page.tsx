@@ -483,7 +483,7 @@ export default function LandingPage() {
                     </p>
                     <p className="flex items-center gap-2">
                         <span className="font-bold text-slate-700">อีเมล:</span>
-                        <a href="mailto:support@foodscan.com" className="text-brand-600 hover:underline font-medium">support@foodscan.com</a>
+                        <a href="mailto:posfoodscan@gmail.com" className="text-brand-600 hover:underline font-medium">posfoodscan@gmail.com</a>
                     </p>
                 </div>
             </div>

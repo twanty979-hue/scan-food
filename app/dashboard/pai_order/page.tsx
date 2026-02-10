@@ -98,7 +98,10 @@ export default function PaymentPage() {
     }, [showTableSelector, refreshTables]);
 
     // 2. Auto Scroll & Bounce Logic (เหมือนเดิม)
-    useEffect(() => {
+useEffect(() => {
+        // ✅ เพิ่มบรรทัดนี้: ถ้าหน้าจอกว้างน้อยกว่า 1024px (มือถือ/แท็บเล็ตแนวตั้ง) ให้ข้ามการทำงานไปเลย ไม่ต้อง Scroll
+        if (typeof window !== 'undefined' && window.innerWidth < 1024) return;
+
         const currentItems = activeTab === 'tables' ? (selectedOrder?.order_items || []) : cart;
         const prevItems = prevItemsRef.current;
         let changedIndex = -1;
@@ -113,7 +116,8 @@ export default function PaymentPage() {
 
         if (changedIndex !== -1 && itemsRef.current[changedIndex]) {
             setTimeout(() => {
-                itemsRef.current[changedIndex]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // ✅ เพิ่ม option { block: 'nearest' } แทน center เพื่อลดการกระโดด ถ้าคุณยังอยากให้มันเลื่อนนิดหน่อยใน PC
+                itemsRef.current[changedIndex]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }, 50);
         }
         prevItemsRef.current = currentItems;

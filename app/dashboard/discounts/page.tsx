@@ -67,44 +67,51 @@ export default function DiscountsPage() {
             <button onClick={() => setIsModalOpen(true)} className="text-orange-600 font-bold hover:underline text-lg">สร้างเลย +</button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          /* ✅ แก้ไข 1: เปลี่ยนเป็น grid-cols-2 และลด gap ในมือถือ */
+          <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
             {discounts.map(d => (
-              <div key={d.id} className="bg-white p-6 rounded-[32px] shadow-sm border border-slate-200 flex flex-col relative overflow-hidden group hover:shadow-xl transition-all hover:border-orange-200">
+              /* ✅ แก้ไข 2: ลด padding ในมือถือ (p-4 -> md:p-6) */
+              <div key={d.id} className="bg-white p-4 md:p-6 rounded-[24px] md:rounded-[32px] shadow-sm border border-slate-200 flex flex-col relative overflow-hidden group hover:shadow-xl transition-all hover:border-orange-200">
                  
-                 {/* Decorative Circle */}
-                 <div className="absolute -right-6 -top-6 w-24 h-24 bg-orange-50 rounded-full opacity-50 group-hover:bg-orange-100 transition-colors"></div>
+                 {/* Decorative Circle (ซ่อนในมือถือเพื่อให้ไม่รก) */}
+                 <div className="hidden md:block absolute -right-6 -top-6 w-24 h-24 bg-orange-50 rounded-full opacity-50 group-hover:bg-orange-100 transition-colors"></div>
 
-                 <div className="flex justify-between items-start mb-4 relative z-10">
-                    <div>
-                        <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${d.apply_to === 'all' ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'}`}>
-                            {d.apply_to === 'all' ? 'ทั้งร้าน' : 'เฉพาะรายการ'}
+                 <div className="flex flex-col md:flex-row justify-between items-start mb-2 md:mb-4 relative z-10 gap-2">
+                    <div className="w-full md:w-auto">
+                        {/* Badge ขนาดเล็กในมือถือ */}
+                        <span className={`px-2 py-0.5 md:px-3 md:py-1 rounded-md md:rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-widest ${d.apply_to === 'all' ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'}`}>
+                            {d.apply_to === 'all' ? 'ทั้งร้าน' : 'บางเมนู'}
                         </span>
-                        <h3 className="text-xl font-black text-slate-800 mt-2 line-clamp-1">{d.name}</h3>
+                        {/* ชื่อแคมเปญ ปรับขนาดฟอนต์ */}
+                        <h3 className="text-sm md:text-xl font-black text-slate-800 mt-1 md:mt-2 line-clamp-1">{d.name}</h3>
                     </div>
-                    <div className="text-right">
-                        <span className="text-4xl font-black text-orange-500 tracking-tight">
-                            {d.value}<span className="text-xl align-top ml-0.5">{d.type === 'percentage' ? '%' : '฿'}</span>
+                    
+                    {/* มูลค่าส่วนลด ใหญ่สะใจแต่ปรับตามจอ */}
+                    <div className="text-left md:text-right w-full md:w-auto">
+                        <span className="text-2xl md:text-4xl font-black text-orange-500 tracking-tight block md:inline">
+                            {d.value}<span className="text-sm md:text-xl align-top ml-0.5">{d.type === 'percentage' ? '%' : '฿'}</span>
                         </span>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase">OFF</p>
+                        {/* <p className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase hidden md:block">OFF</p> */}
                     </div>
                  </div>
 
-                 <div className="bg-slate-50 p-4 rounded-2xl mb-6 space-y-2 border border-slate-100">
-                    <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
+                 {/* ส่วนวันที่ (ย่อในมือถือ แสดงแค่ Expire หรือวันที่เหลือน้อย) */}
+                 <div className="bg-slate-50 p-2 md:p-4 rounded-xl md:rounded-2xl mb-3 md:mb-6 space-y-1 md:space-y-2 border border-slate-100">
+                    <div className="hidden md:flex items-center gap-2 text-xs font-bold text-slate-600">
                         <IconCalendar size={14} className="text-slate-400"/>
                         <span>เริ่ม: {d.start_date ? new Date(d.start_date).toLocaleDateString('th-TH') : 'ทันที'}</span>
                     </div>
-                    <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
-                        <IconCalendar size={14} className="text-slate-400"/>
-                        <span>สิ้นสุด: {d.end_date ? new Date(d.end_date).toLocaleDateString('th-TH') : 'ตลอดไป'}</span>
+                    <div className="flex items-center gap-1 md:gap-2 text-[10px] md:text-xs font-bold text-slate-600">
+                        <IconCalendar size={12} className="md:w-[14px] md:h-[14px] text-slate-400"/>
+                        <span className="truncate">สิ้นสุด: {d.end_date ? new Date(d.end_date).toLocaleDateString('th-TH') : 'ตลอดไป'}</span>
                     </div>
                  </div>
 
                  <button 
                     onClick={() => handleDelete(d.id)} 
-                    className="mt-auto w-full py-3 bg-white border border-slate-200 text-slate-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 rounded-xl font-bold text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                    className="mt-auto w-full py-2 md:py-3 bg-white border border-slate-200 text-slate-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 rounded-lg md:rounded-xl font-bold text-[10px] md:text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-1 md:gap-2"
                  >
-                    <IconTrash size={16}/> ลบโปรโมชัน
+                    <IconTrash size={14} className="md:w-[16px] md:h-[16px]"/> <span className="md:inline">ลบ</span>
                  </button>
               </div>
             ))}

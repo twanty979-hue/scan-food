@@ -27,21 +27,25 @@ export function useMarketplace() {
     const [itemsPerPage, setItemsPerPage] = useState(12);
 
     // --- Responsive Items Logic ---
-    useEffect(() => {
-        const calculateItemsPerPage = () => {
-            const width = window.innerWidth;
-            let columns = 1;
-            if (width >= 1280) columns = 6;       
-            else if (width >= 1024) columns = 4;  
-            else if (width >= 768) columns = 3;   
-            else if (width >= 640) columns = 2;   
-            else columns = 1;
-            setItemsPerPage(columns * 4);
-        };
-        calculateItemsPerPage();
-        window.addEventListener('resize', calculateItemsPerPage);
-        return () => window.removeEventListener('resize', calculateItemsPerPage);
-    }, []);
+   // --- Responsive Items Logic ---
+useEffect(() => {
+    const calculateItemsPerPage = () => {
+        const width = window.innerWidth;
+        let columns = 2; // ✅ เริ่มต้นที่ 2 คอลัมน์สำหรับมือถือ
+
+        if (width >= 1280) columns = 6;       // จอใหญ่มาก
+        else if (width >= 1024) columns = 4;  // จอคอม
+        else if (width >= 768) columns = 3;   // ไอแพดแนวนอน
+        else columns = 2;                     // ✅ มือถือและไอแพดแนวตั้ง (2 คอลัมน์)
+
+        // สูตร: จำนวนคอลัมน์ x 3 แถว (เพื่อให้เต็มหน้าจอพอดี)
+        // มือถือ: 2 x 3 = 6 รายการ
+        setItemsPerPage(columns * 3); // เปลี่ยนตัวคูณเป็น 3 หรือ 4 ก็ได้ตามชอบ
+    };
+    calculateItemsPerPage();
+    window.addEventListener('resize', calculateItemsPerPage);
+    return () => window.removeEventListener('resize', calculateItemsPerPage);
+}, []);
 
     // Init Data
     useEffect(() => {

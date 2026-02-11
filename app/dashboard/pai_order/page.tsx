@@ -151,32 +151,35 @@ useEffect(() => {
     // แก้ไขฟังก์ชันนี้ใน PaymentPage.tsx
 
 const onMainPaymentClick = () => {
-    // ✅ 1. เช็คลิมิตก่อนเป็นอันดับแรก
-    if (isLimitReached) {
-        setStatusModal({
-            show: true,
-            type: 'alert',
-            title: 'อัปเกรดเพื่อใช้งานต่อ',
-            message: `แพ็กเกจฟรีจำกัด ${usageText} ออเดอร์ \nกรุณาอัปเกรดแพ็กเกจเพื่อรับออเดอร์เพิ่มครับ`,
-        });
-        return; // สั่งจบการทำงานตรงนี้ ไม่ให้ไปทำต่อ
-    }
+        // ✅✅✅ [เพิ่มบรรทัดนี้ครับ] สั่งปิดตะกร้ามือถือก่อนเลย เพื่อให้เห็น Modal จ่ายเงิน
+        setShowMobileCart(false);
 
-    // ✅ 2. ถ้าลิมิตยังไม่เต็ม ค่อยแยกทางไปจ่ายเงิน
-    if (paymentMethod === 'promptpay') {
-        // เปิด Modal QR Code สำหรับจ่ายเงิน (ไม่ใช่ Alert Upgrade)
-        setStatusModal({
-            show: true,
-            type: 'qrcode', // ต้องเป็น type นี้เพื่อแสดง QR
-            title: 'สแกนจ่ายเงิน',
-            message: '',
-        });
-    } else {
-        // เปิด Modal เงินสด
-        setReceivedAmount(0); 
-        setShowCashModal(true);
-    }
-};
+        // ✅ 1. เช็คลิมิตก่อนเป็นอันดับแรก
+        if (isLimitReached) {
+            setStatusModal({
+                show: true,
+                type: 'alert',
+                title: 'อัปเกรดเพื่อใช้งานต่อ',
+                message: `แพ็กเกจฟรีจำกัด ${usageText} ออเดอร์ \nกรุณาอัปเกรดแพ็กเกจเพื่อรับออเดอร์เพิ่มครับ`,
+            });
+            return; // สั่งจบการทำงานตรงนี้ ไม่ให้ไปทำต่อ
+        }
+
+        // ✅ 2. ถ้าลิมิตยังไม่เต็ม ค่อยแยกทางไปจ่ายเงิน
+        if (paymentMethod === 'promptpay') {
+            // เปิด Modal QR Code สำหรับจ่ายเงิน (ไม่ใช่ Alert Upgrade)
+            setStatusModal({
+                show: true,
+                type: 'qrcode', // ต้องเป็น type นี้เพื่อแสดง QR
+                title: 'สแกนจ่ายเงิน',
+                message: '',
+            });
+        } else {
+            // เปิด Modal เงินสด
+            setReceivedAmount(0); 
+            setShowCashModal(true);
+        }
+    };
 const confirmCashPayment = async () => {
     try {
         // 1. เช็คยอดเงินก่อน (แปลงเป็น Number เพื่อความชัวร์)

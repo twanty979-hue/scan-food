@@ -28,17 +28,21 @@ export function useThemes() {
     const [itemsPerPage, setItemsPerPage] = useState(15);
 
     // --- Responsive Items Logic ---
-    useEffect(() => {
+   useEffect(() => {
         const calculateItemsPerPage = () => {
             const width = window.innerWidth;
-            let columns = 1;
-            if (width >= 1280) columns = 5;      
-            else if (width >= 1024) columns = 4; 
-            else if (width >= 768) columns = 3;  
-            else if (width >= 640) columns = 2;  
-            else columns = 1;
-            setItemsPerPage(columns * 3);
+            let columns = 2; // ✅ ตั้งค่าเริ่มต้นเป็น 2 เลย (สำหรับมือถือ)
+
+            if (width >= 1280) columns = 5;      // จอใหญ่มาก (5 คอลัมน์)
+            else if (width >= 1024) columns = 4; // จอคอม (4 คอลัมน์)
+            else if (width >= 768) columns = 3;  // ไอแพดแนวนอน (3 คอลัมน์)
+            else columns = 2;                    // ✅ มือถือและไอแพดแนวตั้ง (2 คอลัมน์)
+
+            // สูตร: จำนวนคอลัมน์ x 3 แถว
+            // มือถือ: 2 x 3 = 6 เครื่องเป๊ะ!
+            setItemsPerPage(columns * 3); 
         };
+
         calculateItemsPerPage();
         window.addEventListener('resize', calculateItemsPerPage);
         return () => window.removeEventListener('resize', calculateItemsPerPage);

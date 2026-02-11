@@ -41,22 +41,23 @@ export default function TablesPage() {
         <div className="min-h-screen bg-[#F8FAFC] pb-32">
             
             {/* --- Sticky Glass Header --- */}
-            <div className="sticky top-0 z-30 bg-[#F8FAFC]/80 backdrop-blur-md border-b border-slate-200/50 pt-6 pb-4 px-6 md:px-10 transition-all">
-                <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div>
-                        <h1 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3">
-                            <span className="p-2 bg-emerald-600 rounded-xl shadow-lg shadow-emerald-500/30 text-white">
-                                <IconLayoutGrid size={24} />
+            <div className="sticky top-0 z-30 bg-[#F8FAFC]/90 backdrop-blur-md border-b border-slate-200/60 pt-4 pb-2 px-4 md:px-10 shadow-sm md:shadow-none transition-all">
+                <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-3">
+                    <div className="flex justify-between items-center">
+                        <h1 className="text-xl md:text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3">
+                            <span className="p-1.5 md:p-2 bg-emerald-600 rounded-xl shadow-lg shadow-emerald-500/30 text-white">
+                                <IconLayoutGrid size={20} className="md:w-6 md:h-6" />
                             </span>
-                            จัดการโต๊ะอาหาร
+                            จัดการโต๊ะ
                         </h1>
-                        <p className="text-slate-500 text-sm font-medium mt-1 ml-14 hidden md:block">
-                            สร้างโต๊ะ พิมพ์ QR Code และตรวจสอบสถานะ
-                        </p>
+                        {/* Mobile Add Button (Small Top) */}
+                        <button onClick={() => setIsAddModalOpen(true)} className="md:hidden p-2 bg-slate-900 text-white rounded-lg active:scale-95 transition-transform">
+                           <IconPlus size={20} />
+                        </button>
                     </div>
 
                     <div className="flex gap-3">
-                        {/* Search Input */}
+                         {/* Search Input */}
                         <div className="relative group w-full md:w-64">
                             <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors">
                                 <IconSearch />
@@ -66,7 +67,7 @@ export default function TablesPage() {
                                 placeholder="ค้นหาเบอร์โต๊ะ..." 
                                 value={searchTerm} 
                                 onChange={(e) => setSearchTerm(e.target.value)} 
-                                className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium text-slate-600 placeholder:text-slate-400 shadow-sm"
+                                className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium text-slate-600 placeholder:text-slate-400 text-sm md:text-base shadow-sm"
                             />
                         </div>
 
@@ -81,50 +82,49 @@ export default function TablesPage() {
             </div>
 
             {/* --- Main Content --- */}
-            <div className="max-w-7xl mx-auto p-6 md:px-10">
+            <div className="max-w-7xl mx-auto p-4 md:p-6 md:px-10">
                 
                 {loading ? (
-                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-pulse">
-                      {[...Array(8)].map((_, i) => <div key={i} className="bg-slate-200 h-48 rounded-[32px]"></div>)}
+                   <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6 animate-pulse">
+                      {[...Array(8)].map((_, i) => <div key={i} className="bg-slate-200 h-40 rounded-3xl"></div>)}
                    </div>
                 ) : filteredTables.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-24 text-center bg-white rounded-[40px] border border-slate-100 shadow-sm">
-                        <div className="w-24 h-24 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-300 mb-6">
-                            <IconLayoutGrid size={40} />
+                    <div className="flex flex-col items-center justify-center py-24 text-center bg-white rounded-[32px] border border-slate-100 shadow-sm mx-4">
+                        <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-300 mb-6">
+                            <IconLayoutGrid size={32} />
                         </div>
-                        <h3 className="text-xl font-black text-slate-700">ยังไม่มีโต๊ะในร้าน</h3>
-                        <p className="text-slate-400 mt-2 mb-6">สร้างโต๊ะแรกเพื่อเริ่มรับออเดอร์ผ่าน QR Code</p>
-                        <button onClick={() => setIsAddModalOpen(true)} className="text-emerald-600 font-bold hover:underline">
+                        <h3 className="text-lg font-black text-slate-700">ยังไม่มีโต๊ะในร้าน</h3>
+                        <button onClick={() => setIsAddModalOpen(true)} className="mt-4 text-emerald-600 font-bold hover:underline text-sm">
                             + เพิ่มโต๊ะใหม่
                         </button>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    // ✅✅✅ GRID SYSTEM: Mobile = 2 Columns
+                    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6">
                         {filteredTables.map((table) => (
                             <div 
                                 key={table.id} 
-                                className="group relative bg-white p-6 rounded-[32px] shadow-[0_2px_15px_-4px_rgba(0,0,0,0.05)] border border-slate-100 flex flex-col hover:shadow-[0_20px_40px_-10px_rgba(0,0,0,0.1)] transition-all duration-300 hover:-translate-y-1"
+                                className="group relative bg-white p-3 md:p-6 rounded-2xl md:rounded-[32px] shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] border border-slate-100 flex flex-col hover:shadow-[0_20px_40px_-10px_rgba(0,0,0,0.1)] transition-all duration-300 hover:-translate-y-1"
                             >
                                 
                                 {/* Header Card */}
-                                <div className="flex justify-between items-start mb-6">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-14 h-14 rounded-2xl bg-slate-900 text-white flex items-center justify-center text-2xl font-black shadow-lg shadow-slate-900/20">
+                                <div className="flex justify-between items-start mb-3 md:mb-6">
+                                    <div className="flex items-center gap-2 md:gap-3">
+                                        <div className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-slate-900 text-white flex items-center justify-center text-lg md:text-2xl font-black shadow-lg shadow-slate-900/20 shrink-0">
                                             {table.label}
                                         </div>
-                                        <div>
-                                            <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest block mb-0.5">Status</span>
-                                            <div className={`flex items-center gap-1.5 text-xs font-bold ${table.status === 'available' ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                                <div className={`w-2 h-2 rounded-full ${table.status === 'available' ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></div>
+                                        <div className="overflow-hidden">
+                                            <div className={`flex items-center gap-1.5 text-[10px] md:text-xs font-bold ${table.status === 'available' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                                <div className={`w-1.5 h-1.5 md:w-2 md:h-2 rounded-full ${table.status === 'available' ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></div>
                                                 {table.status === 'available' ? 'ว่าง' : 'ไม่ว่าง'}
                                             </div>
                                         </div>
                                     </div>
                                     
-                                    {/* Delete Button (Hidden by default) */}
+                                    {/* Delete Button (Visible on hover desktop, Top Right on mobile) */}
                                     <button 
                                         onClick={() => deleteTable(table.id)}
-                                        className="w-8 h-8 rounded-full bg-slate-50 text-slate-300 hover:bg-red-50 hover:text-red-500 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100"
+                                        className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-slate-50 text-slate-300 hover:bg-red-50 hover:text-red-500 flex items-center justify-center transition-all md:opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100"
                                         title="ลบโต๊ะ"
                                     >
                                         <IconTrash size={14}/>
@@ -132,27 +132,27 @@ export default function TablesPage() {
                                 </div>
 
                                 {/* Passcode Area */}
-                                <div className="bg-slate-50/80 rounded-2xl p-4 text-center border border-slate-100 mb-6 group-hover:bg-indigo-50/50 group-hover:border-indigo-100 transition-colors">
-                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Passcode</span>
-                                    <div className="text-3xl font-black font-mono tracking-widest text-slate-800 select-all cursor-pointer hover:text-indigo-600 transition-colors">
+                                <div className="bg-slate-50/80 rounded-xl md:rounded-2xl p-2 md:p-4 text-center border border-slate-100 mb-3 md:mb-6 group-hover:bg-emerald-50/50 group-hover:border-emerald-100 transition-colors">
+                                    <span className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5 md:mb-1">Passcode</span>
+                                    <div className="text-lg md:text-3xl font-black font-mono tracking-widest text-slate-800 select-all cursor-pointer hover:text-emerald-600 transition-colors">
                                         {table.access_token}
                                     </div>
                                 </div>
 
                                 {/* Actions Footer */}
-                                <div className="grid grid-cols-5 gap-2 mt-auto">
+                                <div className="grid grid-cols-4 gap-2 mt-auto">
                                     <button 
                                         onClick={() => setSelectedTable(table)} 
-                                        className="col-span-4 py-3 bg-slate-900 text-white rounded-xl font-bold text-xs uppercase shadow-md hover:bg-slate-800 hover:shadow-lg transition-all flex items-center justify-center gap-2"
+                                        className="col-span-3 py-2 md:py-3 bg-slate-900 text-white rounded-xl font-bold text-[10px] md:text-xs uppercase shadow-md hover:bg-slate-800 hover:shadow-lg transition-all flex items-center justify-center gap-1.5"
                                     >
-                                        <IconQrCode size={16} /> QR Code
+                                        <IconQrCode size={14} className="md:w-4 md:h-4" /> QR
                                     </button>
                                     <button 
                                         onClick={() => refreshToken(table)} 
-                                        className="col-span-1 py-3 bg-white border border-slate-200 text-slate-400 rounded-xl flex items-center justify-center hover:bg-slate-50 hover:text-slate-600 hover:border-slate-300 transition-all"
+                                        className="col-span-1 py-2 md:py-3 bg-white border border-slate-200 text-slate-400 rounded-xl flex items-center justify-center hover:bg-slate-50 hover:text-slate-600 hover:border-slate-300 transition-all"
                                         title="รีเซ็ต Passcode"
                                     >
-                                        <IconRefresh size={16} />
+                                        <IconRefresh size={14} className="md:w-4 md:h-4" />
                                     </button>
                                 </div>
 
@@ -200,7 +200,7 @@ export default function TablesPage() {
                                             type="text" 
                                             value={newTableLabel}
                                             onChange={(e) => setNewTableLabel(e.target.value)}
-                                            className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border-transparent focus:bg-white border focus:border-emerald-500 rounded-2xl font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all placeholder:font-normal placeholder:text-slate-400 text-lg"
+                                            className="w-full pl-11 pr-4 py-3 bg-slate-50 border-transparent focus:bg-white border focus:border-emerald-500 rounded-2xl font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all placeholder:font-normal placeholder:text-slate-400 text-lg"
                                             placeholder="เช่น A1, VIP2"
                                             autoFocus
                                         />
@@ -208,7 +208,7 @@ export default function TablesPage() {
                                     <p className="text-[10px] text-slate-400 mt-2 ml-1">ระบบจะสร้าง Passcode ให้อัตโนมัติ</p>
                                 </div>
 
-                                <div className="pt-2 flex gap-3">
+                                <div className="pt-2 flex gap-3 pb-safe">
                                     <button type="button" onClick={() => setIsAddModalOpen(false)} className="flex-1 py-3.5 rounded-2xl font-bold text-slate-500 bg-white border border-slate-200 hover:bg-slate-50 transition-all">ยกเลิก</button>
                                     <button 
                                         type="submit" 

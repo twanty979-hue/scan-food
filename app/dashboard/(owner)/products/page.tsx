@@ -3,7 +3,7 @@
 
 import { useProducts } from '@/hooks/useProducts';
 
-// --- ✨ Custom Icons (Refined) ---
+// --- ✨ Custom Icons ---
 const IconUtensils = ({ size = 24, className }: any) => <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg>;
 const IconPlus = ({ size = 20 }: any) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
 const IconSearch = ({ size = 20 }: any) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
@@ -28,33 +28,33 @@ export default function ProductsPage() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-32">
       
-      {/* --- Sticky Header with Glassmorphism --- */}
-      <div className="sticky top-0 z-30 bg-[#F8FAFC]/80 backdrop-blur-md border-b border-slate-200/50 pt-6 pb-4 px-6 md:px-10">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3">
-              <span className="p-2 bg-blue-600 rounded-xl shadow-lg shadow-blue-500/30 text-white">
-                <IconUtensils size={24} />
+      {/* --- Sticky Header --- */}
+      <div className="sticky top-0 z-30 bg-[#F8FAFC]/90 backdrop-blur-md border-b border-slate-200/60 pt-4 pb-2 px-4 md:px-10 shadow-sm md:shadow-none">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex justify-between items-center">
+            <h1 className="text-xl md:text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3">
+              <span className="p-1.5 md:p-2 bg-blue-600 rounded-xl shadow-lg shadow-blue-500/30 text-white">
+                <IconUtensils size={20} className="md:w-6 md:h-6" />
               </span>
-              จัดการเมนูอาหาร
+              จัดการเมนู
             </h1>
-            <p className="text-slate-500 text-sm font-medium mt-1 ml-14 hidden md:block">
-              จัดการรายการอาหาร ราคา และหมวดหมู่ร้านของคุณ
-            </p>
+            {/* Mobile Add Button (Small Top) */}
+             <button onClick={() => openModal()} className="md:hidden p-2 bg-slate-900 text-white rounded-lg active:scale-95 transition-transform">
+                <IconPlus size={20} />
+             </button>
           </div>
 
           <div className="flex gap-3">
-             {/* Search Input */}
             <div className="relative group w-full md:w-64">
               <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors">
                 <IconSearch />
               </div>
               <input 
                 type="text" 
-                placeholder="ค้นหาเมนู..." 
+                placeholder="ค้นหา..." 
                 value={searchTerm} 
                 onChange={(e) => setSearchTerm(e.target.value)} 
-                className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium text-slate-600 placeholder:text-slate-400 shadow-sm"
+                className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium text-slate-600 placeholder:text-slate-400 text-sm md:text-base shadow-sm"
               />
             </div>
 
@@ -68,11 +68,11 @@ export default function ProductsPage() {
         </div>
 
         {/* Categories Tabs */}
-        <div className="max-w-7xl mx-auto mt-6 overflow-x-auto no-scrollbar pb-1">
+        <div className="max-w-7xl mx-auto mt-4 overflow-x-auto no-scrollbar pb-2">
           <div className="flex gap-2">
             <button 
                 onClick={() => setSelectedCategoryId('ALL')} 
-                className={`px-4 py-2 rounded-full text-sm font-bold transition-all border ${selectedCategoryId === 'ALL' ? 'bg-slate-800 text-white border-slate-800 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}
+                className={`px-3.5 py-1.5 md:px-4 md:py-2 rounded-full text-xs md:text-sm font-bold transition-all border shrink-0 ${selectedCategoryId === 'ALL' ? 'bg-slate-800 text-white border-slate-800 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}
             >
                 ทั้งหมด
             </button>
@@ -80,7 +80,7 @@ export default function ProductsPage() {
               <button 
                 key={cat.id} 
                 onClick={() => setSelectedCategoryId(cat.id)} 
-                className={`px-4 py-2 rounded-full text-sm font-bold transition-all border whitespace-nowrap ${selectedCategoryId === cat.id ? 'bg-slate-800 text-white border-slate-800 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}
+                className={`px-3.5 py-1.5 md:px-4 md:py-2 rounded-full text-xs md:text-sm font-bold transition-all border shrink-0 whitespace-nowrap ${selectedCategoryId === cat.id ? 'bg-slate-800 text-white border-slate-800 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}
               >
                 {cat.name}
               </button>
@@ -90,96 +90,100 @@ export default function ProductsPage() {
       </div>
 
       {/* --- Main Content --- */}
-      <div className="max-w-7xl mx-auto p-6 md:px-10">
+      <div className="max-w-7xl mx-auto p-4 md:p-6 md:px-10">
         
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 animate-pulse">
-             {[...Array(4)].map((_, i) => <div key={i} className="bg-slate-200 h-64 rounded-3xl"></div>)}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6 animate-pulse">
+             {[...Array(6)].map((_, i) => <div key={i} className="bg-slate-200 aspect-[4/5] rounded-2xl"></div>)}
           </div>
         ) : filteredProducts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center bg-white rounded-[40px] border border-slate-100 shadow-sm">
-            <div className="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center text-blue-300 mb-6">
-                <IconUtensils size={40} />
+          <div className="flex flex-col items-center justify-center py-20 text-center bg-white rounded-[32px] border border-slate-100 shadow-sm mx-4">
+            <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center text-blue-300 mb-4">
+                <IconUtensils size={32} />
             </div>
-            <h3 className="text-xl font-black text-slate-700">ยังไม่มีเมนูในหมวดนี้</h3>
-            <p className="text-slate-400 mt-2 mb-6">เริ่มสร้างเมนูแรกของคุณเพื่อเปิดร้านได้เลย</p>
-            <button onClick={() => openModal()} className="text-blue-600 font-bold hover:underline">
+            <h3 className="text-lg font-black text-slate-700">ไม่มีเมนูในหมวดนี้</h3>
+            <button onClick={() => openModal()} className="mt-4 text-blue-600 font-bold hover:underline text-sm">
                 + เพิ่มเมนูใหม่
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          // ✅✅✅ GRID SYSTEM ปรับปรุงใหม่: Mobile = 2 Columns
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-6">
             {filteredProducts.map((p: any) => (
               <div 
                 key={p.id} 
-                className="group relative bg-white rounded-3xl p-3 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] border border-slate-100 hover:shadow-[0_20px_40px_-10px_rgba(0,0,0,0.1)] transition-all duration-300 hover:-translate-y-1 flex flex-col"
+                className={`
+                    group relative bg-white rounded-2xl md:rounded-3xl p-2 md:p-3 
+                    shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] border 
+                    ${!p.is_available ? 'border-slate-100 opacity-80 grayscale-[0.5]' : 'border-slate-100'}
+                    hover:shadow-[0_10px_30px_-10px_rgba(0,0,0,0.1)] transition-all duration-300 hover:-translate-y-1 flex flex-col
+                `}
               >
                 {/* Image Area */}
-                <div className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-slate-100">
+                <div className="relative aspect-square rounded-xl md:rounded-2xl overflow-hidden bg-slate-100">
                   {p.image_name ? (
                     <img src={getImageUrl(p.image_name) ?? ''} alt={p.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                   ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center text-slate-300 gap-2">
-                        <IconImage size={28} />
-                        <span className="text-[10px] font-bold uppercase tracking-wider">No Image</span>
+                        <IconImage size={24} />
                     </div>
                   )}
                   
-                  {/* Badges Overlay */}
-                  <div className="absolute top-2 left-2 flex flex-col gap-1">
+                  {/* Badges */}
+                  <div className="absolute top-1.5 left-1.5 flex flex-col gap-1 z-10">
                      {p.is_recommended && (
-                         <span className="bg-amber-400 text-white text-[10px] font-black px-2 py-1 rounded-lg shadow-sm flex items-center gap-1 backdrop-blur-sm">
-                             <IconStar size={10} /> แนะนำ
+                         <span className="bg-amber-400 text-white text-[9px] md:text-[10px] font-black px-1.5 py-0.5 md:px-2 md:py-1 rounded-md shadow-sm flex items-center gap-1 backdrop-blur-sm">
+                             <IconStar size={9} /> <span className="hidden md:inline">แนะนำ</span>
                          </span>
                      )}
                   </div>
                   
-                  {/* Sold Out Overlay */}
-                  {!p.is_available && (
-                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px] flex items-center justify-center">
-                        <div className="bg-white/10 border border-white/20 text-white px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest backdrop-blur-md">
-                            Sold Out
-                        </div>
-                    </div>
-                  )}
+                  {/* Status Toggle (Floating on Image for Mobile Compactness) */}
+                  <button 
+                        onClick={(e) => { e.stopPropagation(); handleToggle(p.id, p.is_available); }}
+                        className={`absolute bottom-1.5 right-1.5 w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center shadow-md backdrop-blur-md transition-all active:scale-90 z-20 ${p.is_available ? 'bg-white/90 text-emerald-500 hover:bg-emerald-500 hover:text-white' : 'bg-slate-800/80 text-white'}`}
+                  >
+                        <div className={`w-2.5 h-2.5 rounded-full ${p.is_available ? 'bg-emerald-500' : 'bg-rose-500'} ${p.is_available ? '' : 'animate-pulse'}`}></div>
+                  </button>
 
-                  {/* Actions (Hover to show on Desktop) */}
-                  <div className="absolute top-2 right-2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-all duration-200 translate-x-2 group-hover:translate-x-0">
-                    <button onClick={() => openModal(p)} className="w-8 h-8 rounded-full bg-white/90 text-slate-600 hover:text-blue-600 hover:bg-white shadow-sm backdrop-blur-sm flex items-center justify-center transition-colors">
-                        <IconEdit size={14}/>
+                  {/* Actions (Desktop: Hover / Mobile: Always Visible but small) */}
+                  <div className="absolute top-1.5 right-1.5 flex flex-col gap-1.5 md:opacity-0 group-hover:opacity-100 transition-all duration-200 md:translate-x-2 group-hover:translate-x-0">
+                    <button onClick={() => openModal(p)} className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-white/90 text-slate-600 hover:text-blue-600 hover:bg-white shadow-sm backdrop-blur-sm flex items-center justify-center transition-colors">
+                        <IconEdit size={12} className="md:w-[14px] md:h-[14px]"/>
                     </button>
-                    <button onClick={() => handleDelete(p.id)} className="w-8 h-8 rounded-full bg-white/90 text-slate-400 hover:text-red-500 hover:bg-white shadow-sm backdrop-blur-sm flex items-center justify-center transition-colors">
-                        <IconTrash size={14}/>
+                    <button onClick={() => handleDelete(p.id)} className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-white/90 text-slate-400 hover:text-red-500 hover:bg-white shadow-sm backdrop-blur-sm flex items-center justify-center transition-colors">
+                        <IconTrash size={12} className="md:w-[14px] md:h-[14px]"/>
                     </button>
                   </div>
+
+                   {/* Sold Out Overlay */}
+                   {!p.is_available && (
+                    <div className="absolute inset-0 bg-slate-900/10 backdrop-blur-[1px] pointer-events-none flex items-center justify-center">
+                        <span className="bg-slate-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-sm">หมด</span>
+                    </div>
+                  )}
                 </div>
                 
                 {/* Content */}
-                <div className="pt-4 pb-2 px-1 flex-1 flex flex-col">
-                  <div className="flex justify-between items-start gap-2 mb-1">
-                    <h3 className="font-bold text-slate-800 text-base line-clamp-1 group-hover:text-blue-600 transition-colors">{p.name}</h3>
-                    <p className="font-black text-slate-900 text-lg">฿{p.price}</p>
-                  </div>
+                <div className="pt-2.5 px-1 flex-1 flex flex-col">
+                  <h3 className="font-bold text-slate-800 text-sm md:text-base leading-tight line-clamp-2 mb-1 group-hover:text-blue-600 transition-colors h-[2.5em]">{p.name}</h3>
                   
-                  <p className="text-xs font-medium text-slate-400 mb-3">
-                      {categories.find(c => c.id === p.category_id)?.name || 'General'}
-                  </p>
-
-                  <div className="flex flex-wrap gap-1.5 mt-auto">
-                    {p.price_special && <span className="bg-slate-50 px-2 py-1 rounded-md border border-slate-100 text-[10px] font-bold text-slate-500">พิเศษ +{p.price_special}</span>}
-                    {p.price_jumbo && <span className="bg-slate-50 px-2 py-1 rounded-md border border-slate-100 text-[10px] font-bold text-slate-500">จัมโบ้ +{p.price_jumbo}</span>}
+                  <div className="flex items-end justify-between mt-auto">
+                    <div className="flex flex-col">
+                         <span className="text-[10px] text-slate-400 line-clamp-1">
+                             {categories.find(c => c.id === p.category_id)?.name || 'General'}
+                         </span>
+                         <p className="font-black text-slate-900 text-base md:text-lg tracking-tight">฿{p.price}</p>
+                    </div>
                   </div>
-                </div>
 
-                {/* Footer Toggle */}
-                <div className="mt-3 pt-3 border-t border-dashed border-slate-100 flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">สถานะ</span>
-                    <button 
-                        onClick={() => handleToggle(p.id, p.is_available)} 
-                        className={`text-[10px] font-bold px-3 py-1.5 rounded-full transition-all border ${p.is_available ? 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100' : 'bg-slate-50 text-slate-400 border-slate-100 hover:bg-slate-100'}`}
-                    >
-                        {p.is_available ? '● พร้อมขาย' : '○ ของหมด'}
-                    </button>
+                  {/* Tags Compact */}
+                  {(p.price_special || p.price_jumbo) && (
+                      <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-dashed border-slate-100">
+                        {p.price_special && <span className="bg-slate-50 px-1.5 py-0.5 rounded text-[9px] font-bold text-slate-500 border border-slate-100">+พ {p.price_special}</span>}
+                        {p.price_jumbo && <span className="bg-slate-50 px-1.5 py-0.5 rounded text-[9px] font-bold text-slate-500 border border-slate-100">+จ {p.price_jumbo}</span>}
+                      </div>
+                  )}
                 </div>
 
               </div>
@@ -187,28 +191,27 @@ export default function ProductsPage() {
           </div>
         )}
 
-        {/* Mobile Floating Button */}
+        {/* Floating Button (Mobile Only) */}
         <button onClick={() => openModal()} className="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-slate-900 text-white rounded-full shadow-2xl shadow-slate-900/40 flex items-center justify-center z-40 hover:scale-110 transition-transform active:scale-90">
             <IconPlus size={24}/>
         </button>
 
-        {/* --- Modern Modal --- */}
+        {/* --- Modern Modal (Same logic) --- */}
         {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={() => setIsModalOpen(false)}></div>
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setIsModalOpen(false)}></div>
             <div className="bg-white w-full max-w-lg rounded-[28px] shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
               
-              <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
+              <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
                 <div>
                     <h3 className="text-lg font-black text-slate-800">{editId ? 'แก้ไขเมนู' : 'สร้างเมนูใหม่'}</h3>
-                    <p className="text-xs text-slate-400">กรอกข้อมูลเมนูของคุณให้ครบถ้วน</p>
                 </div>
                 <button onClick={() => setIsModalOpen(false)} className="w-8 h-8 rounded-full bg-slate-50 text-slate-400 hover:bg-slate-100 flex items-center justify-center transition-colors">
                     <IconX size={18}/>
                 </button>
               </div>
               
-              <form onSubmit={handleSave} className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
+              <form onSubmit={handleSave} className="p-6 space-y-5 overflow-y-auto custom-scrollbar">
                 
                 {/* Image Upload Area */}
                 <div className="flex justify-center">
@@ -280,7 +283,7 @@ export default function ProductsPage() {
                       <div className="w-1 h-4 bg-blue-500 rounded-full"></div>
                       <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">กำหนดราคา</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-3 gap-3">
                     <div className="space-y-1">
                         <label className="text-[10px] font-bold text-slate-400 text-center block">ปกติ</label>
                         <input type="number" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} className="w-full px-2 py-2 bg-white border border-slate-200 focus:border-blue-500 rounded-lg text-center font-black text-slate-800 focus:outline-none transition-colors" placeholder="0" required />
@@ -309,7 +312,7 @@ export default function ProductsPage() {
                 </label>
 
                 {/* Footer Buttons */}
-                <div className="pt-2 flex gap-3">
+                <div className="pt-2 flex gap-3 pb-safe">
                   <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3.5 rounded-xl font-bold text-slate-500 bg-white border border-slate-200 hover:bg-slate-50 transition-colors">ยกเลิก</button>
                   <button type="submit" disabled={isSubmitting} className="flex-[2] py-3.5 rounded-xl font-bold text-white bg-slate-900 shadow-lg shadow-slate-900/20 hover:bg-slate-800 hover:shadow-xl hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2">
                       {isSubmitting ? <span className="animate-pulse">กำลังบันทึก...</span> : 'บันทึกเมนู'}

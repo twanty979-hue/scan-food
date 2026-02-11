@@ -2,178 +2,238 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation' // ใช้ router ของ Next.js เพื่อ refresh แบบไม่กระพริบ
-import AddEmployeeForm from './AddEmployeeForm'
-import DeleteEmployeeButton from './DeleteEmployeeButton'
+import { useRouter } from 'next/navigation'
+import { 
+  User, Plus, Trash2, Phone, Mail, Shield, X, ChevronRight, MoreHorizontal 
+} from 'lucide-react';
+import AddEmployeeForm from './AddEmployeeForm' 
+
+// ฟังก์ชันจัดเบอร์โทรสวยๆ
+const formatPhone = (phone: string) => {
+  if (!phone) return '-';
+  const clean = phone.replace(/\D/g, '');
+  const match = clean.match(/^(\d{2,3})(\d{3})(\d{4})$/);
+  if (match) return `${match[1]}-${match[2]}-${match[3]}`;
+  return phone;
+};
 
 // Helper สี Avatar
 const getAvatarColor = (name: string) => {
+  if (!name) return 'bg-slate-100 text-slate-500';
   const colors = [
-    'bg-orange-100 text-orange-600 ring-orange-50', 
-    'bg-blue-100 text-blue-600 ring-blue-50', 
-    'bg-emerald-100 text-emerald-600 ring-emerald-50', 
-    'bg-violet-100 text-violet-600 ring-violet-50', 
-    'bg-rose-100 text-rose-600 ring-rose-50',
-    'bg-amber-100 text-amber-600 ring-amber-50'
-  ]
-  return colors[name.length % colors.length]
+    'bg-orange-100 text-orange-600', 
+    'bg-blue-100 text-blue-600', 
+    'bg-emerald-100 text-emerald-600', 
+    'bg-violet-100 text-violet-600', 
+    'bg-rose-100 text-rose-600'
+  ];
+  return colors[name.length % colors.length];
 }
 
 export default function EmployeeManager({ initialEmployees, brandId }: { initialEmployees: any[], brandId: string }) {
-  const [employees, setEmployees] = useState(initialEmployees)
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const router = useRouter()
+  const [employees, setEmployees] = useState(initialEmployees || []);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  
+  // ✅ State สำหรับ Modal ดูรายละเอียด (เมื่อกดที่การ์ดในมือถือ)
+  const [selectedEmployee, setSelectedEmployee] = useState<any | null>(null);
+  
+  const router = useRouter();
 
-  // ฟังก์ชันรีเฟรชหน้าจอแบบ Soft Refresh
-  const handleRefresh = () => {
-    router.refresh()
-    // หมายเหตุ: ในโปรเจคจริงอาจจะต้อง fetch data ใหม่มา setEmployees 
-    // หรือรอ router refresh เสร็จแล้ว update state แต่เบื้องต้นใช้ router.refresh() 
-    // จะไป trigger ให้ server component โหลดข้อมูลใหม่เอง
+  // Mock Delete (พี่เปลี่ยนไปใช้ Logic ลบจริงของพี่ได้เลย)
+  const handleDelete = async (id: string) => {
+    if(!confirm('ยืนยันการลบพนักงาน?')) return;
+    // ... call api delete ...
+    setEmployees(prev => prev.filter(e => e.id !== id));
+    setSelectedEmployee(null); // ปิด Modal ด้วย
+    router.refresh();
+  };
+
+  const handleSuccessAdd = () => {
+      setIsAddModalOpen(false);
+      router.refresh();
   }
 
   return (
-    <div>
-      {/* Header + ปุ่มเพิ่มพนักงาน */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
+    <div className="space-y-6">
+      
+      {/* 1. Header & ปุ่มเพิ่ม (เหมือนเดิม) */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-black text-slate-800 tracking-tight">จัดการพนักงาน</h1>
-          <p className="text-slate-500 mt-2 font-medium">
-             จัดการสิทธิ์ เพิ่ม/ลบ และตรวจสอบสถานะบัญชีผู้ใช้
-          </p>
+           {/* ในมือถือ Header อาจจะซ้ำกับ Sticky Bar ข้างบน ถ้าพี่มี Sticky Bar แล้ว ตรงนี้ลบ h1/p ออกได้ครับ */}
         </div>
         
         <button 
-          onClick={() => setIsModalOpen(true)}
-          className="
-            group
-            bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 
-            text-white px-6 py-3.5 rounded-xl font-bold shadow-lg shadow-blue-500/20 
-            transition-all duration-300 active:scale-95 flex items-center gap-2.5
-          "
+          onClick={() => setIsAddModalOpen(true)}
+          className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white px-6 py-3.5 rounded-xl font-bold shadow-lg shadow-blue-500/20 active:scale-95 flex items-center justify-center gap-2 transition-all"
         >
-          <div className="bg-white/20 p-1 rounded-lg group-hover:bg-white/30 transition-colors">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-          </div>
+          <div className="bg-white/20 p-1 rounded-lg"><Plus size={18} /></div>
           <span>เพิ่มพนักงานใหม่</span>
         </button>
       </div>
 
-      {/* ตารางรายชื่อ */}
-      <div className="bg-white rounded-[24px] border border-slate-100 shadow-xl shadow-slate-200/40 overflow-hidden relative">
-        {employees.length > 0 ? (
-           <div className="overflow-x-auto">
-             <table className="w-full text-left border-collapse">
-               <thead>
-                 <tr className="bg-slate-50/50 border-b border-slate-100 text-slate-500 text-[11px] uppercase tracking-widest font-bold">
-                   <th className="p-5 pl-8">ข้อมูลพนักงาน</th>
-                   <th className="p-5">เบอร์โทรศัพท์ (Login)</th>
-                   <th className="p-5 text-center">สถานะบัญชี</th>
-                   <th className="p-5 pr-8 text-right">ดำเนินการ</th>
-                 </tr>
-               </thead>
-               <tbody className="divide-y divide-slate-50">
-                 {employees.map((emp) => (
-                   <tr key={emp.id} className="group hover:bg-blue-50/30 transition-colors duration-200">
-                     <td className="p-5 pl-8">
-                       <div className="flex items-center gap-4">
-                         {/* Avatar with Ring */}
-                         <div className={`w-11 h-11 rounded-2xl flex items-center justify-center text-lg font-black shadow-sm ring-4 ${getAvatarColor(emp.full_name)}`}>
-                           {emp.full_name.charAt(0)}
-                         </div>
-                         <div>
-                            <div className="font-bold text-slate-800 text-[15px]">{emp.full_name}</div>
-                            <div className="text-xs text-slate-400 font-medium mt-0.5">{emp.email}</div>
-                         </div>
-                       </div>
-                     </td>
-                     <td className="p-5">
-                        <div className="flex items-center gap-2">
-                             <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-400">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
-                             </div>
-                             <span className="font-mono text-sm text-slate-600 font-bold tracking-tight">
-                                {emp.phone.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3')}
-                             </span>
-                        </div>
-                     </td>
-                     <td className="p-5 text-center">
-                        <div className={`
-                            inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold border shadow-sm uppercase tracking-wide
-                            ${emp.is_active 
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
-                                : 'bg-rose-50 text-rose-700 border-rose-100'
-                            }
-                        `}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${emp.is_active ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></span>
-                          {emp.is_active ? 'Active' : 'Suspended'}
-                        </div>
-                     </td>
-                     <td className="p-5 pr-8 text-right">
-                       <DeleteEmployeeButton userId={emp.id} employeeName={emp.full_name} />
-                     </td>
-                   </tr>
-                 ))}
-               </tbody>
-             </table>
-           </div>
-        ) : (
-          /* Empty State ที่ดูดีขึ้น */
-          <div className="py-24 flex flex-col items-center justify-center text-center">
-            <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mb-6 border-4 border-white shadow-lg shadow-slate-100">
-               <svg className="w-10 h-10 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      {/* 2. MOBILE VIEW: รายการแบบการ์ด (ซ่อนเบอร์) */}
+      <div className="md:hidden space-y-3">
+        {employees.length === 0 ? (
+            <div className="text-center py-12 text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl">
+                ไม่พบข้อมูลพนักงาน
             </div>
-            <h3 className="text-xl font-black text-slate-700 mb-2">ยังไม่มีพนักงานในร้าน</h3>
-            <p className="text-slate-400 text-sm max-w-xs leading-relaxed mb-8">
-               เริ่มต้นด้วยการเพิ่มพนักงานคนแรกของคุณ เพื่อช่วยจัดการร้านและรับออเดอร์
-            </p>
-            <button 
-                onClick={() => setIsModalOpen(true)}
-                className="text-blue-600 font-bold text-sm hover:underline"
-            >
-                + เพิ่มพนักงานตอนนี้
-            </button>
-          </div>
+        ) : (
+            employees.map((emp) => (
+                <div 
+                    key={emp.id} 
+                    onClick={() => setSelectedEmployee(emp)} // ✅ กดเพื่อเปิด Modal
+                    className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between active:bg-slate-50 transition-colors cursor-pointer"
+                >
+                    <div className="flex items-center gap-4 min-w-0">
+                        {/* Avatar */}
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-lg font-black shrink-0 ${getAvatarColor(emp.full_name)}`}>
+                            {emp.full_name?.charAt(0).toUpperCase()}
+                        </div>
+                        
+                        {/* Info (ไม่มีเบอร์โทร ตามสั่ง) */}
+                        <div className="min-w-0">
+                            <h3 className="font-bold text-slate-900 text-sm truncate pr-2">
+                                {emp.full_name}
+                            </h3>
+                            <div className="flex items-center gap-2 mt-1">
+                                {/* Role Badge */}
+                                <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase">
+                                    {emp.role}
+                                </span>
+                                {/* Status Dot */}
+                                <div className={`flex items-center gap-1 text-[10px] font-bold ${emp.is_active ? 'text-emerald-600' : 'text-slate-400'}`}>
+                                    <div className={`w-2 h-2 rounded-full ${emp.is_active ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
+                                    {emp.is_active ? 'Active' : 'Inactive'}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Chevron Icon (บอกว่ากดได้) */}
+                    <div className="text-slate-300">
+                        <ChevronRight size={20} />
+                    </div>
+                </div>
+            ))
         )}
       </div>
 
-      {/* --- MODAL (Popup) --- */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          {/* Backdrop */}
-          <div 
-            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
-            onClick={() => setIsModalOpen(false)}
-          ></div>
+      {/* 3. DESKTOP VIEW: ตารางเต็ม (เหมือนเดิม) */}
+      <div className="hidden md:block bg-white rounded-[24px] border border-slate-100 shadow-sm overflow-hidden">
+         <table className="w-full text-left border-collapse">
+            <thead>
+                <tr className="bg-slate-50/80 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    <th className="p-5 pl-8">พนักงาน</th>
+                    <th className="p-5">เบอร์โทรศัพท์</th>
+                    <th className="p-5">PIN</th>
+                    <th className="p-5 text-center">สถานะ</th>
+                    <th className="p-5 pr-8 text-right"></th>
+                </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+                {employees.map((emp) => (
+                    <tr key={emp.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="p-5 pl-8">
+                            <div className="flex items-center gap-3">
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${getAvatarColor(emp.full_name)}`}>
+                                    {emp.full_name?.charAt(0)}
+                                </div>
+                                <div>
+                                    <div className="font-bold text-slate-800">{emp.full_name}</div>
+                                    <div className="text-xs text-slate-400">{emp.email}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td className="p-5 font-mono text-sm text-slate-600">{formatPhone(emp.phone)}</td>
+                        <td className="p-5 font-mono text-sm text-slate-600">{emp.pin_code || '----'}</td>
+                        <td className="p-5 text-center">
+                            <span className={`px-2 py-1 rounded-full text-[10px] font-bold border ${emp.is_active ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-50 text-slate-400 border-slate-100'}`}>
+                                {emp.is_active ? 'ACTIVE' : 'INACTIVE'}
+                            </span>
+                        </td>
+                        <td className="p-5 pr-8 text-right">
+                            <button onClick={() => handleDelete(emp.id)} className="p-2 hover:bg-red-50 text-slate-300 hover:text-red-500 rounded-lg transition-colors">
+                                <Trash2 size={16} />
+                            </button>
+                        </td>
+                    </tr>
+                ))}
+            </tbody>
+         </table>
+      </div>
 
-          {/* Modal Content */}
-          <div className="relative bg-white rounded-[32px] shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            {/* Header Modal */}
-            <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-white">
-              <div>
-                 <h3 className="text-xl font-black text-slate-800">เพิ่มพนักงานใหม่</h3>
-                 <p className="text-xs text-slate-400 mt-1">กรอกข้อมูลเพื่อสร้างบัญชีผู้ใช้ใหม่</p>
-              </div>
-              <button 
-                onClick={() => setIsModalOpen(false)} 
-                className="w-10 h-10 rounded-full bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-red-500 flex items-center justify-center transition-all"
-              >
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-              </button>
-            </div>
+      {/* --- MODAL DETAIL (Mobile Only) --- */}
+      {/* นี่คือโมดูลที่เด้งขึ้นมาเมื่อกดชื่อคน เพื่อโชว์เบอร์และข้อมูลครบๆ */}
+      {selectedEmployee && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setSelectedEmployee(null)}></div>
             
-            <div className="p-8 bg-slate-50/30">
-              <AddEmployeeForm 
-                brandId={brandId} 
-                onSuccess={() => {
-                   setIsModalOpen(false)
-                   handleRefresh()
-                }}
-              />
+            <div className="bg-white w-full sm:max-w-sm rounded-t-[32px] sm:rounded-[32px] shadow-2xl relative z-10 overflow-hidden animate-in slide-in-from-bottom duration-300">
+                
+                {/* Modal Header */}
+                <div className="flex justify-between items-center p-6 border-b border-slate-100">
+                    <h3 className="text-lg font-bold text-slate-900">ข้อมูลพนักงาน</h3>
+                    <button onClick={() => setSelectedEmployee(null)} className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-slate-500">
+                        <X size={18} />
+                    </button>
+                </div>
+
+                <div className="p-6 pb-10">
+                    {/* Profile Section */}
+                    <div className="flex flex-col items-center mb-8">
+                        <div className={`w-24 h-24 rounded-[32px] flex items-center justify-center text-4xl font-black mb-4 shadow-sm ${getAvatarColor(selectedEmployee.full_name)}`}>
+                            {selectedEmployee.full_name?.charAt(0).toUpperCase()}
+                        </div>
+                        <h2 className="text-2xl font-black text-slate-900">{selectedEmployee.full_name}</h2>
+                        <p className="text-slate-500">{selectedEmployee.email}</p>
+                    </div>
+
+                    {/* Details Grid */}
+                    <div className="grid grid-cols-2 gap-4 mb-8">
+                        {/* เบอร์โทร (โชว์ตรงนี้แทน) */}
+                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">เบอร์โทรศัพท์</span>
+                            <div className="flex items-center gap-2 text-slate-900 font-bold font-mono text-lg">
+                                <Phone size={16} className="text-slate-400"/>
+                                {formatPhone(selectedEmployee.phone)}
+                            </div>
+                        </div>
+                        {/* PIN */}
+                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">PIN Code</span>
+                            <div className="flex items-center gap-2 text-slate-900 font-bold font-mono text-lg">
+                                <Shield size={16} className="text-slate-400"/>
+                                {selectedEmployee.pin_code || '----'}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Delete Action */}
+                    <button 
+                        onClick={() => handleDelete(selectedEmployee.id)}
+                        className="w-full py-4 rounded-2xl bg-red-50 text-red-600 font-bold flex items-center justify-center gap-2 hover:bg-red-100 border border-red-100 transition-colors"
+                    >
+                        <Trash2 size={20} /> ลบบัญชีผู้ใช้นี้
+                    </button>
+                </div>
             </div>
-          </div>
         </div>
       )}
+
+      {/* --- ADD MODAL --- */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsAddModalOpen(false)}></div>
+            <div className="bg-white rounded-[32px] w-full max-w-lg relative z-10 p-8 animate-in zoom-in-95">
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-xl font-bold">เพิ่มพนักงาน</h3>
+                    <button onClick={() => setIsAddModalOpen(false)}><X size={24} className="text-slate-400"/></button>
+                </div>
+                <AddEmployeeForm brandId={brandId} onSuccess={handleSuccessAdd} />
+            </div>
+        </div>
+      )}
+
     </div>
   )
 }

@@ -56,9 +56,12 @@ export default function TableQrModal({ table, brandId, brandSlug, qrLogoUrl, onC
                 
                 {/* Header */}
                 <div className={`p-8 pb-14 text-center relative ${isLocked ? 'bg-red-500' : 'bg-slate-900'}`}>
-                    <button onClick={onClose} className="absolute top-6 right-6 w-10 h-10 bg-white/10 rounded-full flex items-center justify-center text-white hover:bg-white/20 transition-all active:scale-95">
-                        <IconX size={20} />
-                    </button>
+                   <button 
+  onClick={onClose} 
+  className="absolute top-6 right-6 z-50 w-10 h-10 bg-white/10 rounded-full flex items-center justify-center text-white hover:bg-white/20 transition-all active:scale-95"
+>
+  <IconX size={20} />
+</button>
                     <h3 className="text-4xl font-black text-white uppercase mb-1 drop-shadow-sm">โต๊ะ {table.label}</h3>
                     <p className={`${isLocked ? 'text-red-200' : 'text-blue-400'} text-[10px] font-black uppercase tracking-[0.2em]`}>
                         {isLocked ? 'SERVICE UNAVAILABLE' : 'Scan to Order'}

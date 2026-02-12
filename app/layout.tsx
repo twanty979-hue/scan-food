@@ -13,7 +13,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   metadataBase: new URL('https://pos-foodscan.com'),
 
-  title: "POS & FoodScan - ระบบ POS และ FoodScan สแกนสั่งอาหาร",
+  title: "ระบบ POS ร้านอาหาร พร้อม QR Code สแกนสั่งอาหาร | POS FoodScan",
   
   description: "POS FoodScan คือระบบ POS ร้านอาหาร และสแกนสั่งอาหาร QR Code ที่ดีที่สุด ใช้งานง่าย ลดต้นทุน พนักงานไม่ต้องจด เริ่มต้นใช้งานฟรีวันนี้",
 

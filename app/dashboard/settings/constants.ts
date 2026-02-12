@@ -1,75 +1,72 @@
 export const PLANS = {
   free: { 
-    name: 'Starter', 
+    name: 'Free', 
     price: 'ฟรี', 
     period: 'ตลอดชีพ', 
     themes: '2 ธีม', 
-    orders: '30 ออเดอร์/เดือน', 
+    orders: '100 ออเดอร์/เดือน', 
     features: [
-       
       'เลือกได้ 2 ธีม',
-      'รองรับ 30 ออเดอร์/เดือน',
-      
-      
+      'รองรับ 100 ออเดอร์/เดือน',
+      'Dashboard ย้อนหลัง 60 วัน',
     ], 
     color: 'border-slate-200', 
     btnColor: 'bg-slate-100 text-slate-600 hover:bg-slate-200' 
   },
+
   basic: { 
     name: 'Basic', 
     price: '399', 
     period: 'บาท/เดือน', 
-    themes: '10 ธีม', 
+    themes: '4 ธีม', 
     orders: 'ไม่จำกัด', 
     features: [
-    'การจัดโปรโมชั้น',
-      'ออเดอร์ไม่จำกัด', 
-      'สร้างQrCode ไม่จำกัด',
+      'เลือกได้ 4 ธีม',
+      'ออเดอร์ไม่จำกัด',
+      'สร้างQrCode ไม่จำกัด', 
       'คิดเงินได้ไม่จำกัด',
-      'ฟรี 10 ธีม', 
-      
-      
+      'Dashboard ไม่จำกัดย้อนหลัง',
+      'Export รายงาน (Excel)',
     ], 
     color: 'border-blue-200', 
     btnColor: 'bg-blue-600 text-white hover:bg-blue-700' 
   },
+
   pro: { 
     name: 'Pro', 
-    price: '1,299', 
+    price: '699', 
     period: 'บาท/เดือน', 
-    themes: '15 ธีม', 
+    themes: '7 ธีม', 
     orders: 'ไม่จำกัด', 
     features: [
-        'การจัดโปรโมชั้น',
-      'ออเดอร์ไม่จำกัด', 
-      'สร้างQrCode ไม่จำกัด',
+      'เลือกได้ 7 ธีม',
+      'สร้างQrCode ไม่จำกัด', 
       'คิดเงินได้ไม่จำกัด',
-        'เพิ่มพนักงาน แก้ไข',
-      'ระบบจัดการพนักงาน', 
-      'กำหนดสิทธ์พนักงาน', 
-      'เลือกได้ 15 ธีม',
+      'Dashboard ไม่จำกัดย้อนหลัง',
+      'Export รายงาน (Excel)',
+
+      'ระบบพนักงาน',
+      'กำหนดสิทธิ์พนักงาน',
       
     ], 
     color: 'border-indigo-200', 
     btnColor: 'bg-indigo-600 text-white hover:bg-indigo-700' 
   },
+
   ultimate: { 
-    name: 'ULTIMATE', 
+    name: 'Ultimate', 
     price: '1,999', 
     period: 'บาท/เดือน', 
-    themes: '25 ธีม', 
+    themes: '55 ธีม + พรีเมียม', 
     orders: 'ไม่จำกัด', 
     features: [
-        'การจัดโปรโมชั้น',
-      'ออเดอร์ไม่จำกัด', 
-      'สร้างQrCode ไม่จำกัด',
+      'ทุกธีม ',
+      'สิทธิ์ใช้ธีมพรีเมียม',
+      'มีแบบใบเสร็จให้เลือก 5 แบบ',
+      'สร้างQrCode ไม่จำกัด', 
       'คิดเงินได้ไม่จำกัด',
-      'ระบบจัดการพนักงาน', 
-      'เพิ่มพนักงาน แก้ไข',
-      'กำหนดสิทธ์พนักงาน', 
-      'เลือกได้ 30 ธีม',
-      
-      
+      'Dashboard ไม่จำกัดย้อนหลัง',
+      'Export รายงาน (Excel)',
     ], 
     color: 'border-purple-500 shadow-purple-200', 
     btnColor: 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:shadow-lg hover:shadow-purple-500/30', 

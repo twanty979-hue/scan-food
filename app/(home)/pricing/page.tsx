@@ -25,52 +25,55 @@ export default function PricingPage() {
         {/* Pricing Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 items-start">
 
-          {/* 1. STARTER Plan */}
-          <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-lg shadow-slate-200/50 hover:shadow-xl transition-all duration-300 relative group h-full flex flex-col">
+          {/* 1. FREE Plan */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-lg shadow-slate-200/50 hover:shadow-xl transition-all duration-300 relative group h-full flex flex-col">
             <div className="mb-6 text-center">
               <h3 className="text-sm font-bold text-slate-400 tracking-widest uppercase mb-2">STARTER</h3>
               <div className="flex items-center justify-center gap-1 mb-2">
                 <span className="text-4xl font-black text-slate-800">ฟรี</span>
-                <span className="text-sm text-slate-400 font-medium">ตลอดชีพ</span>
               </div>
-              <p className="text-xs text-slate-500">เริ่มต้นใช้งานร้านอาหาร</p>
+              <p className="text-xs text-slate-500">เริ่มต้นใช้งาน</p>
             </div>
             
-            <ul className="space-y-4 mb-8 flex-grow">
+            <ul className="space-y-3 mb-8 flex-grow">
               <li className="flex items-start gap-3 text-sm text-slate-600">
                 <i className="fa-solid fa-check text-slate-400 mt-1"></i>
                 เลือกได้ 2 ธีม
               </li>
               <li className="flex items-start gap-3 text-sm text-slate-600">
                 <i className="fa-solid fa-check text-slate-400 mt-1"></i>
-                รองรับ 30 ออเดอร์/เดือน
+                รองรับ 100 ออเดอร์/เดือน
               </li>
               <li className="flex items-start gap-3 text-sm text-slate-600">
                 <i className="fa-solid fa-check text-slate-400 mt-1"></i>
-                QR Code สั่งอาหาร
+                Dashboard ย้อนหลัง 60 วัน
               </li>
             </ul>
 
             <Link 
               href="/register" 
-              className="w-full block text-center py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-bold hover:border-slate-800 hover:text-slate-800 transition-colors"
+              className="w-full block text-center py-2.5 rounded-xl border-2 border-slate-200 text-slate-600 font-bold hover:border-slate-800 hover:text-slate-800 transition-colors"
             >
-              สมัครฟรี
+              ใช้งานอยู่
             </Link>
           </div>
 
           {/* 2. BASIC Plan */}
-          <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-lg shadow-slate-200/50 hover:shadow-xl transition-all duration-300 h-full flex flex-col">
+          <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-lg shadow-slate-200/50 hover:shadow-xl transition-all duration-300 h-full flex flex-col">
             <div className="mb-6 text-center">
-              <h3 className="text-sm font-bold text-slate-400 tracking-widest uppercase mb-2">BASIC</h3>
+              <h3 className="text-sm font-bold text-blue-500 tracking-widest uppercase mb-2">BASIC</h3>
               <div className="flex items-baseline justify-center gap-1 mb-2">
                 <span className="text-4xl font-black text-slate-800">399</span>
-                <span className="text-sm text-slate-400 font-medium">บาท/เดือน</span>
+                <span className="text-sm text-slate-400 font-medium">บ./เดือน</span>
               </div>
-              <p className="text-xs text-slate-500">สำหรับร้านที่ต้องการขยายยอดขาย</p>
+              <p className="text-xs text-slate-500">สำหรับร้านขนาดเล็ก</p>
             </div>
             
-            <ul className="space-y-4 mb-8 flex-grow">
+            <ul className="space-y-3 mb-8 flex-grow">
+              <li className="flex items-start gap-3 text-sm text-slate-600">
+                <i className="fa-solid fa-check text-blue-500 mt-1"></i>
+                เลือกได้ 4 ธีม
+              </li>
               <li className="flex items-start gap-3 text-sm text-slate-600">
                 <i className="fa-solid fa-check text-blue-500 mt-1"></i>
                 ออเดอร์ไม่จำกัด
@@ -83,108 +86,140 @@ export default function PricingPage() {
                 <i className="fa-solid fa-check text-blue-500 mt-1"></i>
                 คิดเงินได้ไม่จำกัด
               </li>
-               <li className="flex items-start gap-3 text-sm text-slate-600">
+              <li className="flex items-start gap-3 text-sm text-slate-600">
                 <i className="fa-solid fa-check text-blue-500 mt-1"></i>
-                ฟรี 10 ธีม
+                Dashboard ไม่จำกัดย้อนหลัง
               </li>
-               <li className="flex items-start gap-3 text-sm text-slate-600">
+              <li className="flex items-start gap-3 text-sm text-slate-600">
                 <i className="fa-solid fa-check text-blue-500 mt-1"></i>
-                จัดโปรโมชั่น
+                Export รายงาน (Excel)
               </li>
             </ul>
 
             <Link 
               href="/register?plan=basic" 
-              className="w-full block text-center py-3 rounded-xl bg-blue-50 text-blue-600 font-bold hover:bg-blue-100 transition-colors"
+              className="w-full block text-center py-2.5 rounded-xl bg-blue-50 text-blue-600 font-bold hover:bg-blue-100 transition-colors"
             >
-              เลือกแผนนี้
+              เลือกแพ็กเกจนี้
             </Link>
           </div>
 
-          {/* 3. PRO Plan (Highlight) */}
-          <div className="bg-white rounded-3xl p-8 border-2 border-blue-500 shadow-2xl shadow-blue-500/20 relative transform md:-translate-y-4 h-full flex flex-col z-10">
-            {/* Badge */}
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-lg">
-              BEST VALUE
-            </div>
-
-            <div className="mb-6 text-center pt-2">
+          {/* 3. PRO Plan */}
+          <div className="bg-white rounded-3xl p-6 border border-blue-200 shadow-lg shadow-blue-200/50 hover:shadow-xl transition-all duration-300 h-full flex flex-col">
+            <div className="mb-6 text-center">
               <h3 className="text-sm font-bold text-blue-600 tracking-widest uppercase mb-2">PRO</h3>
               <div className="flex items-baseline justify-center gap-1 mb-2">
-                <span className="text-5xl font-black text-slate-800">1,299</span>
-                <span className="text-sm text-slate-400 font-medium">บาท/เดือน</span>
+                <span className="text-4xl font-black text-slate-800">699</span>
+                <span className="text-sm text-slate-400 font-medium">บ./เดือน</span>
               </div>
-              <p className="text-xs text-slate-500">สำหรับร้านที่ต้องการระบบจัดการครบวงจร</p>
+              <p className="text-xs text-slate-500">สำหรับร้านที่ต้องการระบบพนักงาน</p>
             </div>
             
-            <ul className="space-y-4 mb-8 flex-grow">
-               <li className="flex items-start gap-3 text-sm font-medium text-slate-700">
-                <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                   <i className="fa-solid fa-check text-blue-600 text-xs"></i>
-                </div>
-                ทุกฟีเจอร์ใน Basic
+            <ul className="space-y-3 mb-8 flex-grow">
+               <li className="flex items-start gap-3 text-sm text-slate-600">
+                <i className="fa-solid fa-check text-blue-600 mt-1"></i>
+                เลือกได้ 7 ธีม
               </li>
               <li className="flex items-start gap-3 text-sm text-slate-600">
-                 <i className="fa-solid fa-check text-blue-500 mt-1"></i>
-                ระบบจัดการพนักงาน
+                <i className="fa-solid fa-check text-blue-600 mt-1"></i>
+                สร้าง QR Code ไม่จำกัด
               </li>
               <li className="flex items-start gap-3 text-sm text-slate-600">
-                 <i className="fa-solid fa-check text-blue-500 mt-1"></i>
+                <i className="fa-solid fa-check text-blue-600 mt-1"></i>
+                คิดเงินได้ไม่จำกัด
+              </li>
+               <li className="flex items-start gap-3 text-sm text-slate-600">
+                <i className="fa-solid fa-check text-blue-600 mt-1"></i>
+                 Dashboard ไม่จำกัดย้อนหลัง
+              </li>
+              <li className="flex items-start gap-3 text-sm text-slate-600">
+                <i className="fa-solid fa-check text-blue-600 mt-1"></i>
+                 Export รายงาน (Excel)
+              </li>
+              <li className="flex items-start gap-3 text-sm font-medium text-blue-700">
+                 <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                    <i className="fa-solid fa-check text-blue-600 text-xs"></i>
+                 </div>
+                ระบบพนักงาน
+              </li>
+              <li className="flex items-start gap-3 text-sm font-medium text-blue-700">
+                 <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                    <i className="fa-solid fa-check text-blue-600 text-xs"></i>
+                 </div>
                 กำหนดสิทธิ์พนักงาน
-              </li>
-              <li className="flex items-start gap-3 text-sm text-slate-600">
-                 <i className="fa-solid fa-check text-blue-500 mt-1"></i>
-                เลือกได้ 15 ธีม
               </li>
             </ul>
 
             <Link 
               href="/register?plan=pro" 
-              className="w-full block text-center py-3.5 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all hover:scale-[1.02]"
+              className="w-full block text-center py-2.5 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-colors"
             >
-              แนะนำ
+              เลือกแพ็กเกจนี้
             </Link>
           </div>
 
-          {/* 4. ULTIMATE Plan */}
-          <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-lg shadow-purple-200/50 hover:shadow-xl transition-all duration-300 h-full flex flex-col">
-            <div className="mb-6 text-center">
+          {/* 4. ULTIMATE Plan (Best Seller) */}
+          <div className="bg-white rounded-3xl p-6 border-2 border-purple-500 shadow-2xl shadow-purple-500/20 relative transform md:-translate-y-4 h-full flex flex-col z-10">
+             {/* Badge */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-purple-600 to-pink-600 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-lg whitespace-nowrap">
+              ขายดีที่สุด
+            </div>
+
+            <div className="mb-6 text-center pt-2">
               <h3 className="text-sm font-bold text-purple-600 tracking-widest uppercase mb-2">ULTIMATE</h3>
               <div className="flex items-baseline justify-center gap-1 mb-2">
                 <span className="text-4xl font-black text-slate-800">1,999</span>
-                <span className="text-sm text-slate-400 font-medium">บาท/เดือน</span>
+                <span className="text-sm text-slate-400 font-medium">บ./เดือน</span>
               </div>
               <p className="text-xs text-slate-500">จัดเต็มทุกฟีเจอร์สูงสุด</p>
             </div>
             
-            <ul className="space-y-4 mb-8 flex-grow">
+            <ul className="space-y-3 mb-8 flex-grow">
                <li className="flex items-start gap-3 text-sm font-medium text-slate-700">
                 <div className="w-5 h-5 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
                    <i className="fa-solid fa-check text-purple-600 text-xs"></i>
                 </div>
-                ทุกฟีเจอร์ใน Pro
+                ทุกธีม
+              </li>
+              <li className="flex items-start gap-3 text-sm font-medium text-slate-700">
+                <div className="w-5 h-5 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
+                   <i className="fa-solid fa-check text-purple-600 text-xs"></i>
+                </div>
+                สิทธิ์ใช้ธีมพรีเมียม
               </li>
               <li className="flex items-start gap-3 text-sm text-slate-600">
                 <i className="fa-solid fa-check text-purple-500 mt-1"></i>
-                เลือกได้ 30 ธีม
+                มีแบบใบเสร็จให้เลือก 5 แบบ
               </li>
               <li className="flex items-start gap-3 text-sm text-slate-600">
                 <i className="fa-solid fa-check text-purple-500 mt-1"></i>
-                ทีมซัพพอร์ตดูแลพิเศษ
+                สร้าง QR Code ไม่จำกัด
+              </li>
+              <li className="flex items-start gap-3 text-sm text-slate-600">
+                <i className="fa-solid fa-check text-purple-500 mt-1"></i>
+                คิดเงินได้ไม่จำกัด
+              </li>
+              <li className="flex items-start gap-3 text-sm text-slate-600">
+                <i className="fa-solid fa-check text-purple-500 mt-1"></i>
+                Dashboard ไม่จำกัดย้อนหลัง
+              </li>
+              <li className="flex items-start gap-3 text-sm text-slate-600">
+                <i className="fa-solid fa-check text-purple-500 mt-1"></i>
+                Export รายงาน (Excel)
               </li>
             </ul>
 
             <Link 
               href="/register?plan=ultimate" 
-              className="w-full block text-center py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-500 text-white font-bold hover:from-purple-700 hover:to-pink-600 shadow-lg shadow-purple-500/30 transition-all"
+              className="w-full block text-center py-3.5 rounded-xl bg-gradient-to-r from-purple-600 to-pink-500 text-white font-bold hover:from-purple-700 hover:to-pink-600 shadow-lg shadow-purple-500/30 transition-all hover:scale-[1.02]"
             >
-              เลือกแผนนี้
+              เลือกแพ็กเกจนี้
             </Link>
           </div>
 
         </div>
 
-        {/* FAQ or Contact Link (Optional) */}
+        {/* FAQ or Contact Link */}
         <div className="mt-16 text-center">
           <p className="text-slate-500">
             มีคำถามเพิ่มเติม? <Link href="/contact" className="text-blue-600 font-bold hover:underline">ติดต่อทีมขายของเรา</Link>

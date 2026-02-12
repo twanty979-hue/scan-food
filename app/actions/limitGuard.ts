@@ -6,7 +6,7 @@ import { cookies } from 'next/headers';
 import dayjs from 'dayjs';
 
 // 🔧 CONFIG: ตั้งค่าจำนวนออเดอร์ฟรีตรงนี้ที่เดียว (แก้เป็น 30 เมื่อเทสเสร็จนะครับ)
-const MAX_FREE_ORDERS = 30; 
+const MAX_FREE_ORDERS = 100; 
 
 // Helper สร้าง Supabase
 async function getSupabase() {

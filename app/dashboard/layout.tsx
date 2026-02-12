@@ -68,22 +68,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   
   // ✅ ตรวจสอบ Plan: เป็น Pro/Ultimate หรือไม่
   const isPremium = ['pro', 'ultimate'].includes(brand?.plan);
+  
 
   const navItems = [
-    { name: 'Dashboard', href: '/dashboard', icon: Icondashboard, ownerOnly: true },
-    { name: 'ส่วนลด/โปรฯ', href: '/dashboard/discounts', icon: IconTag, ownerOnly: true },
-    { name: 'เมนูอาหาร', href: '/dashboard/products', icon: IconPlusSquare, ownerOnly: true },
-    { name: 'ใบเส็จย้อนหลัง', href: '/dashboard/receipts', icon: IconHistory, ownerOnly: true },
-    { name: 'ตั้งค่าร้าน', href: '/dashboard/settings', icon: IconSettings, ownerOnly: true },
-
-    // 🔥 เมนูพนักงาน: ซ่อนถ้า (ไม่ใช่เจ้าของ) AND (ร้านไม่ใช่ Premium)
-    { 
-        name: '--- พนักงาน ---', 
-        href: '#', 
-        icon: null, 
-        separator: true, 
-        hidden: !isOwner && !isPremium 
-    },
     { 
         name: 'คิดเงิน (POS)', 
         href: '/dashboard/pai_order', 
@@ -96,6 +83,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         icon: IconChef,
         hidden: !isOwner && !isPremium
     },
+// 🔥 เมนูพนักงาน: ซ่อนถ้า (ไม่ใช่เจ้าของ) AND (ร้านไม่ใช่ Premium)
+    { 
+        name: '--- จัดการร้าน ---', 
+        href: '#', 
+        icon: null, 
+        separator: true, 
+        hidden: !isOwner && !isPremium 
+    },
+    { name: 'Dashboard', href: '/dashboard', icon: Icondashboard, ownerOnly: true },
+    { name: 'ส่วนลด/โปรฯ', href: '/dashboard/discounts', icon: IconTag, ownerOnly: true },
+    { name: 'เมนูอาหาร', href: '/dashboard/products', icon: IconPlusSquare, ownerOnly: true },
+    { name: 'ใบเส็จย้อนหลัง', href: '/dashboard/receipts', icon: IconHistory, ownerOnly: true },
+    { name: 'ตั้งค่าร้าน', href: '/dashboard/settings', icon: IconSettings, ownerOnly: true },
+
+    
+    
     
     { name: '--- จัดการธีม ---', href: '#', icon: null, separator: true },
     { name: 'เลือกธีมร้าน', href: '/dashboard/theme', icon: IconPalette, isMagic: true }, 

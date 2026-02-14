@@ -27,8 +27,8 @@ const supabaseAdmin = createClient(
 
 const BASE_PRICES: Record<string, number> = {
   free: 0,
-  basic: 39900, 
-  pro: 129900, 
+  basic: 25000, 
+  pro: 48900, 
   ultimate: 199900 
 };
 

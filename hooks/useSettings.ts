@@ -163,7 +163,7 @@ export function useSettings() {
     const handleUpgradePlan = async (newPlan: string, method: 'credit_card' | 'promptpay') => {
         if (!isOwner || !brandId) return;
         
-        const basePrices: Record<string, number> = { free: 0, basic: 39900, pro: 129900, ultimate: 199900 };
+        const basePrices: Record<string, number> = { free: 0, basic: 25000, pro: 48900, ultimate: 199900 };
         let amount = basePrices[newPlan] || 0;
 
         if (period === 'yearly') {

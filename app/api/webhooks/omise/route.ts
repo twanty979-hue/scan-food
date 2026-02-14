@@ -31,6 +31,18 @@ function calculateEffectivePlan(brand: any) {
     return 'free';
 }
 
+async function markAsProcessed(chargeId: string, metadata: any) {
+    try {
+        await new Promise((resolve) => {
+            omise.charges.update(chargeId, {
+                metadata: { ...metadata, is_processed: 'true' }
+            } as any, resolve);
+        });
+    } catch (omiseError) {
+        console.error('⚠️ Failed to update Omise metadata:', omiseError);
+    }
+}
+
 // ----------------------------------------------------------------------
 // ⚡ MAIN WEBHOOK LOGIC
 // ----------------------------------------------------------------------
@@ -42,14 +54,13 @@ export async function POST(req: NextRequest) {
         if (event.key === 'charge.complete') {
             const rawCharge = event.data;
 
-            // ⚠️ ใช้ SERVICE_ROLE_KEY
+            // ⚠️ เชื่อมต่อ Database ด้วย Service Role
             const supabaseAdmin = createClient(
                 process.env.SUPABASE_URL!,
                 process.env.SUPABASE_SERVICE_ROLE_KEY!
             );
 
-            // 🛑 เช็คก่อนเลย: "รายการนี้ Frontend ทำไปหรือยัง?"
-            // ถ้าสถานะใน DB เป็น successful แล้ว แปลว่าหน้าเว็บทำเสร็จแล้ว -> Webhook จบงานได้เลย
+            // 🛑 เช็คความปลอดภัย 1: หน้าบ้านทำไปหรือยัง?
             const { data: existingLog } = await supabaseAdmin
                 .from('payment_logs')
                 .select('status')
@@ -57,15 +68,10 @@ export async function POST(req: NextRequest) {
                 .single();
 
             if (existingLog?.status === 'successful') {
-                console.log(`✨ Skipped: Charge ${rawCharge.id} was already handled by Frontend.`);
-                return NextResponse.json({ message: 'Skipped (Already Success)' });
+                return NextResponse.json({ message: 'Skipped (Already Success by Frontend)' });
             }
 
-            // --------------------------------------------------------------
-            // ถ้ายังไม่เสร็จ (เช่น ลูกค้าปิดจอหนี) -> Webhook ค่อยทำงานต่อจากตรงนี้
-            // --------------------------------------------------------------
-
-            // 1. ตรวจสอบสถานะกับ Omise อีกครั้ง
+            // ดึงข้อมูลล่าสุดจาก Omise
             const charge = await new Promise<any>((resolve, reject) => {
                 omise.charges.retrieve(rawCharge.id, (err, resp) => {
                     if (err) reject(err);
@@ -73,78 +79,77 @@ export async function POST(req: NextRequest) {
                 });
             });
 
-            // อัปเดต Log
-            await supabaseAdmin.from('payment_logs').update({
-                status: charge.status,
-                error_message: charge.failure_message || null
-            }).eq('charge_id', charge.id);
-
-            if (charge.status !== 'successful') {
-                return NextResponse.json({ message: 'Charge failed (Logged)' });
-            }
-
             const metadata = charge.metadata || {};
-            if (metadata.is_processed === 'true') {
-                return NextResponse.json({ message: 'Already processed' });
-            }
 
             // =================================================================
-            // CASE 1: UPGRADE PLAN
+            // 🔵 CASE 2: BUY THEME (ซื้อธีม)
             // =================================================================
-            if (metadata.type === 'upgrade_plan' && metadata.brand_id) {
-                const { brand_id, new_plan, period } = metadata;
-                const { data: brand } = await supabaseAdmin.from('brands').select('*').eq('id', brand_id).single();
-                if (!brand) throw new Error(`Brand ID ${brand_id} not found`);
+            if (metadata.type === 'buy_theme' && metadata.brand_id && metadata.theme_id) {
 
-                let updateData: any = { updated_at: new Date().toISOString() };
-                if (new_plan === 'basic') updateData.expiry_basic = calculateNewExpiryForTier(brand.expiry_basic, period);
-                else if (new_plan === 'pro') updateData.expiry_pro = calculateNewExpiryForTier(brand.expiry_pro, period);
-                else if (new_plan === 'ultimate') updateData.expiry_ultimate = calculateNewExpiryForTier(brand.expiry_ultimate, period);
+                // 🛑 Final Race Condition Check (เช็คป้าย processed จากหน้าบ้าน)
+                const freshCharge = await new Promise<any>((resolve) => {
+                    omise.charges.retrieve(rawCharge.id, (err, resp) => resolve(resp || {}));
+                });
 
-                await supabaseAdmin.from('brands').update(updateData).eq('id', brand_id);
-                
-                const { data: updatedBrand } = await supabaseAdmin.from('brands').select('*').eq('id', brand_id).single();
-                const effectivePlan = calculateEffectivePlan(updatedBrand);
-                await supabaseAdmin.from('brands').update({ plan: effectivePlan }).eq('id', brand_id);
+                if (freshCharge?.metadata?.is_processed === 'true') {
+                    return NextResponse.json({ message: 'Skipped (Race Condition)' });
+                }
 
-                await markAsProcessed(charge.id, metadata);
-            }
+                const { brand_id, theme_id, plan } = metadata;
 
-            // =================================================================
-            // CASE 2: BUY THEME (Logic คำนวณวัน)
-            // =================================================================
-            else if (metadata.type === 'buy_theme' && metadata.brand_id && metadata.theme_id) {
+                // --- 🧠 CALCULATOR LOGIC ---
+                let daysToAdd = 30; 
+                let finalPurchaseType = plan || 'monthly';
 
-                const { brand_id, theme_id, plan } = metadata; 
-                
-                // ดึงข้อมูลเดิม (Top-up)
+                switch (plan) {
+                    case 'weekly':
+                        daysToAdd = 7;
+                        break;
+                    case 'monthly':
+                        daysToAdd = 30;
+                        break;
+                    case 'yearly':
+                        daysToAdd = 365;
+                        break;
+                    default:
+                        // 🚨 เจอแล้ว! รหัสลับสำหรับตรวจบั๊ก (15 วัน)
+                        daysToAdd = 15; 
+                        finalPurchaseType = 'unknown_plan_fallback'; 
+                        break;
+                }
+
+                // --- 📝 LOGGING TO DATABASE (บันทึกลง payment_logs) ---
+                await supabaseAdmin.from('payment_logs').upsert({
+                    brand_id: brand_id,
+                    charge_id: charge.id,
+                    amount: charge.amount, // สตางค์
+                    currency: charge.currency,
+                    status: charge.status,
+                    payment_method: charge.source?.type || 'credit_card',
+                    type: 'buy_theme',
+                    plan_detail: theme_id,
+                    period: finalPurchaseType,
+                    error_message: charge.failure_message || null
+                }, { onConflict: 'charge_id' });
+
+                if (charge.status !== 'successful') {
+                    return NextResponse.json({ message: 'Charge failed' });
+                }
+
+                // --- 🚀 UPDATE THEME EXPIRY ---
                 const { data: existing } = await supabaseAdmin
                     .from('themes')
-                    .select('expires_at, purchase_type')
+                    .select('expires_at')
                     .eq('brand_id', brand_id)
                     .eq('marketplace_theme_id', theme_id)
                     .single();
 
-                if (existing?.purchase_type === 'lifetime') {
-                    await markAsProcessed(charge.id, metadata);
-                    return NextResponse.json({ message: 'Lifetime preserved' });
-                }
-
-                // คำนวณวัน
                 const now = dayjs();
-                let baseDate = now;
-                if (existing?.expires_at && dayjs(existing.expires_at).isAfter(now)) {
-                    baseDate = dayjs(existing.expires_at);
-                }
+                let baseDate = (existing?.expires_at && dayjs(existing.expires_at).isAfter(now)) 
+                    ? dayjs(existing.expires_at) 
+                    : now;
 
-                let daysToAdd = 30; // Default
-                // ✅ ใช้ plan จาก metadata ชัวร์ๆ
-                if (plan === 'weekly') daysToAdd = 7;
-                else if (plan === 'monthly') daysToAdd = 30;
-                else if (plan === 'yearly') daysToAdd = 365;
-                
                 const finalExpiresAt = baseDate.add(daysToAdd, 'day').toISOString();
-                const finalPurchaseType = plan || 'monthly'; 
 
                 await supabaseAdmin.from('themes').upsert({
                     brand_id: brand_id,
@@ -154,8 +159,47 @@ export async function POST(req: NextRequest) {
                     updated_at: new Date().toISOString()
                 }, { onConflict: 'brand_id, marketplace_theme_id' });
 
-                console.log(`✅ Webhook Theme: Added ${daysToAdd} days`);
+                console.log(`✅ Webhook Theme Success: Plan=${finalPurchaseType}, Added=${daysToAdd} days`);
                 await markAsProcessed(charge.id, metadata);
+            }
+
+            // =================================================================
+            // 🟢 CASE 1: UPGRADE PLAN (สมัครสมาชิกร้านค้า)
+            // =================================================================
+            else if (metadata.type === 'upgrade_plan' && metadata.brand_id) {
+                const { brand_id, new_plan, period } = metadata;
+
+                // บันทึก Log สำหรับ Upgrade Plan
+                await supabaseAdmin.from('payment_logs').upsert({
+                    brand_id: brand_id,
+                    charge_id: charge.id,
+                    amount: charge.amount,
+                    currency: charge.currency,
+                    status: charge.status,
+                    payment_method: charge.source?.type || 'credit_card',
+                    type: 'upgrade_plan',
+                    plan_detail: new_plan,
+                    period: period,
+                    error_message: charge.failure_message || null
+                }, { onConflict: 'charge_id' });
+
+                if (charge.status !== 'successful') return NextResponse.json({ message: 'Failed' });
+
+                const { data: brand } = await supabaseAdmin.from('brands').select('*').eq('id', brand_id).single();
+                if (brand) {
+                    let updateData: any = { updated_at: new Date().toISOString() };
+                    if (new_plan === 'basic') updateData.expiry_basic = calculateNewExpiryForTier(brand.expiry_basic, period);
+                    else if (new_plan === 'pro') updateData.expiry_pro = calculateNewExpiryForTier(brand.expiry_pro, period);
+                    else if (new_plan === 'ultimate') updateData.expiry_ultimate = calculateNewExpiryForTier(brand.expiry_ultimate, period);
+
+                    await supabaseAdmin.from('brands').update(updateData).eq('id', brand_id);
+                    
+                    const { data: updatedBrand } = await supabaseAdmin.from('brands').select('*').eq('id', brand_id).single();
+                    const effectivePlan = calculateEffectivePlan(updatedBrand);
+                    await supabaseAdmin.from('brands').update({ plan: effectivePlan }).eq('id', brand_id);
+
+                    await markAsProcessed(charge.id, metadata);
+                }
             }
         }
 
@@ -164,17 +208,5 @@ export async function POST(req: NextRequest) {
     } catch (error: any) {
         console.error('❌ Webhook Error:', error.message);
         return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-}
-
-async function markAsProcessed(chargeId: string, metadata: any) {
-    try {
-        await new Promise((resolve) => {
-            omise.charges.update(chargeId, {
-                metadata: { ...metadata, is_processed: 'true' }
-            } as any, resolve);
-        });
-    } catch (omiseError) {
-        console.error('⚠️ Failed to update Omise metadata:', omiseError);
     }
 }

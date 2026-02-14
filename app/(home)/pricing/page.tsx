@@ -63,7 +63,7 @@ export default function PricingPage() {
             <div className="mb-6 text-center">
               <h3 className="text-sm font-bold text-blue-500 tracking-widest uppercase mb-2">BASIC</h3>
               <div className="flex items-baseline justify-center gap-1 mb-2">
-                <span className="text-4xl font-black text-slate-800">399</span>
+                <span className="text-4xl font-black text-slate-800">250</span>
                 <span className="text-sm text-slate-400 font-medium">บ./เดือน</span>
               </div>
               <p className="text-xs text-slate-500">สำหรับร้านขนาดเล็ก</p>
@@ -109,7 +109,7 @@ export default function PricingPage() {
             <div className="mb-6 text-center">
               <h3 className="text-sm font-bold text-blue-600 tracking-widest uppercase mb-2">PRO</h3>
               <div className="flex items-baseline justify-center gap-1 mb-2">
-                <span className="text-4xl font-black text-slate-800">699</span>
+                <span className="text-4xl font-black text-slate-800">489</span>
                 <span className="text-sm text-slate-400 font-medium">บ./เดือน</span>
               </div>
               <p className="text-xs text-slate-500">สำหรับร้านที่ต้องการระบบพนักงาน</p>

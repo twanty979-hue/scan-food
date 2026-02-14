@@ -16,7 +16,7 @@ export const PLANS = {
 
   basic: { 
     name: 'Basic', 
-    price: '399', 
+    price: '250', 
     period: 'บาท/เดือน', 
     themes: '4 ธีม', 
     orders: 'ไม่จำกัด', 
@@ -34,7 +34,7 @@ export const PLANS = {
 
   pro: { 
     name: 'Pro', 
-    price: '699', 
+    price: '489', 
     period: 'บาท/เดือน', 
     themes: '7 ธีม', 
     orders: 'ไม่จำกัด', 

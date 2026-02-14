@@ -1,12 +1,15 @@
-// hooks/useThemeDetail.tsx
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+// ✅ Import Type จาก Action เพื่อความชัวร์ (หรือ Hardcode เอาแบบด้านล่างก็ได้)
 import { getThemeDetailAction, installThemeAction } from '@/app/actions/marketplaceDetailActions';
 import { createPromptPayQRCode, checkOmisePaymentStatus } from '@/app/actions/omiseActions';
 import { useRouter, useParams } from 'next/navigation';
 import dayjs from 'dayjs';
 
 const BUCKET_NAME = 'theme-images';
+
+// ✅ สร้าง Type ใหม่สำหรับ 3 แผนนี้เท่านั้น
+type PlanType = 'weekly' | 'monthly' | 'yearly';
 
 export function useThemeDetail() {
     const { id } = useParams();
@@ -18,7 +21,7 @@ export function useThemeDetail() {
     const [userRole, setUserRole] = useState<{ isOwner: boolean }>({ isOwner: false });
     const [ownership, setOwnership] = useState<{
         isOwned: boolean;
-        type: 'monthly' | 'lifetime' | null;
+        type: string | null; // แก้เป็น string เพื่อรองรับ weekly/yearly
         expiresAt: string | null;
         daysLeft: number | null;
         isExpired: boolean;
@@ -30,7 +33,9 @@ export function useThemeDetail() {
     const [viewMode, setViewMode] = useState<'mobile' | 'ipad'>('mobile');
     const [activeImage, setActiveImage] = useState<string | null>(null);
     const [displayImages, setDisplayImages] = useState<string[]>([]);
-    const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'lifetime'>('monthly');
+    
+    // ✅ แก้ State Plan: เริ่มต้นที่ 'monthly' และรองรับ 3 แบบ
+    const [selectedPlan, setSelectedPlan] = useState<PlanType>('monthly');
 
     // Payment State
     const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -38,13 +43,13 @@ export function useThemeDetail() {
     const [chargeId, setChargeId] = useState<string | null>(null);
     const [paymentStatus, setPaymentStatus] = useState<'idle' | 'pending' | 'successful'>('idle');
 
-    // ✅✅ NEW: ระบบ Modal กลางจอ (แทน Alert/Confirm)
+    // Modal State
     const [alertModal, setAlertModal] = useState<{
         isOpen: boolean;
         type: 'success' | 'error' | 'confirm';
         title: string;
         message: string;
-        onConfirm?: () => void; // ฟังก์ชันที่จะทำเมื่อกดปุ่มยืนยัน
+        onConfirm?: () => void;
     }>({ isOpen: false, type: 'success', title: '', message: '' });
 
     // --- Init Data ---
@@ -70,10 +75,6 @@ export function useThemeDetail() {
                         daysLeft: daysLeft,
                         isExpired: isExpired
                     });
-
-                    if (owned.purchase_type === 'monthly' && !isExpired) {
-                        setSelectedPlan('lifetime');
-                    }
                 } else {
                     setOwnership({ isOwned: false, type: null, expiresAt: null, daysLeft: null, isExpired: false });
                 }
@@ -120,33 +121,27 @@ export function useThemeDetail() {
         return () => clearInterval(interval);
     }, [showPaymentModal, chargeId, paymentStatus]);
 
-    // ---------------------------------------------------------
-    // ✅ Logic การติดตั้ง (ใช้ Modal แทน Alert)
-    // ---------------------------------------------------------
     const performInstall = async (verifiedChargeId?: string | null) => {
         setProcessing(true);
-        // ปิด Modal ยืนยันก่อน (ถ้ามี)
         setAlertModal(prev => ({ ...prev, isOpen: false })); 
 
+        // ✅ ส่ง selectedPlan ที่เป็น weekly/monthly/yearly ไป
         const res = await installThemeAction(theme.id, verifiedChargeId || null, selectedPlan);
         
         setProcessing(false);
         setShowPaymentModal(false);
 
         if (res.success) {
-            // 🎉 Success: เปิด Modal สีเขียว
             setAlertModal({
                 isOpen: true,
                 type: 'success',
                 title: 'Installation Successful!',
                 message: 'Your new theme is ready to use.',
                 onConfirm: () => {
-                    // พอกด OK ใน Modal สำเร็จ ให้รีโหลดหน้า
                     window.location.reload();
                 }
             });
         } else {
-            // ❌ Error: เปิด Modal สีแดง
             setAlertModal({
                 isOpen: true,
                 type: 'error',
@@ -157,7 +152,7 @@ export function useThemeDetail() {
         }
     };
 
-    const handleGetTheme = async () => {
+    const handleGetTheme = async (overridePlan?: PlanType) => {
         if (!userRole.isOwner) {
             setAlertModal({
                 isOpen: true, type: 'error', title: 'Access Denied', 
@@ -167,28 +162,30 @@ export function useThemeDetail() {
             return;
         }
 
-        if (ownership.isOwned && ownership.type === 'lifetime') {
-            router.push('/dashboard/theme');
-            return;
-        }
+        // ใช้ plan ที่ส่งมา (จากการกดปุ่ม) หรือใช้ state ปัจจุบัน
+        const planToBuy = overridePlan || selectedPlan;
 
-        const currentPrice = selectedPlan === 'monthly' ? (theme.price_monthly ?? 0) : (theme.price_lifetime ?? 0);
+        // ✅ คำนวณราคาตาม Plan จริงๆ
+        let currentPrice = 0;
+        if (planToBuy === 'weekly') currentPrice = theme.price_weekly ?? 0;
+        else if (planToBuy === 'monthly') currentPrice = theme.price_monthly ?? 0;
+        else if (planToBuy === 'yearly') currentPrice = theme.price_yearly ?? 0;
 
-        // ✅ CASE 1: ของฟรี (Free Theme) -> เปิด Modal ยืนยัน
+        // ถ้าเป็นของฟรี (ราคา 0)
         if (currentPrice === 0) {
             setAlertModal({
                 isOpen: true,
                 type: 'confirm',
                 title: 'Confirm Installation',
                 message: `Install "${theme.name}" for free?`,
-                onConfirm: () => performInstall(null) // ถ้ากด Yes ให้ไปติดตั้ง
+                onConfirm: () => performInstall(null)
             });
             return;
         }
 
-        // ✅ CASE 2: ของเสียเงิน -> เปิด QR Code เลย (ถือว่ากดปุ่มคือยืนยันแล้ว)
         setProcessing(true);
-        const res = await createPromptPayQRCode(currentPrice, theme.id, selectedPlan);
+        // ✅ ส่ง planToBuy ไปสร้าง QR Code
+        const res = await createPromptPayQRCode(currentPrice, theme.id, planToBuy);
 
         if (res.success && res.qrImage) {
             setQrCode(res.qrImage);
@@ -223,7 +220,6 @@ export function useThemeDetail() {
         setPaymentStatus('idle');
     };
 
-    // Helper ปิด Modal ทั่วไป
     const closeAlertModal = () => {
         setAlertModal(prev => ({ ...prev, isOpen: false }));
     };
@@ -234,7 +230,6 @@ export function useThemeDetail() {
         getImageUrl, handleGetTheme, handleShare, router,
         showPaymentModal, qrCode, paymentStatus, closePaymentModal,
         selectedPlan, setSelectedPlan,
-        // ✅ ส่ง Modal State ออกไป
         alertModal, closeAlertModal 
     };
 }

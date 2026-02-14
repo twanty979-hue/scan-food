@@ -90,15 +90,10 @@ export default function ThemeCard({
       <div className="mt-6 w-full max-w-[280px] text-center">
         <h3 className="text-sm font-black text-slate-800 leading-tight uppercase truncate">{mkt.name}</h3>
         
-        {/* Category & Mode Badge */}
-        <div className="flex justify-center items-center gap-2 mt-2 mb-2">
-            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{mkt.marketplace_categories?.name}</span>
-            <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-            <span className="text-[9px] font-mono text-slate-400">{mkt.theme_mode}</span>
-        </div>
+        {/* ❌❌ ลบส่วน Category & Mode Badge ออกแล้วครับ ❌❌ */}
 
-        {/* ✅ 2. แสดงสถานะวันหมดอายุ (ใช้ SVG Icons แทน Emoji) */}
-        <div className="mb-3 h-6 flex items-center justify-center">
+        {/* ✅ 2. แสดงสถานะวันหมดอายุ (เพิ่ม mt-2 เพื่อเว้นระยะจากชื่อให้สวยงาม) */}
+        <div className="mt-2 mb-3 h-6 flex items-center justify-center">
             {daysLeft === 'Lifetime' ? (
                 <span className="inline-flex items-center gap-1.5 text-[10px] font-black text-amber-600 bg-amber-50 px-3 py-0.5 rounded-full border border-amber-100 shadow-sm">
                     <IconCrown size={12} className="stroke-amber-600" /> Lifetime

@@ -11,7 +11,6 @@ export default function MarketplaceCard({ theme, isOwned, getImageUrl, onClick }
     
     // 🎨 ฟังก์ชันเลือกสีป้ายตาม Plan
     const renderTierBadge = () => {
-        // ถ้าเป็นเจ้าของแล้ว ให้ขึ้นว่า OWNED สีเขียวเสมอ
         if (isOwned) {
             return (
                 <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100 shadow-sm">
@@ -22,7 +21,6 @@ export default function MarketplaceCard({ theme, isOwned, getImageUrl, onClick }
 
         const plan = theme.min_plan?.toLowerCase() || 'free';
 
-        // แยกสีตามระดับ Plan
         switch (plan) {
             case 'ultimate':
                 return (
@@ -51,7 +49,7 @@ export default function MarketplaceCard({ theme, isOwned, getImageUrl, onClick }
         }
     };
 
-    // แสดงราคาเสริม (ถ้ามีขายแยก)
+    // แสดงราคาเสริม
     const renderPriceInfo = () => {
         if (isOwned) return null;
 
@@ -73,7 +71,7 @@ export default function MarketplaceCard({ theme, isOwned, getImageUrl, onClick }
             {/* รูปทรงมือถือ */}
             <div className="relative w-full aspect-[9/19.5] transition-all duration-500 group-hover:-translate-y-4 max-w-[200px] md:max-w-[220px] xl:max-w-[280px]">
                 
-                {/* Glow Effect ถ้าเป็นเจ้าของ หรือ Ultimate */}
+                {/* Glow Effect */}
                 {isOwned ? (
                     <div className="absolute inset-0 bg-emerald-500/20 blur-3xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500 translate-y-10 scale-90"></div>
                 ) : theme.min_plan === 'ultimate' ? (
@@ -93,7 +91,7 @@ export default function MarketplaceCard({ theme, isOwned, getImageUrl, onClick }
                         {/* Image */}
                         <img src={getImageUrl(theme.image_url)} loading="lazy" className="w-full h-full object-cover object-top transition-transform duration-[2s] ease-out group-hover:scale-110 opacity-90 group-hover:opacity-100" alt={theme.name} />
                         
-                        {/* Overlay: View Details */}
+                        {/* Overlay */}
                         {!isOwned && (
                             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center backdrop-blur-[2px] z-30">
                                 <div className="bg-white px-4 py-2 rounded-full font-bold text-xs shadow-lg transform scale-90 group-hover:scale-100 transition-transform">
@@ -102,7 +100,7 @@ export default function MarketplaceCard({ theme, isOwned, getImageUrl, onClick }
                             </div>
                         )}
 
-                         {/* Icon Check ถ้าเป็นเจ้าของ */}
+                         {/* Icon Check */}
                          {isOwned && (
                              <div className="absolute top-4 right-4 z-30 bg-emerald-500 text-white p-1.5 rounded-full shadow-lg border-2 border-[#363535]">
                                 <IconCheck size={12} className="stroke-[4px]" />
@@ -118,19 +116,14 @@ export default function MarketplaceCard({ theme, isOwned, getImageUrl, onClick }
             <div className="mt-6 w-full max-w-[280px] text-center">
                 <h3 className="text-sm font-black text-slate-800 leading-tight uppercase truncate">{theme.name}</h3>
                 
-                {/* Category & Mode Badge */}
-                <div className="flex justify-center items-center gap-2 mt-2 mb-2">
-                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{theme.marketplace_categories?.name || 'Theme'}</span>
-                    <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-                    <span className="text-[9px] font-mono text-slate-400">{theme.theme_mode}</span>
-                </div>
+                {/* ❌❌ ลบส่วนแสดง Category & Mode ออกไปแล้วครับ ❌❌ */}
 
-                {/* ✅✅ ป้าย Plan Badge (มาแล้วครับ!) */}
-                <div className="mb-2 h-6 flex items-center justify-center">
+                {/* ✅✅ ป้าย Plan Badge (ขยับระยะห่างนิดหน่อยให้สวยงาม) */}
+                <div className="mt-2 mb-2 h-6 flex items-center justify-center">
                     {renderTierBadge()}
                 </div>
                 
-                {/* แสดงราคาตัวเล็กๆ ด้านล่าง (ถ้ามี) */}
+                {/* ราคาเสริม */}
                 {renderPriceInfo()}
                 
                 {/* ปุ่มกด */}

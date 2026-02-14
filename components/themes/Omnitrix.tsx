@@ -217,8 +217,9 @@ export default function App({ state, actions, helpers }: any) {
             
             /* Omnitrix Hourglass Shape Helper */
             .hourglass-clip {
-                clip-path: polygon(0 0, 100% 0, 50% 50%, 100% 100%, 0 100%, 50% 50%);
-            }
+    /* รูปหกเหลี่ยมแนวตั้ง */
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+}
         `}</style>
 
         {/* --- Header (Omnitrix Watch Face) --- */}
@@ -230,10 +231,10 @@ export default function App({ state, actions, helpers }: any) {
                  <div>
                      <div className="flex items-center gap-2 mb-2 bg-lime-900/30 w-fit px-4 py-1.5 rounded-full border border-lime-500/50">
                          <span className="w-2 h-2 rounded-full bg-lime-400 animate-pulse shadow-[0_0_5px_#84cc16]"></span>
-                         <p className="text-lime-300 text-[10px] font-bold tracking-widest hero-font">DNA LOADED</p>
+                         <p className="text-lime-300 text-[10px] font-bold tracking-widest hero-font">DATA LOADED</p>
                      </div>
                      <h1 className="text-3xl font-black tracking-tight leading-none mt-1 drop-shadow-[0_0_10px_rgba(132,204,22,0.8)] hero-font italic">
-                         HERO TIME!
+                         SYSTEM READY!
                      </h1>
                  </div>
                  
@@ -260,7 +261,7 @@ export default function App({ state, actions, helpers }: any) {
                             <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
                             <div className="absolute bottom-4 left-4">
                                 <div className="px-4 py-1.5 bg-lime-600 text-black text-[10px] font-black uppercase tracking-widest rounded-full hero-font shadow-[0_0_10px_#84cc16]">
-                                    ALIEN OF THE WEEK
+                                   SPECIAL MENU
                                 </div>
                             </div>
                         </div>

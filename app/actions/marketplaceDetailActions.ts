@@ -74,7 +74,6 @@ export async function getThemeDetailAction(themeId: string) {
 
 // ------------------------------------------------------------------
 // ✅ Action 2: installThemeAction (ตัวแก้หลัก: ซื้อ 7 ได้ 7, ซื้อ 30 ได้ 30)
-// ------------------------------------------------------------------
 export async function installThemeAction(marketplaceThemeId: string, chargeId: string | null, plan: 'weekly' | 'monthly' | 'yearly') {
     const supabase = await getSupabase();
     try {
@@ -92,10 +91,6 @@ export async function installThemeAction(marketplaceThemeId: string, chargeId: s
         const currentBrandPlan = calculateEffectivePlan(brand);
         const hasRightAccess = canAccessTheme(currentBrandPlan, themeData.min_plan);
 
-        // =============================================================
-        // 🧠 LOGIC การคำนวณวันหมดอายุ (แก้ไขแล้ว)
-        // =============================================================
-        
         let finalPurchaseType = '';
         let finalExpiresAt = '';
 
@@ -104,59 +99,69 @@ export async function installThemeAction(marketplaceThemeId: string, chargeId: s
             const charge = await omise.charges.retrieve(chargeId);
             if (charge.status !== 'successful') throw new Error("Payment failed");
 
-            // 🛑 เช็คดัก: ถ้า Webhook (Vercel/Omise) แย่งทำไปแล้ว เราไม่ต้องทำซ้ำ!
+            // 🛑 1. เช็คดัก Webhook
             if (charge.metadata?.is_processed === 'true') {
                 console.log("✅ Already processed by Webhook. Skipping.");
                 return { success: true };
             }
 
-            // บันทึก Type ตามที่ลูกค้าเลือกจริง
-            finalPurchaseType = plan || 'monthly';
+            // 🛡️ [จุดเพิ่มใหม่] 2. เช็ค Log ถ้าค่า plan ที่ส่งมาจากหน้าบ้านหายไป
+            let finalPlan = plan; 
+            if (!finalPlan) {
+                console.log("🕵️ Plan parameter missing, checking payment_logs...");
+                const { data: fallbackLog } = await supabase.from('payment_logs')
+                    .select('period')
+                    .eq('charge_id', chargeId)
+                    .single();
+                
+                if (fallbackLog?.period) {
+                    finalPlan = fallbackLog.period as any;
+                    console.log(`✅ Recovered plan [${finalPlan}] from logs.`);
+                }
+            }
 
-            // ดึงวันหมดอายุเดิมมาเช็ค (เผื่อลูกค้า Top-up เติมวัน)
+            finalPurchaseType = finalPlan || 'monthly';
+
             const now = dayjs();
             let baseDate = now;
-            const { data: existingTheme } = await supabase.from('themes').select('expires_at').eq('brand_id', brandId).eq('marketplace_theme_id', marketplaceThemeId).single();
+            const { data: existingTheme } = await supabase.from('themes').select('expires_at')
+                .eq('brand_id', brandId).eq('marketplace_theme_id', marketplaceThemeId).single();
             
             if (existingTheme?.expires_at && dayjs(existingTheme.expires_at).isAfter(now)) {
                 baseDate = dayjs(existingTheme.expires_at);
             }
 
-            // ✅ จุดแก้สำคัญ: คำนวณวันตาม Plan ที่ส่งมา (ไม่ Hardcode 30 วันแล้ว!)
-            let daysToAdd = 30; // Default fallback
-            switch (plan) {
-                case 'weekly': daysToAdd = 7; break;   // ซื้อ 7 วัน ได้ 7 วัน
-                case 'monthly': daysToAdd = 30; break; // ซื้อ 30 วัน ได้ 30 วัน
-                case 'yearly': daysToAdd = 365; break; // ซื้อ 1 ปี ได้ 365 วัน
-                default: daysToAdd = 30;
+            // 3. คำนวณวัน (ใช้ค่าที่กู้คืนมาได้)
+            let daysToAdd = 18; 
+            switch (finalPlan) {
+                case 'weekly':  daysToAdd = 7; break;
+                case 'monthly': daysToAdd = 30; break;
+                case 'yearly':  daysToAdd = 365; break;
+                default: 
+                    daysToAdd = 18; // 🚨 บัคโชว์เลข 18 ให้เห็นชัดๆ
+                    console.warn("⚠️ System still could not find plan, using debug: 18");
             }
             
             finalExpiresAt = baseDate.add(daysToAdd, 'day').toISOString();
 
-            // 🚀 รีบแปะป้ายจองทันที! (เพื่อบอก Webhook ว่า "กูทำแล้ว มึงห้ามทำซ้ำ")
-            // ทำงานแบบ Fire-and-forget ไม่ต้องรอ response เพื่อความเร็ว
+            // 4. แปะป้ายบอก Webhook ว่าหน้าบ้านทำแล้วนะ
             markOmiseAsProcessed(chargeId, charge.metadata);
-
         } 
-        // 🎁 กรณีที่ 2: "ใช้สิทธิ์ฟรี" (ตาม Plan)
+        // ... (กรณีใช้สิทธิ์ฟรี คงเดิม) ...
         else if (hasRightAccess) {
             finalPurchaseType = 'subscription';
-            // ใช้วันหมดอายุเดียวกับ Plan ของร้านค้า
             if (currentBrandPlan === 'ultimate') finalExpiresAt = brand.expiry_ultimate;
             else if (currentBrandPlan === 'pro') finalExpiresAt = brand.expiry_pro;
             else if (currentBrandPlan === 'basic') finalExpiresAt = brand.expiry_basic;
-            else finalExpiresAt = dayjs().add(30, 'day').toISOString(); // fallback
+            else finalExpiresAt = dayjs().add(30, 'day').toISOString();
         } 
         else {
             throw new Error("Payment required");
         }
 
-        // กันเหนียว: ถ้าไม่มีวันหมดอายุจริงๆ ให้ default 30 วัน
-        if (!finalExpiresAt) {
-            finalExpiresAt = dayjs().add(30, 'day').toISOString();
-        }
+        if (!finalExpiresAt) finalExpiresAt = dayjs().add(30, 'day').toISOString();
 
-        // 4. บันทึก/อัปเดต ลง Database
+        // 5. บันทึก/อัปเดต
         const { error } = await supabase.from('themes').upsert({
             brand_id: brandId,
             marketplace_theme_id: marketplaceThemeId,

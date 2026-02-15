@@ -1,3 +1,4 @@
+// api/webhooks/omise/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import dayjs from 'dayjs';
@@ -81,87 +82,87 @@ export async function POST(req: NextRequest) {
 
             const metadata = charge.metadata || {};
 
-            // =================================================================
-            // 🔵 CASE 2: BUY THEME (ซื้อธีม)
-            // =================================================================
-            if (metadata.type === 'buy_theme' && metadata.brand_id && metadata.theme_id) {
+           // =================================================================
+// 🔵 CASE 2: BUY THEME (ซื้อธีม)
+// =================================================================
+if (metadata.type === 'buy_theme' && metadata.brand_id && metadata.theme_id) {
 
-                // 🛑 Final Race Condition Check (เช็คป้าย processed จากหน้าบ้าน)
-                const freshCharge = await new Promise<any>((resolve) => {
-                    omise.charges.retrieve(rawCharge.id, (err, resp) => resolve(resp || {}));
-                });
+    // 🛑 1. Race Condition Check
+    const freshCharge = await new Promise<any>((resolve) => {
+        omise.charges.retrieve(rawCharge.id, (err, resp) => resolve(resp || {}));
+    });
+    if (freshCharge?.metadata?.is_processed === 'true') {
+        return NextResponse.json({ message: 'Skipped (Already processed)' });
+    }
 
-                if (freshCharge?.metadata?.is_processed === 'true') {
-                    return NextResponse.json({ message: 'Skipped (Race Condition)' });
-                }
+    const { brand_id, theme_id } = metadata;
+    
+    // 🔍 2. พยายามดึงค่า plan จาก Metadata ก่อน
+    let plan = metadata.plan || metadata.period;
 
-                const { brand_id, theme_id, plan } = metadata;
+    // 🛡️ [จุดแก้ให้หายขาด] ถ้าหาจาก Metadata ไม่เจอ ให้ไปขุดจากตาราง payment_logs
+    if (!plan) {
+        console.log(`🕵️ Plan missing in metadata for charge ${rawCharge.id}, searching DB...`);
+        const { data: fallbackLog } = await supabaseAdmin
+            .from('payment_logs')
+            .select('period')
+            .eq('charge_id', rawCharge.id)
+            .single();
 
-                // --- 🧠 CALCULATOR LOGIC ---
-                let daysToAdd = 30; 
-                let finalPurchaseType = plan || 'monthly';
+        if (fallbackLog?.period) {
+            plan = fallbackLog.period;
+            console.log(`✅ Recovered plan [${plan}] from payment_logs table!`);
+        }
+    }
 
-                switch (plan) {
-                    case 'weekly':
-                        daysToAdd = 7;
-                        break;
-                    case 'monthly':
-                        daysToAdd = 30;
-                        break;
-                    case 'yearly':
-                        daysToAdd = 365;
-                        break;
-                    default:
-                        // 🚨 เจอแล้ว! รหัสลับสำหรับตรวจบั๊ก (15 วัน)
-                        daysToAdd = 15; 
-                        finalPurchaseType = 'unknown_plan_fallback'; 
-                        break;
-                }
+    // --- 🧠 CALCULATOR LOGIC ---
+    let daysToAdd = 18; // 🚨 เลขนำโชคสำหรับ Debug ถ้ายังหาไม่เจออีกจริง ๆ
+    let finalPurchaseType = plan || 'unknown_plan_error';
 
-                // --- 📝 LOGGING TO DATABASE (บันทึกลง payment_logs) ---
-                await supabaseAdmin.from('payment_logs').upsert({
-                    brand_id: brand_id,
-                    charge_id: charge.id,
-                    amount: charge.amount, // สตางค์
-                    currency: charge.currency,
-                    status: charge.status,
-                    payment_method: charge.source?.type || 'credit_card',
-                    type: 'buy_theme',
-                    plan_detail: theme_id,
-                    period: finalPurchaseType,
-                    error_message: charge.failure_message || null
-                }, { onConflict: 'charge_id' });
+    switch (plan) {
+        case 'weekly':  daysToAdd = 7; break;
+        case 'monthly': daysToAdd = 30; break;
+        case 'yearly':  daysToAdd = 365; break;
+        default:
+            daysToAdd = 18; // ถ้าหลุดมานี่คือพังจริงๆ ทั้ง Meta และ DB
+            console.error(`❌ Still could not determine plan for ${rawCharge.id}`);
+    }
 
-                if (charge.status !== 'successful') {
-                    return NextResponse.json({ message: 'Charge failed' });
-                }
+    // --- 📝 บันทึกข้อมูลกลับลง Log (Update Status) ---
+    await supabaseAdmin.from('payment_logs').upsert({
+        brand_id: brand_id,
+        charge_id: charge.id,
+        amount: charge.amount,
+        status: charge.status,
+        payment_method: charge.source?.type || 'credit_card',
+        type: 'buy_theme',
+        plan_detail: theme_id,
+        period: plan, // บันทึกค่าที่กู้คืนมาได้ลงไปใน Log ด้วย
+    }, { onConflict: 'charge_id' });
 
-                // --- 🚀 UPDATE THEME EXPIRY ---
-                const { data: existing } = await supabaseAdmin
-                    .from('themes')
-                    .select('expires_at')
-                    .eq('brand_id', brand_id)
-                    .eq('marketplace_theme_id', theme_id)
-                    .single();
+    if (charge.status !== 'successful') return NextResponse.json({ message: 'Failed' });
 
-                const now = dayjs();
-                let baseDate = (existing?.expires_at && dayjs(existing.expires_at).isAfter(now)) 
-                    ? dayjs(existing.expires_at) 
-                    : now;
+    // --- 🚀 UPDATE THEME EXPIRY ---
+    // (ส่วนนี้ใช้ daysToAdd ที่คำนวณมาได้ ไปบวกวันตามปกติเหมือนเดิม)
+    const { data: existing } = await supabaseAdmin.from('themes').select('expires_at')
+        .eq('brand_id', brand_id).eq('marketplace_theme_id', theme_id).single();
 
-                const finalExpiresAt = baseDate.add(daysToAdd, 'day').toISOString();
+    const now = dayjs();
+    let baseDate = (existing?.expires_at && dayjs(existing.expires_at).isAfter(now)) 
+        ? dayjs(existing.expires_at) : now;
 
-                await supabaseAdmin.from('themes').upsert({
-                    brand_id: brand_id,
-                    marketplace_theme_id: theme_id,
-                    purchase_type: finalPurchaseType, 
-                    expires_at: finalExpiresAt,
-                    updated_at: new Date().toISOString()
-                }, { onConflict: 'brand_id, marketplace_theme_id' });
+    const finalExpiresAt = baseDate.add(daysToAdd, 'day').toISOString();
 
-                console.log(`✅ Webhook Theme Success: Plan=${finalPurchaseType}, Added=${daysToAdd} days`);
-                await markAsProcessed(charge.id, metadata);
-            }
+    await supabaseAdmin.from('themes').upsert({
+        brand_id: brand_id,
+        marketplace_theme_id: theme_id,
+        purchase_type: finalPurchaseType, 
+        expires_at: finalExpiresAt,
+        updated_at: new Date().toISOString()
+    }, { onConflict: 'brand_id, marketplace_theme_id' });
+
+    await markAsProcessed(charge.id, metadata);
+}
 
             // =================================================================
             // 🟢 CASE 1: UPGRADE PLAN (สมัครสมาชิกร้านค้า)

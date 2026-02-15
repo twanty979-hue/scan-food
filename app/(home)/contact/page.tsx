@@ -52,7 +52,7 @@ export default function ContactPage() {
               </div>
               
               <h2 className="text-3xl font-extrabold text-slate-800 tracking-tight">
-                คุณวรธน นามทอง
+                คุณวรธน นำทอง
               </h2>
               <div className="mt-3 inline-flex items-center space-x-2 bg-blue-100/50 px-4 py-1.5 rounded-full border border-blue-200">
                 <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
@@ -104,7 +104,7 @@ export default function ContactPage() {
                   <div className="ml-6 flex-1">
                     <p className="text-xs text-blue-500 font-bold uppercase tracking-wide mb-1">Facebook ส่วนตัว</p>
                     <p className="text-slate-800 font-bold text-xl group-hover:text-[#1877F2] transition-colors">
-                      วรธน นามทอง
+                      วรธน นำทอง
                     </p>
                   </div>
                   <div className="text-slate-300 group-hover:text-blue-500 transition-colors">➔</div>

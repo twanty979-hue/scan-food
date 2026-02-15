@@ -99,28 +99,33 @@ export async function installThemeAction(marketplaceThemeId: string, chargeId: s
             const charge = await omise.charges.retrieve(chargeId);
             if (charge.status !== 'successful') throw new Error("Payment failed");
 
-            // 🛑 1. เช็คดัก Webhook
+            // 🛑 1. เช็คดัก Webhook (ถ้าทำไปแล้วก็จบ)
             if (charge.metadata?.is_processed === 'true') {
                 console.log("✅ Already processed by Webhook. Skipping.");
                 return { success: true };
             }
 
-            // 🛡️ [จุดเพิ่มใหม่] 2. เช็ค Log ถ้าค่า plan ที่ส่งมาจากหน้าบ้านหายไป
+            // 🛡️ 2. [แก้ตรงนี้!] บังคับเช็ค Log เสมอ (Override Frontend Data)
+            // เราจะไม่ใช้ค่า 'plan' ที่ส่งมาจากหน้าบ้านเลย ถ้ามี Log ให้ใช้จาก Log เท่านั้น!
             let finalPlan = plan; 
-            if (!finalPlan) {
-                console.log("🕵️ Plan parameter missing, checking payment_logs...");
-                const { data: fallbackLog } = await supabase.from('payment_logs')
-                    .select('period')
-                    .eq('charge_id', chargeId)
-                    .single();
-                
-                if (fallbackLog?.period) {
-                    finalPlan = fallbackLog.period as any;
-                    console.log(`✅ Recovered plan [${finalPlan}] from logs.`);
-                }
+            
+            console.log(`🕵️ Verifying plan from DB for charge: ${chargeId}`);
+            const { data: verifiedLog } = await supabase.from('payment_logs')
+                .select('period')
+                .eq('charge_id', chargeId)
+                .single();
+            
+            if (verifiedLog?.period) {
+                finalPlan = verifiedLog.period as any;
+                console.log(`✅ TRUSTED SOURCE: Using plan from payment_logs -> [${finalPlan}]`);
+            } else {
+                console.warn("⚠️ Warning: No log found, falling back to frontend param (Risky)");
             }
 
-            finalPurchaseType = finalPlan || 'monthly';
+            // ❌ Final Check: ต้องมีค่า และต้องไม่ใช่ค่ามั่ว
+            if (!finalPlan) throw new Error("Critical: Plan type is missing!");
+
+            finalPurchaseType = finalPlan;
 
             const now = dayjs();
             let baseDate = now;
@@ -131,23 +136,23 @@ export async function installThemeAction(marketplaceThemeId: string, chargeId: s
                 baseDate = dayjs(existingTheme.expires_at);
             }
 
-            // 3. คำนวณวัน (ใช้ค่าที่กู้คืนมาได้)
-            let daysToAdd = 18; 
+            // 3. คำนวณวัน (Strict Mode)
+            let daysToAdd = 0; 
             switch (finalPlan) {
                 case 'weekly':  daysToAdd = 7; break;
                 case 'monthly': daysToAdd = 30; break;
                 case 'yearly':  daysToAdd = 365; break;
                 default: 
-                    daysToAdd = 18; // 🚨 บัคโชว์เลข 18 ให้เห็นชัดๆ
-                    console.warn("⚠️ System still could not find plan, using debug: 18");
+                    throw new Error(`Invalid plan selected: ${finalPlan}`);
             }
             
             finalExpiresAt = baseDate.add(daysToAdd, 'day').toISOString();
 
-            // 4. แปะป้ายบอก Webhook ว่าหน้าบ้านทำแล้วนะ
+            // 4. แปะป้ายบอก Webhook
             markOmiseAsProcessed(chargeId, charge.metadata);
         } 
-        // ... (กรณีใช้สิทธิ์ฟรี คงเดิม) ...
+        
+        // ... (Logic ของฟรี/สมาชิก เหมือนเดิม) ...
         else if (hasRightAccess) {
             finalPurchaseType = 'subscription';
             if (currentBrandPlan === 'ultimate') finalExpiresAt = brand.expiry_ultimate;
@@ -159,9 +164,9 @@ export async function installThemeAction(marketplaceThemeId: string, chargeId: s
             throw new Error("Payment required");
         }
 
-        if (!finalExpiresAt) finalExpiresAt = dayjs().add(30, 'day').toISOString();
+        if (!finalExpiresAt) throw new Error("Failed to calculate expiration date");
 
-        // 5. บันทึก/อัปเดต
+        // 5. บันทึก (สังเกต purchase_type จะใช้ finalPlan ที่ดึงจาก Log แล้ว)
         const { error } = await supabase.from('themes').upsert({
             brand_id: brandId,
             marketplace_theme_id: marketplaceThemeId,

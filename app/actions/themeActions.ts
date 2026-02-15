@@ -42,38 +42,43 @@ function calculateEffectivePlan(brand: any) {
 // ----------------------------------------------------------------------
 // ✅ HELPER: ระบบ Sync Themes แบบ Smart Merge (คงเดิม 100%)
 // ----------------------------------------------------------------------
-export async function syncThemesWithPlan(supabase: any, brandId: string, plan: string, planExpiry: string | null) {
-    // 1. กำหนดสิทธิ์ Tier (เหมือนเดิม)
+export async function syncThemesWithPlan(
+    supabase: any, 
+    brandId: string, 
+    plan: string, 
+    planExpiry: string | null,
+    periodToAdd?: 'monthly' | 'yearly',
+    chargeIdForCheck?: string // 🆕 เพิ่ม: ส่ง Charge ID มาเช็คเพื่อความชัวร์ (ถ้ามี)
+) {
+    let verifiedPeriodToAdd = periodToAdd;
+    
+    if (chargeIdForCheck) {
+        const { data: log } = await supabase
+            .from('payment_logs')
+            .select('period')
+            .eq('charge_id', chargeIdForCheck)
+            .single();
+            
+        if (log?.period) {
+            verifiedPeriodToAdd = log.period; // ยึดค่าจาก Log เป็นหลัก
+            console.log(`🛡️ [ThemeSync] Double-checked Log: Using period '${verifiedPeriodToAdd}'`);
+        }
+    }
+    // 1. กำหนดสิทธิ์ Tier
     let allowedTiers: string[] = [];
     if (plan === 'free') allowedTiers = ['free'];
     else if (plan === 'basic') allowedTiers = ['free', 'basic'];
     else if (plan === 'pro') allowedTiers = ['free', 'basic', 'pro'];
     else if (plan === 'ultimate') allowedTiers = ['free', 'basic', 'pro', 'ultimate'];
 
-    // 2. ดึง ID ธีมที่อนุญาต (เพิ่ม is_free_with_plan = true เพื่อดึงเฉพาะของแถม)
-    const { data: allowedThemes } = await supabase
-        .from('marketplace_themes')
-        .select('id')
-        .in('min_plan', allowedTiers)
-        .eq('is_active', true)
-        .eq('is_free_with_plan', true); 
-
+    // 2. ดึง ID ธีมที่แถมฟรี
+    const { data: allowedThemes } = await supabase.from('marketplace_themes').select('id').in('min_plan', allowedTiers).eq('is_active', true).eq('is_free_with_plan', true);
     const allowedIds = allowedThemes?.map((t: any) => t.id) || [];
 
-    // --- PHASE A: ล้างบาง (Delete) ---
-    // ลบเฉพาะที่เป็น 'subscription' (ของแถม) ที่ไม่อยู่ในรายการ allowedIds แล้ว
-    // ✅ ของที่ซื้อแยก (weekly/monthly) จะไม่ถูกลบ เพราะ purchase_type ไม่ตรงเงื่อนไข
-    let deleteQuery = supabase.from('themes')
-        .delete()
-        .eq('brand_id', brandId)
-        .eq('purchase_type', 'subscription'); 
-
-    if (allowedIds.length > 0) {
-        deleteQuery = deleteQuery.not('marketplace_theme_id', 'in', `(${allowedIds.join(',')})`);
-    }
+    let deleteQuery = supabase.from('themes').delete().eq('brand_id', brandId).eq('purchase_type', 'subscription');
+    if (allowedIds.length > 0) deleteQuery = deleteQuery.not('marketplace_theme_id', 'in', `(${allowedIds.join(',')})`);
     await deleteQuery;
 
-    // --- PHASE B: เติมของ/อัปเดต (Upsert) ---
     if (allowedIds.length > 0) {
         const { data: existingThemes } = await supabase
             .from('themes')
@@ -86,26 +91,29 @@ export async function syncThemesWithPlan(supabase: any, brandId: string, plan: s
 
         const records = allowedIds.map((id: string) => {
             const existing = existingMap.get(id);
-            
-            // ค่า Default สำหรับของใหม่ (คือ Subscription ตาม Plan)
             let finalPurchaseType = 'subscription'; 
             let finalExpiresAt = planExpiry; 
 
             if (existing) {
-                // 🛑 CHECKPOINT สำคัญ: เช็คก่อนว่าเป็นของที่ "ซื้อแยก" มาหรือเปล่า?
-                if (['weekly', 'monthly', 'yearly'].includes(existing.purchase_type)) {
-                     // ✅ ถ้าซื้อแยกมา:
-                     // 1. ให้คงสถานะ Type เดิมไว้ (เช่น weekly)
-                     finalPurchaseType = existing.purchase_type;
-                     
-                     // 2. ใช้วันหมดอายุเดิมใน DB เท่านั้น!! (ห้ามเอา planExpiry ไปทับ)
-                     // เพราะการบวกลบวัน (25+7 หรือ 30+7) ต้องทำจบไปแล้วตั้งแต่ตอนกดซื้อ/อัปเกรด
-                     // หน้าที่ตรงนี้คือ "แสดงผลตามจริง" ห้ามไปแก้ของเขา
-                     finalExpiresAt = existing.expires_at; 
-                } 
-                else {
-                    // ✅ ถ้าเป็น Subscription (ของแถม) อยู่แล้ว:
-                    // ให้ Sync วันตาม Plan ปัจจุบัน (เช่น Plan ยืด อายุธีมก็ยืดตาม)
+                const now = dayjs();
+                const existingExpiry = existing.expires_at ? dayjs(existing.expires_at) : now;
+                const isPaidType = ['weekly', 'monthly', 'yearly'].includes(existing.purchase_type);
+
+                if (isPaidType) {
+                    finalPurchaseType = existing.purchase_type; 
+                    
+                    // ✅ ใช้ verifiedPeriodToAdd ที่เช็คจาก Log แล้ว
+                    if (verifiedPeriodToAdd) {
+                        const daysToAdd = verifiedPeriodToAdd === 'monthly' ? 30 : 365;
+                        const baseDate = existingExpiry.isAfter(now) ? existingExpiry : now;
+                        finalExpiresAt = baseDate.add(daysToAdd, 'day').toISOString();
+                    } else {
+                        // Logic เดิม (Idle Check)
+                        const planExpDate = planExpiry ? dayjs(planExpiry) : now;
+                        if (planExpDate.isAfter(existingExpiry)) finalExpiresAt = planExpiry;
+                        else finalExpiresAt = existing.expires_at;
+                    }
+                } else {
                     finalPurchaseType = 'subscription';
                     finalExpiresAt = planExpiry;
                 }
@@ -121,10 +129,7 @@ export async function syncThemesWithPlan(supabase: any, brandId: string, plan: s
         });
 
         if (records.length > 0) {
-            await supabase.from('themes').upsert(records, { 
-                onConflict: 'brand_id, marketplace_theme_id',
-                ignoreDuplicates: false 
-            });
+            await supabase.from('themes').upsert(records, { onConflict: 'brand_id, marketplace_theme_id' });
         }
     }
 }

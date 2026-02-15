@@ -231,7 +231,7 @@ export async function upgradeBrandPlanAction(
     else if (effectivePlan === 'pro') activeExpiry = updatedBrand.expiry_pro;
     else if (effectivePlan === 'basic') activeExpiry = updatedBrand.expiry_basic;
 
-    await syncThemesWithPlan(supabase, brandId, effectivePlan, activeExpiry);
+    await syncThemesWithPlan(supabase, brandId, effectivePlan, activeExpiry, period);
 
     return { success: true };
 
@@ -297,72 +297,88 @@ export async function createPromptPayChargeAction(
 export async function checkPaymentStatusAction(
   brandId: string, 
   chargeId: string, 
-  newPlan: string,
-  period: 'monthly' | 'yearly'
+  _unsafeNewPlan: string,
+  _unsafePeriod: 'monthly' | 'yearly'
 ) {
-  // ⚠️ ไม่เรียก getSupabase() เพราะเราจะใช้ supabaseAdmin แทน
-  // เพื่อแก้ปัญหา User ปิดหน้าเว็บ หรือ Session หลุด แล้ว Log ไม่บันทึก
-  
   try {
+      // 1. เช็คสถานะกับ Omise
       const charge = await new Promise<any>((resolve, reject) => {
           omise.charges.retrieve(chargeId, (err, resp) => err ? reject(err) : resolve(resp));
       });
 
       if (charge.status === 'successful') {
-          
-          // 🛡️ เช็คว่า Process ไปหรือยัง
+          // 🛡️ ด่านที่ 1: เช็คจาก Omise Metadata (ถ้า Webhook ทำจบไปแล้ว)
           if (charge.metadata && charge.metadata.is_processed === 'true') {
+              console.log("✅ [Action] Already processed by Webhook (Metadata check)");
               return { status: 'successful' }; 
           }
 
-          // -------------------------------------------------------
-          // ✅ อัปเดต Log เป็น Successful (ใช้ Admin Function)
-          // -------------------------------------------------------
-          await updatePaymentLogStatus(chargeId, 'successful');
+          // 🛡️ ด่านที่ 2: "กุญแจล็อกประตู" (Atomic Lock)
+          // พยายามจองสิทธิ์การบวกวัน โดยเปลี่ยน status จาก 'pending' เป็น 'processing'
+          // ใครมาถึงก่อนได้จองก่อน คนมาทีหลังจะหาแถว 'pending' ไม่เจอ
+          const { data: lockAttempt, error: lockError } = await supabaseAdmin
+              .from('payment_logs')
+              .update({ status: 'processing' })
+              .eq('charge_id', chargeId)
+              .eq('status', 'pending') // <--- หัวใจสำคัญ: ต้องยังเป็น pending เท่านั้น
+              .select();
 
-          // -------------------------------------------------------
-          // ✅ เริ่มกระบวนการอัปเกรด (ใช้ supabaseAdmin ทะลุ RLS)
-          // -------------------------------------------------------
-          
-          // 1. ดึงข้อมูล Brand
-          const { data: brand, error: brandError } = await supabaseAdmin
-              .from('brands')
-              .select('*')
-              .eq('id', brandId)
-              .single();
+          if (lockError || !lockAttempt || lockAttempt.length === 0) {
+              console.log(`🚫 [Action] Blocked! Webhook or other process is already handling this.`);
               
-          if (brandError || !brand) {
-             console.error("Brand not found (Admin Check):", brandError);
-             throw new Error("Brand not found");
+              // เช็คอีกครั้งว่าตอนนี้สถานะใน DB เป็น successful หรือยัง เพื่อแจ้งหน้าจอ
+              const { data: currentStatus } = await supabaseAdmin
+                  .from('payment_logs')
+                  .select('status')
+                  .eq('charge_id', chargeId)
+                  .single();
+                  
+              if (currentStatus?.status === 'successful') return { status: 'successful' };
+              return { status: 'pending' }; 
           }
 
-          // 2. คำนวณวันหมดอายุ
+          // -------------------------------------------------------
+          // 🚀 ถ้าหลุดมาถึงตรงนี้ แปลว่า Action นี้คือ "ผู้ชนะ" และได้รับสิทธิ์จัดการ!
+          // -------------------------------------------------------
+          
+          // ดึงข้อมูลจริงจาก Log (ที่เราล็อกสำเร็จ)
+          const trustedLog = lockAttempt[0]; 
+          const realPlan = trustedLog.plan_detail; 
+          const realPeriod = trustedLog.period as 'monthly' | 'yearly';
+
+          console.log(`✅ [Action] Winner! Processing Plan=${realPlan}, Period=${realPeriod}`);
+
+          // 1. ดึงข้อมูล Brand
+          const { data: brand, error: brandError } = await supabaseAdmin
+              .from('brands').select('*').eq('id', brandId).single();
+              
+          if (brandError || !brand) throw new Error("Brand not found");
+
+          // 2. คำนวณวันหมดอายุใหม่
           let updateData: any = { updated_at: new Date().toISOString() };
+          if (realPlan === 'basic') updateData.expiry_basic = calculateNewExpiryForTier(brand.expiry_basic, realPeriod);
+          else if (realPlan === 'pro') updateData.expiry_pro = calculateNewExpiryForTier(brand.expiry_pro, realPeriod);
+          else if (realPlan === 'ultimate') updateData.expiry_ultimate = calculateNewExpiryForTier(brand.expiry_ultimate, realPeriod);
 
-          if (newPlan === 'basic') updateData.expiry_basic = calculateNewExpiryForTier(brand.expiry_basic, period);
-          else if (newPlan === 'pro') updateData.expiry_pro = calculateNewExpiryForTier(brand.expiry_pro, period);
-          else if (newPlan === 'ultimate') updateData.expiry_ultimate = calculateNewExpiryForTier(brand.expiry_ultimate, period);
-
-          // 3. อัปเดตวันหมดอายุ
+          // 3. บันทึกวันหมดอายุ
           await supabaseAdmin.from('brands').update(updateData).eq('id', brandId);
 
-          // 4. Recalculate & Sync Plan
+          // 4. คำนวณยศใหม่ (Effective Plan)
           const { data: updatedBrand } = await supabaseAdmin.from('brands').select('*').eq('id', brandId).single();
           const effectivePlan = calculateEffectivePlan(updatedBrand);
-          
           await supabaseAdmin.from('brands').update({ plan: effectivePlan }).eq('id', brandId);
 
+          // 5. Sync Themes (ทบวัน)
           let activeExpiry = null;
           if (effectivePlan === 'ultimate') activeExpiry = updatedBrand.expiry_ultimate;
           else if (effectivePlan === 'pro') activeExpiry = updatedBrand.expiry_pro;
           else if (effectivePlan === 'basic') activeExpiry = updatedBrand.expiry_basic;
 
-          // ✅ ส่ง supabaseAdmin เข้าไปใน syncThemes เพื่อให้ทะลุ RLS ในตาราง themes ด้วย
-          await syncThemesWithPlan(supabaseAdmin, brandId, effectivePlan, activeExpiry);
+          await syncThemesWithPlan(supabaseAdmin, brandId, effectivePlan, activeExpiry, realPeriod);
 
-          // -------------------------------------------------------
-          // ✅ Mark processed at Omise
-          // -------------------------------------------------------
+          // 6. อัปเดต Log เป็น Successful และปิดงานที่ Omise
+          await updatePaymentLogStatus(chargeId, 'successful');
+
           await new Promise((resolve) => {
               omise.charges.update(chargeId, {
                 metadata: { ...charge.metadata, is_processed: 'true' }
@@ -372,7 +388,6 @@ export async function checkPaymentStatusAction(
           return { status: 'successful' };
 
       } else if (charge.status === 'failed') {
-          // ❌ ถ้าเช็คแล้วเจอว่า Failed ก็อัปเดต Log ด้วย (ใช้ Admin Function)
           await updatePaymentLogStatus(chargeId, 'failed', charge.failure_message);
           return { status: 'failed' };
       }

@@ -1,10 +1,11 @@
+// app/actions/marketplaceDetailActions.ts
 'use server'
 
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import Omise from 'omise';
 import dayjs from 'dayjs';
-import { canAccessTheme } from '@/lib/planConfig';
+import { canAccessTheme } from '@/lib/planConfig'; // ตรวจสอบ path นี้ว่าถูกต้องนะครับ
 
 const omise = Omise({
     publicKey: process.env.NEXT_PUBLIC_OMISE_PUBLIC_KEY!,
@@ -29,7 +30,7 @@ function calculateEffectivePlan(brand: any) {
 }
 
 // ------------------------------------------------------------------
-// Helper: แปะป้ายบอก Omise ว่า "ทำรายการนี้แล้ว" (เพื่อกัน Webhook ทำซ้ำ)
+// Helper: แปะป้ายบอก Omise ว่า "ทำรายการนี้แล้ว" (กัน Webhook ทำซ้ำ)
 // ------------------------------------------------------------------
 async function markOmiseAsProcessed(chargeId: string, metadata: any) {
     try {
@@ -43,7 +44,7 @@ async function markOmiseAsProcessed(chargeId: string, metadata: any) {
     }
 }
 
-// --- Action 1: getThemeDetailAction ---
+// --- Action 1: getThemeDetailAction (ดึงข้อมูลธีมปกติ) ---
 export async function getThemeDetailAction(themeId: string) {
     try {
         const supabase = await getSupabase();
@@ -72,13 +73,14 @@ export async function getThemeDetailAction(themeId: string) {
 }
 
 // ------------------------------------------------------------------
-// ✅ Action 2: installThemeAction (Logic ใหม่: แย่งกันทำกับ Webhook)
+// ✅ Action 2: installThemeAction (ตัวแก้หลัก: ซื้อ 7 ได้ 7, ซื้อ 30 ได้ 30)
 // ------------------------------------------------------------------
 export async function installThemeAction(marketplaceThemeId: string, chargeId: string | null, plan: 'weekly' | 'monthly' | 'yearly') {
     const supabase = await getSupabase();
     try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error("Unauthorized");
+        
         const { data: profile } = await supabase.from('profiles').select('role, brand_id').eq('id', user.id).single();
         if (!profile?.brand_id || profile.role !== 'owner') throw new Error("Permission denied");
         const brandId = profile.brand_id;
@@ -91,7 +93,7 @@ export async function installThemeAction(marketplaceThemeId: string, chargeId: s
         const hasRightAccess = canAccessTheme(currentBrandPlan, themeData.min_plan);
 
         // =============================================================
-        // 🧠 LOGIC การคำนวณวันหมดอายุ
+        // 🧠 LOGIC การคำนวณวันหมดอายุ (แก้ไขแล้ว)
         // =============================================================
         
         let finalPurchaseType = '';
@@ -102,15 +104,16 @@ export async function installThemeAction(marketplaceThemeId: string, chargeId: s
             const charge = await omise.charges.retrieve(chargeId);
             if (charge.status !== 'successful') throw new Error("Payment failed");
 
-            // 🛑 เช็คดัก: ถ้า Webhook (Vercel) แย่งทำไปแล้ว เราไม่ต้องทำซ้ำ!
+            // 🛑 เช็คดัก: ถ้า Webhook (Vercel/Omise) แย่งทำไปแล้ว เราไม่ต้องทำซ้ำ!
             if (charge.metadata?.is_processed === 'true') {
                 console.log("✅ Already processed by Webhook. Skipping.");
                 return { success: true };
             }
 
+            // บันทึก Type ตามที่ลูกค้าเลือกจริง
             finalPurchaseType = plan || 'monthly';
 
-            // ดึงวันหมดอายุเดิมมาเช็ค (Top-up)
+            // ดึงวันหมดอายุเดิมมาเช็ค (เผื่อลูกค้า Top-up เติมวัน)
             const now = dayjs();
             let baseDate = now;
             const { data: existingTheme } = await supabase.from('themes').select('expires_at').eq('brand_id', brandId).eq('marketplace_theme_id', marketplaceThemeId).single();
@@ -119,39 +122,41 @@ export async function installThemeAction(marketplaceThemeId: string, chargeId: s
                 baseDate = dayjs(existingTheme.expires_at);
             }
 
-            // ✅ คำนวณวัน (Calculator)
-            let daysToAdd = 30; // Default
+            // ✅ จุดแก้สำคัญ: คำนวณวันตาม Plan ที่ส่งมา (ไม่ Hardcode 30 วันแล้ว!)
+            let daysToAdd = 30; // Default fallback
             switch (plan) {
-                case 'weekly': daysToAdd = 7; break;
-                case 'monthly': daysToAdd = 30; break;
-                case 'yearly': daysToAdd = 365; break;
+                case 'weekly': daysToAdd = 7; break;   // ซื้อ 7 วัน ได้ 7 วัน
+                case 'monthly': daysToAdd = 30; break; // ซื้อ 30 วัน ได้ 30 วัน
+                case 'yearly': daysToAdd = 365; break; // ซื้อ 1 ปี ได้ 365 วัน
                 default: daysToAdd = 30;
             }
             
             finalExpiresAt = baseDate.add(daysToAdd, 'day').toISOString();
 
             // 🚀 รีบแปะป้ายจองทันที! (เพื่อบอก Webhook ว่า "กูทำแล้ว มึงห้ามทำซ้ำ")
-            // ทำแบบ Fire-and-forget ไม่ต้องรอ
+            // ทำงานแบบ Fire-and-forget ไม่ต้องรอ response เพื่อความเร็ว
             markOmiseAsProcessed(chargeId, charge.metadata);
 
         } 
-        // 🎁 กรณีที่ 2: "ใช้สิทธิ์ฟรี"
+        // 🎁 กรณีที่ 2: "ใช้สิทธิ์ฟรี" (ตาม Plan)
         else if (hasRightAccess) {
             finalPurchaseType = 'subscription';
+            // ใช้วันหมดอายุเดียวกับ Plan ของร้านค้า
             if (currentBrandPlan === 'ultimate') finalExpiresAt = brand.expiry_ultimate;
             else if (currentBrandPlan === 'pro') finalExpiresAt = brand.expiry_pro;
             else if (currentBrandPlan === 'basic') finalExpiresAt = brand.expiry_basic;
-            else finalExpiresAt = dayjs().add(30, 'day').toISOString();
+            else finalExpiresAt = dayjs().add(30, 'day').toISOString(); // fallback
         } 
         else {
             throw new Error("Payment required");
         }
 
+        // กันเหนียว: ถ้าไม่มีวันหมดอายุจริงๆ ให้ default 30 วัน
         if (!finalExpiresAt) {
             finalExpiresAt = dayjs().add(30, 'day').toISOString();
         }
 
-        // 4. บันทึก
+        // 4. บันทึก/อัปเดต ลง Database
         const { error } = await supabase.from('themes').upsert({
             brand_id: brandId,
             marketplace_theme_id: marketplaceThemeId,

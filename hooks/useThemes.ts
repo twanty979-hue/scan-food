@@ -13,10 +13,9 @@ export function useThemes() {
     const [themes, setThemes] = useState<any[]>([]);
     const [categories, setCategories] = useState<any[]>([]); 
     const [selectedCategory, setSelectedCategory] = useState('ALL'); 
-    
-    // ✅ เพิ่ม State สำหรับกรอง Lifetime
-    const [filterLifetime, setFilterLifetime] = useState(false);
 
+    // ❌ ลบ State filterLifetime ออก
+    
     const [loading, setLoading] = useState(true);
     const [brandId, setBrandId] = useState<string | null>(null);
     const [currentConfig, setCurrentConfig] = useState<{slug: string, mode: string} | null>(null);
@@ -27,19 +26,17 @@ export function useThemes() {
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(15);
 
-    // --- Responsive Items Logic ---
+    // --- Responsive Items Logic (คงเดิม) ---
    useEffect(() => {
         const calculateItemsPerPage = () => {
             const width = window.innerWidth;
-            let columns = 2; // ✅ ตั้งค่าเริ่มต้นเป็น 2 เลย (สำหรับมือถือ)
+            let columns = 2; 
 
-            if (width >= 1280) columns = 5;      // จอใหญ่มาก (5 คอลัมน์)
-            else if (width >= 1024) columns = 4; // จอคอม (4 คอลัมน์)
-            else if (width >= 768) columns = 3;  // ไอแพดแนวนอน (3 คอลัมน์)
-            else columns = 2;                    // ✅ มือถือและไอแพดแนวตั้ง (2 คอลัมน์)
+            if (width >= 1280) columns = 5;      
+            else if (width >= 1024) columns = 4; 
+            else if (width >= 768) columns = 3;  
+            else columns = 2;                    
 
-            // สูตร: จำนวนคอลัมน์ x 3 แถว
-            // มือถือ: 2 x 3 = 6 เครื่องเป๊ะ!
             setItemsPerPage(columns * 3); 
         };
 
@@ -48,7 +45,7 @@ export function useThemes() {
         return () => window.removeEventListener('resize', calculateItemsPerPage);
     }, []);
 
-    // --- Init Data ---
+    // --- Init Data (คงเดิม) ---
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
@@ -67,7 +64,7 @@ export function useThemes() {
         fetchData();
     }, [router]);
 
-    // ✅ Logic กรองข้อมูล (เพิ่ม Lifetime Filter)
+    // ✅ Logic กรองข้อมูล (ตัด Lifetime ออก เหลือแค่ Category)
     const filteredThemes = useMemo(() => {
         let result = themes;
 
@@ -76,42 +73,28 @@ export function useThemes() {
             result = result.filter((t: any) => t.marketplace_themes?.category_id === selectedCategory);
         }
 
-        // 2. กรอง Lifetime (ถ้าเปิด)
-        if (filterLifetime) {
-            result = result.filter((t: any) => t.purchase_type === 'lifetime');
-        }
+        // ❌ ลบ Logic กรอง Lifetime ออก
 
         return result;
-    }, [themes, selectedCategory, filterLifetime]); // เพิ่ม dependency
+    }, [themes, selectedCategory]); // เอา filterLifetime ออกจาก dependency
 
-    // ✅ ฟังก์ชันเปิด/ปิด Lifetime
-    const toggleLifetimeFilter = () => {
-        setFilterLifetime(prev => !prev);
-        setCurrentPage(1); // รีเซ็ตหน้าเมื่อกรอง
-    };
+    // ❌ ลบ toggleLifetimeFilter ออก
 
     const handleCategoryChange = (catId: string) => {
         setSelectedCategory(catId);
         setCurrentPage(1);
     };
 
-    // --- Logic: Apply Theme ---
+    // --- Logic: Apply Theme (คงเดิม) ---
    const handleApplyTheme = async (theme: any) => {
         if (!isOwner) return alert('เฉพาะเจ้าของร้านเท่านั้นที่เปลี่ยนธีมได้');
         
-        // ❌ ลบส่วนนี้ออกครับ
-        // const mkt = theme.marketplace_themes;
-        // const confirmChange = confirm(`ยืนยันการใช้ธีม...`);
-        // if (!confirmChange) return;
-        
-        // ✅ เหลือไว้แค่นี้ (Logic การยิง API ล้วนๆ)
         const mkt = theme.marketplace_themes;
         setApplyingId(theme.id);
         try {
             const res = await applyThemeAction(mkt.slug, mkt.theme_mode);
             if (res.success) {
                 setCurrentConfig({ slug: mkt.slug, mode: mkt.theme_mode });
-                // alert('เปิดใช้งานธีมสำเร็จ!'); // จะลบ alert นี้ออกด้วยก็ได้ถ้าอยากให้ Modal ปิดเองเงียบๆ
             } else {
                 throw new Error(res.error);
             }
@@ -129,7 +112,7 @@ export function useThemes() {
         return supabase.storage.from(BUCKET_NAME).getPublicUrl(filePath).data.publicUrl;
     };
 
-    // --- Pagination ---
+    // --- Pagination (คงเดิม) ---
     const totalPages = Math.ceil(filteredThemes.length / Math.max(1, itemsPerPage));
     const currentThemes = useMemo(() => {
         const start = (currentPage - 1) * itemsPerPage;
@@ -146,6 +129,6 @@ export function useThemes() {
         applyingId, currentThemes, currentPage, totalPages,
         changePage, handleApplyTheme, getImageUrl,
         categories, selectedCategory, handleCategoryChange,
-        filterLifetime, toggleLifetimeFilter // ✅ ส่งค่าใหม่ออกไป
+        // ❌ ไม่ต้อง return filterLifetime, toggleLifetimeFilter แล้ว
     };
 }

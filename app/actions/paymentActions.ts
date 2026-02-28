@@ -140,30 +140,61 @@ export async function getUnpaidOrdersAction(brandId: string) {
     return Object.values(grouped).filter((g: any) => g.order_items.length > 0);
 }
 
-// --- 3. Process Payment (✅ แก้ไขจุดบัคตรงนี้) ---
 export async function processPaymentAction(payload: any) {
     const supabase = await getSupabase();
-    const { brandId, userId, totalAmount, receivedAmount, changeAmount, paymentMethod, type, selectedOrder, cart } = payload;
+    const { brandId, userId, totalAmount, receivedAmount, changeAmount, paymentMethod, type, selectedOrder, cart, paymentTime } = payload;
 
     try {
         await checkOrderLimitOrThrow(brandId);
+
+        // 🚨 1. Time Tampering Check & Sync Gap Fix
+        // ใช้เวลาจากเครื่อง Client ที่ส่งมา (paymentTime) เพื่อให้ยอดขายตรงวัน
+        const saleTime = paymentTime || new Date().toISOString();
+        
+        // กันคนแฮกตั้งเวลา iPad ล่วงหน้าไปอนาคตเพื่อปั่นยอด (ยอมให้เวลาคลาดเคลื่อนได้ไม่เกิน 1 วัน)
+        if (dayjs(saleTime).isAfter(dayjs().add(1, 'day'))) {
+            throw new Error("Time manipulation detected");
+        }
 
         let finalOrderId: any = null;
         let receiptItems: any[] = [];
         let tableLabel = 'Walk-in';
 
+        // 🚨 2. Price Tampering Check (ห้ามเชื่อราคาฝั่ง Client 100%)
+        if (type === 'pos' && cart && cart.length > 0) {
+            // ไปดึงราคาของแท้จากฐานข้อมูล (Server)
+            const productIds = cart.map((c: any) => c.id);
+            const { data: realProducts } = await supabase
+                .from('products')
+                .select('id, price, price_special, price_jumbo')
+                .in('id', productIds);
+
+            // บังคับเปลี่ยนราคาสินค้าในตะกร้าให้ตรงกับ Server ก่อนเซฟ
+            cart.forEach((item: any) => {
+                const realP = realProducts?.find(p => p.id === item.id);
+                if (realP) {
+                    if (item.variant === 'normal') item.price = Number(realP.price);
+                    if (item.variant === 'special') item.price = Number(realP.price_special || realP.price);
+                    if (item.variant === 'jumbo') item.price = Number(realP.price_jumbo || realP.price);
+                }
+            });
+        }
+
         if (type === 'tables' && selectedOrder) {
-            finalOrderId = selectedOrder.id; // ใช้ ID ตัวแทนสักตัวเพื่อผูกกับ pai_orders
+            finalOrderId = selectedOrder.id; 
             tableLabel = selectedOrder.table_label;
             receiptItems = selectedOrder.order_items.filter((i: any) => i.status !== 'cancelled');
         } 
         else {
+            // 🔥 ยัด saleTime เข้าไปใน created_at เพื่อแก้บัคซิงค์ยอดเหลื่อมวัน
             const { data: newOrder, error: orderErr } = await supabase.from('orders').insert({
                 brand_id: brandId, 
                 status: 'paid', 
                 total_price: totalAmount, 
                 table_label: 'Walk-in', 
-                type: 'pos'
+                type: 'pos',
+                created_at: saleTime,  // <--- จุดแก้
+                updated_at: saleTime   // <--- จุดแก้
             }).select().single();
             
             if (orderErr) throw orderErr;
@@ -174,13 +205,14 @@ export async function processPaymentAction(payload: any) {
                 product_id: i.id, 
                 product_name: i.name, 
                 quantity: i.quantity, 
-                price: i.price, 
+                price: i.price, // เป็นราคาที่ถูก Verify แล้วจากด้านบน
                 variant: i.variant,
                 promotion_snapshot: i.promotion_snapshot 
             }));
             await supabase.from('order_items').insert(receiptItems);
         }
 
+        // 🔥 ยัด saleTime เข้าไปใน created_at ด้วย
         const { data: payRecord, error: payError } = await supabase.from('pai_orders').insert({
             order_id: finalOrderId, 
             brand_id: brandId, 
@@ -188,28 +220,35 @@ export async function processPaymentAction(payload: any) {
             received_amount: receivedAmount, 
             change_amount: changeAmount, 
             payment_method: paymentMethod, 
-            cashier_id: userId 
+            cashier_id: userId,
+            created_at: saleTime  // <--- จุดแก้
         }).select().single();
 
         if (payError) throw payError;
 
-        if (type === 'tables') {
-            // ✅✅✅ แก้ไขจุดตาย: เปลี่ยนจากการใช้ .in('id', ...) มาเป็นการอัปเดตทั้งโต๊ะแทน
-            // เพื่อกวาดออเดอร์ทั้งหมดของโต๊ะนี้ที่เป็นสถานะ 'done' ให้กลายเป็น 'paid'
+     if (type === 'tables') {
+            // 🚨 1. แก้ไขตรงนี้: ล็อกเป้าอัปเดตด้วย finalOrderId ตรงๆ เลย ไม่ต้องสนสถานะแล้ว เพราะยังไงก็คือบิลที่เราเพิ่งจ่าย
             await supabase.from('orders')
-                .update({ status: 'paid', payment_id: payRecord.id })
-                .eq('brand_id', brandId)
-                .eq('table_label', selectedOrder.table_label) // หาตามชื่อโต๊ะ
-                .eq('status', 'done'); // เอาเฉพาะที่เสร็จแล้ว (กันพลาดไปโดนตัวที่เพิ่งสั่ง)
+                .update({ 
+                    status: 'paid', 
+                    payment_id: payRecord.id, // 👈 เอา ID ใบเสร็จไปเสียบ
+                    updated_at: saleTime 
+                })
+                .eq('id', finalOrderId); 
             
-            // เคลียร์สถานะโต๊ะให้ว่าง
-            const newToken = Math.random().toString(36).substring(2, 6).toUpperCase();
+            // 🌟 2. ให้เอา Token ที่ POS สุ่มมาให้ ไปบันทึกลง Database ได้เลย
+            const validToken = payload.newAccessToken || Math.random().toString(36).substring(2, 6).toUpperCase();
+            
             await supabase.from('tables')
-                .update({ status: 'available', access_token: newToken })
+                // 🚨 ลบ status: 'available' ออก เพื่อกันบัค Error 400 (Bad Request)
+                .update({ access_token: validToken }) 
                 .eq('brand_id', brandId)
                 .eq('label', selectedOrder.table_label);
+
         } else {
-            await supabase.from('orders').update({ payment_id: payRecord.id }).eq('id', finalOrderId);
+            await supabase.from('orders')
+                .update({ payment_id: payRecord.id })
+                .eq('id', finalOrderId);
         }
 
         return { success: true, payRecord, receiptItems, tableLabel };

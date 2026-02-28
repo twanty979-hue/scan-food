@@ -6,7 +6,6 @@ import dayjs from 'dayjs';
 import { 
     getPaymentInitialDataAction, 
     getUnpaidOrdersAction, 
-    processPaymentAction,
     updateOrderStatusAction,
     getPendingAndPreparingOrdersAction,
     getAllTablesAction, 
@@ -15,9 +14,22 @@ import {
 } from '@/app/actions/paymentActions';
 import { getLatestTableDataAction } from '@/app/actions/tableActions';
 import { getOrderUsage } from '@/app/actions/limitGuard';
+import { db } from '@/lib/db'; 
+
+// ✅ ฟังก์ชันสร้าง UUID แบบปลอดภัย
+const generateUUID = () => {
+    if (typeof window !== 'undefined' && window.crypto && window.crypto.randomUUID) {
+        return window.crypto.randomUUID();
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = (Math.random() * 16) | 0;
+        const v = c === 'x' ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+    });
+};
 
 export function usePayment() {
-    // --- Audio State & Ref (iPad Fix) ---
+    // --- Audio State & Ref ---
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
 
@@ -57,8 +69,6 @@ export function usePayment() {
     const [showTableSelector, setShowTableSelector] = useState(false);
 
     const processedOrdersRef = useRef<Set<string>>(new Set());
-    
-    // ✅ เพิ่ม Ref เพื่อเก็บสถานะล่าสุดของออเดอร์ (แก้ปัญหา Closure ใน setTimeout)
     const unpaidOrdersRef = useRef(unpaidOrders);
 
     // --- Helpers ---
@@ -85,28 +95,24 @@ export function usePayment() {
     }, [brandId]);
 
     // --- Audio Functions ---
-    // ✅ 2. Init Audio
     useEffect(() => {
         if (typeof window !== 'undefined') {
             audioRef.current = new Audio('/sounds/alert.mp3');
         }
     }, []);
 
-    // ✅ 3. ฟังก์ชันปลดล็อก (Unlock Trick)
     const unlockAudio = useCallback(() => {
         if (!audioRef.current) return;
         const audio = audioRef.current;
-        audio.volume = 0.0; // เล่นเสียงเงียบๆ
+        audio.volume = 0.0;
         audio.play().then(() => {
             audio.pause();
             audio.currentTime = 0;
-            audio.volume = 1.0; // คืนค่าความดัง
-            setIsAudioUnlocked(true); // จำว่าปลดแล้ว
-            console.log("🔊 Audio Context Unlocked!");
+            audio.volume = 1.0;
+            setIsAudioUnlocked(true);
         }).catch(e => console.error("Unlock failed:", e));
     }, []);
 
-    // ✅ 4. ฟังก์ชันเล่นเสียงจริง (Play Sound)
     const playSound = useCallback(() => {
         if (!audioRef.current) return;
         const audio = audioRef.current;
@@ -114,12 +120,9 @@ export function usePayment() {
         audio.play().catch(e => console.error("Playback failed:", e));
     }, []);
 
-    // ✅ 5. ฟังก์ชันเปิด Auto Kitchen (ต้องผูกกับปุ่มกด)
     const toggleAutoKitchen = () => {
         const newState = !autoKitchen;
         setAutoKitchen(newState);
-        
-        // 🔥 ถ้าเปิด Auto ให้ถือโอกาสนี้ปลดล็อกเสียงไปด้วยเลย!
         if (newState && !isAudioUnlocked) {
             unlockAudio();
         }
@@ -138,23 +141,55 @@ export function usePayment() {
         }
         
         const init = async () => {
-            const res = await getPaymentInitialDataAction();
-            if (res.success) {
-                setBrandId(res.brandId!);
-                setCurrentUser(res.user);
-                setCurrentProfile(res.profile);
-                setCurrentBrand(res.brand);
-                setCategories(res.categories || []);
-                setProducts(res.products || []);
-                setDiscounts(res.discounts || []);
-                setAllTables(res.tables || []);
-                
-                const usage = await getOrderUsage(res.brandId!);
-                setLimitStatus(usage);
+            try {
+                const res = await getPaymentInitialDataAction();
+                if (res.success) {
+                    setBrandId(res.brandId!);
+                    setCurrentUser(res.user);
+                    setCurrentProfile(res.profile);
+                    setCurrentBrand(res.brand);
+                    setCategories(res.categories || []);
+                    setProducts(res.products || []);
+                    setDiscounts(res.discounts || []);
+                    setAllTables(res.tables || []);
+                    
+                    const discountMappings = (res.discounts || []).flatMap((d: any) => 
+                        (d.discount_products || []).map((dp: any) => ({
+                            discount_id: d.id, product_id: dp.product_id
+                        }))
+                    );
 
-                const orders = await getUnpaidOrdersAction(res.brandId!);
-                setUnpaidOrders(orders);
-                unpaidOrdersRef.current = orders; // Sync Ref
+                    await Promise.all([
+                        db.categories.bulkPut(res.categories || []),
+                        db.products.bulkPut(res.products || []),
+                        db.discounts.bulkPut(res.discounts || []),
+                        db.discount_products.bulkPut(discountMappings)
+                    ]);
+
+                    const usage = await getOrderUsage(res.brandId!);
+                    setLimitStatus(usage);
+
+                    const orders = await getUnpaidOrdersAction(res.brandId!);
+                    const localSyncQueue = await db.sync_queue.toArray();
+                    const paidLocalOrderIds = localSyncQueue
+                        .filter(q => q.type === 'PAYMENT')
+                        .map(q => q.payload.localOrderId);
+
+                    const trulyUnpaidOrders = orders.filter((o: any) => !paidLocalOrderIds.includes(o.id));
+                    setUnpaidOrders(trulyUnpaidOrders);
+                    unpaidOrdersRef.current = trulyUnpaidOrders;
+                } else {
+                    throw new Error("Cannot fetch from cloud"); 
+                }
+            } catch (error) {
+                console.warn("⚠️ Offline Mode: Loading from local Dexie database");
+                const localCats = await db.categories.toArray();
+                const localProds = await db.products.toArray();
+                const localDiscs = await db.discounts.toArray();
+                
+                if (localCats.length > 0) setCategories(localCats);
+                if (localProds.length > 0) setProducts(localProds);
+                if (localDiscs.length > 0) setDiscounts(localDiscs);
             }
             setLoading(false);
         };
@@ -168,43 +203,36 @@ export function usePayment() {
         }
     }, [cart, autoKitchen]);
 
-    // ✅ Sync Ref ทุกครั้งที่ unpaidOrders เปลี่ยน
     useEffect(() => {
         unpaidOrdersRef.current = unpaidOrders;
     }, [unpaidOrders]);
 
     const refreshOrders = useCallback(async () => {
         if (!brandId) return;
-        const orders = await getUnpaidOrdersAction(brandId);
-        setUnpaidOrders(orders);
+        
+        const cloudOrders = await getUnpaidOrdersAction(brandId);
+        const localSyncQueue = await db.sync_queue.toArray();
+        const paidLocalOrderIds = localSyncQueue
+            .filter(q => q.type === 'PAYMENT')
+            .map(q => q.payload.localOrderId); 
+
+        const trulyUnpaidOrders = cloudOrders.filter((order: any) => {
+            return !paidLocalOrderIds.includes(order.id);
+        });
+
+        setUnpaidOrders(trulyUnpaidOrders);
         refreshQuota(); 
     }, [brandId, refreshQuota]);
 
-    // =========================================================================
-    // ✅ 3. Realtime Listener (แก้ใหม่: เช็คสถานะก่อนยิง Done)
-    // =========================================================================
+    // --- Realtime Listener ---
     useEffect(() => {
         if (!brandId) return;
 
         const finishOrder = async (orderId: string) => {
             if (processedOrdersRef.current.has(orderId)) return;
-
-            // 🛑 เช็คสถานะล่าสุดจาก Database ก่อนยิง (กันเหนียวสุดๆ)
-            const { data: currentOrder } = await supabase
-                .from('orders')
-                .select('status')
-                .eq('id', orderId)
-                .single();
-
-            // ถ้าออเดอร์ไม่อยู่แล้ว หรือสถานะเป็น cancelled -> จบข่าว ไม่ต้องทำอะไร
-            if (!currentOrder || currentOrder.status === 'cancelled' || currentOrder.status === 'done') {
-                console.log(`🚫 Auto Skipped: Order ${orderId} is ${currentOrder?.status}`);
-                return;
-            }
-
-            // ถ้าสถานะยังปกติ ค่อยอัปเดตเป็น done
+            const { data: currentOrder } = await supabase.from('orders').select('status').eq('id', orderId).single();
+            if (!currentOrder || currentOrder.status === 'cancelled' || currentOrder.status === 'done') return;
             await updateOrderStatusAction(orderId, 'done');
-            console.log(`🤖 Auto: Done (Finished) ${orderId}`);
             processedOrdersRef.current.add(orderId);
             refreshOrders();
         };
@@ -213,23 +241,15 @@ export function usePayment() {
             if (!autoKitchen) return;
             if (order.status === 'pending') {
                 await updateOrderStatusAction(order.id, 'preparing');
-                console.log(`🤖 Auto: Accepted New Order ${order.id}`);
-                
-                // 🔥 สั่งเล่นเสียงตรงนี้ (iPad จะยอมให้เล่นถ้า unlockAudio ถูกเรียกไปแล้ว)
                 playSound();
-                
                 setTimeout(() => finishOrder(order.id), 5 * 60 * 1000);
             } else if (order.status === 'preparing') {
                 const lastUpdate = dayjs(order.updated_at);
-                const now = dayjs();
-                const diffMins = now.diff(lastUpdate, 'minute', true);
-                console.log(`🤖 Auto: Resuming ${order.id}, Passed: ${diffMins.toFixed(2)} mins`);
+                const diffMins = dayjs().diff(lastUpdate, 'minute', true);
                 if (diffMins >= 5) {
                     finishOrder(order.id);
                 } else {
-                    const remainingMs = (5 - diffMins) * 60 * 1000;
-                    console.log(`🤖 Auto: Waiting remaining ${remainingMs} ms`);
-                    setTimeout(() => finishOrder(order.id), remainingMs);
+                    setTimeout(() => finishOrder(order.id), (5 - diffMins) * 60 * 1000);
                 }
             }
         };
@@ -243,37 +263,18 @@ export function usePayment() {
         const orderChannel = supabase.channel('payment_realtime_orders_v3')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `brand_id=eq.${brandId}` }, 
             (payload) => {
-                console.log('🔔 Order Update:', payload);
-                setTimeout(() => {
-                    refreshOrders();
-                    refreshTables(); 
-                }, 500);
-
+                setTimeout(() => { refreshOrders(); refreshTables(); }, 500);
                 if (autoKitchen && payload.eventType === 'INSERT') {
                     const newOrder = payload.new;
                     if (newOrder.status === 'pending') processOrder(newOrder);
                 }
-            })
-            .subscribe((status) => {
-                 if (status === 'SUBSCRIBED') console.log('✅ Connected to Orders');
-            });
+            }).subscribe();
 
         const tableChannel = supabase.channel('payment_realtime_tables_v3')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'tables', filter: `brand_id=eq.${brandId}` }, 
-            () => {
-                console.log('🪑 Table Update');
-                setTimeout(() => {
-                    refreshTables();
-                }, 500);
-            })
-            .subscribe((status) => {
-                 if (status === 'SUBSCRIBED') console.log('✅ Connected to Tables');
-            });
+            () => { setTimeout(() => refreshTables(), 500); }).subscribe();
 
-        return () => { 
-            supabase.removeChannel(orderChannel); 
-            supabase.removeChannel(tableChannel);
-        };
+        return () => { supabase.removeChannel(orderChannel); supabase.removeChannel(tableChannel); };
     }, [brandId, autoKitchen, refreshOrders, refreshTables, playSound]);
 
     // --- Logic: Pricing ---
@@ -312,22 +313,12 @@ export function usePayment() {
             let final = basePrice;
             if (d.type === 'percentage') final = basePrice - (basePrice * d.value / 100);
             else if (d.type === 'fixed') final = basePrice - d.value;
-            
             final = Math.max(0, final);
-
-            // ✅ เพิ่มบรรทัดนี้: บังคับปัดเศษให้ตกที่ .00, .25, .50, .75 เสมอ
             final = Math.round(final * 4) / 4;
-
-            if (final < bestPrice) {
-                bestPrice = final;
-                bestDiscountObj = d;
-            }
+            if (final < bestPrice) { bestPrice = final; bestDiscountObj = d; }
         });
 
-        return { 
-            original: basePrice, final: bestPrice, discount: basePrice - bestPrice,
-            promoDetails: bestDiscountObj ? { id: bestDiscountObj.id, name: bestDiscountObj.name, type: bestDiscountObj.type, value: bestDiscountObj.value, savedAmount: basePrice - bestPrice } : null
-        };
+        return { original: basePrice, final: bestPrice, discount: basePrice - bestPrice, promoDetails: bestDiscountObj };
     }, [discounts, products]);
 
     // --- Logic: Cart ---
@@ -347,20 +338,62 @@ export function usePayment() {
 
     const removeFromCart = (index: number) => setCart(prev => prev.filter((_, i) => i !== index));
 
-    // --- Logic: Payment ---
     const rawTotal = useMemo(() => activeTab === 'tables' ? (selectedOrder?.total_price || 0) : cart.reduce((s, i) => s + (i.price * i.quantity), 0), [activeTab, selectedOrder, cart]);
     
-    // ✅✅✅ เพิ่มบรรทัดนี้ที่หายไปกลับมาครับ
     const payableAmount = useMemo(() => {
         if (paymentMethod === 'cash') return roundForCash(rawTotal);
         return Number(rawTotal.toFixed(2));
     }, [rawTotal, paymentMethod]);
 
+// =========================================================================
+    // ☁️ Helper: ล้างโต๊ะบน Cloud ทันที (ยิงเฉพาะตอนจ่ายเงินโต๊ะ)
+    // =========================================================================
+    const clearTableOnCloud = async (brandIdStr: string, tableLabelStr: string, newTokenStr: string, payIdStr: string) => {
+        try {
+            const nowIso = dayjs().format();
+            
+            // 1. เปลี่ยนออเดอร์ของโต๊ะนี้เป็น paid
+            // 🚨 เอา payment_id ออก! เพราะใบเสร็จยังไม่ขึ้น Cloud (เดี๋ยวตัวปุ่ม Sync ค่อยเอาไปอัปเดตทีหลัง)
+            const { error: orderErr } = await supabase.from('orders').update({ 
+                status: 'paid',
+                updated_at: nowIso
+            })
+            .eq('brand_id', brandIdStr)
+            .eq('table_label', tableLabelStr)
+            .in('status', ['pending', 'preparing', 'cooking', 'served', 'done']); 
+            
+            if (orderErr) {
+                console.error("❌ ล้างออเดอร์บน Cloud พลาด (409/อื่นๆ):", orderErr.message);
+            }
+
+            // 2. สับเปลี่ยน Token โต๊ะ
+            // 🚨 เอา status: 'available' ออก! เพื่อป้องกัน Error 400 อัปเดตแค่ Token พอ
+            const { error: tableErr } = await supabase.from('tables').update({ 
+                access_token: newTokenStr
+            })
+            .eq('brand_id', brandIdStr)
+            .eq('label', tableLabelStr);
+
+            if (tableErr) {
+                console.error("❌ เปลี่ยนรหัสโต๊ะบน Cloud พลาด (400/อื่นๆ):", tableErr.message);
+            }
+
+            if (!orderErr && !tableErr) {
+                console.log(`🚀 เคลียร์โต๊ะบน Cloud เรียบร้อย: โต๊ะ ${tableLabelStr} (Token ใหม่: ${newTokenStr})`);
+            }
+        } catch (e) {
+            console.error("⚠️ โหลด Cloud ไม่สำเร็จ:", e);
+        }
+    };
+
+    // =========================================================================
+    // 🔥 ระบบชำระเงิน
+    // =========================================================================
     const handlePayment = async () => {
         const safePayable = Number(payableAmount);
         const safeReceived = Number(receivedAmount);
 
-        if (safePayable <= 0) return;
+        if (safePayable < 0) return; 
 
         if (paymentMethod === 'cash' && safeReceived < safePayable) {
             setStatusModal({ show: true, type: 'error', title: 'ยอดเงินไม่พอ', message: 'กรุณารับเงินเพิ่มจากลูกค้า' });
@@ -368,46 +401,99 @@ export function usePayment() {
         }
         
         const change = paymentMethod === 'promptpay' ? 0 : (safeReceived - safePayable);
+        const nowIso = dayjs().format(); 
+        const localPayId = generateUUID(); 
 
-        const payload = {
-            brandId,
-            userId: currentUser?.id,
-            totalAmount: safePayable,
-            receivedAmount: paymentMethod === 'promptpay' ? safePayable : safeReceived,
-            changeAmount: Number(change.toFixed(2)), 
-            paymentMethod,
-            type: activeTab,
-            selectedOrder,
-            cart
+        let finalOrderId = '';
+        let tableLabel = 'Walk-in';
+        let itemsToSave: any[] = [];
+        let orderType = activeTab === 'pos' ? 'pos' : 'table';
+        
+        let newToken: string | null = null; 
+
+        if (activeTab === 'tables' && selectedOrder) {
+            finalOrderId = selectedOrder.id;
+            tableLabel = selectedOrder.table_label;
+            newToken = Math.random().toString(36).substring(2, 6).toUpperCase(); 
+            
+            itemsToSave = selectedOrder.order_items
+                .filter((i: any) => i.status !== 'cancelled')
+                .map((i: any) => ({ ...i, order_id: finalOrderId, updated_at: nowIso }));
+        } else {
+            finalOrderId = generateUUID();
+            itemsToSave = cart.map((i: any) => ({
+                id: generateUUID(), order_id: finalOrderId, product_id: i.id, product_name: i.name,
+                quantity: i.quantity, price: i.price, variant: i.variant, promotion_snapshot: i.promotion_snapshot,
+                status: 'active', created_at: nowIso
+            }));
+        }
+
+        const newOrderData = {
+            id: finalOrderId, brand_id: brandId, status: 'paid', total_price: safePayable,
+            table_label: tableLabel, type: orderType, payment_id: localPayId, created_at: nowIso, updated_at: nowIso
         };
 
-        const res = await processPaymentAction(payload);
+        const paiOrderData = {
+            id: localPayId, order_id: finalOrderId, brand_id: brandId, total_amount: safePayable,
+            received_amount: paymentMethod === 'promptpay' ? safePayable : safeReceived, change_amount: Number(change.toFixed(2)),
+            payment_method: paymentMethod, cashier_id: currentUser?.id, created_at: nowIso
+        };
 
-        if (res.success) {
+        try {
+            // 🌟 1. บันทึกข้อมูลลง IndexedDB เสมอ (รอปุ่ม Sync ทำงานทีหลัง)
+            await db.transaction('rw', 'orders', 'order_items', 'pai_orders', 'sync_queue', async () => {
+                await db.orders.put(newOrderData); 
+                await db.order_items.bulkPut(itemsToSave);
+                await db.pai_orders.put(paiOrderData);
+
+                await db.sync_queue.add({
+                    type: 'PAYMENT',
+                    payload: {
+                        brandId, userId: currentUser?.id, totalAmount: safePayable, receivedAmount: paiOrderData.received_amount,
+                        changeAmount: paiOrderData.change_amount, paymentMethod, type: activeTab,
+                        selectedOrder: activeTab === 'tables' ? selectedOrder : null, cart: activeTab === 'pos' ? cart : [],
+                        localOrderId: finalOrderId, localPayId, tableLabel, paymentTime: nowIso, newAccessToken: newToken 
+                    },
+                    status: 'pending'
+                });
+            });
+
+            console.log("✅ บันทึกลงเครื่องสำเร็จ! (รอคิว Sync)");
+
+            // 🌟 2. ถ้ายืนยันการ "ขายโต๊ะ" (Tables) ให้รีบไปเคลียร์ Cloud ทันที!
+            // หมายเหตุ: ถ้าเป็นโหมด POS เงื่อนไขนี้จะไม่ทำงาน (ประหยัดเซิร์ฟตามที่คุณต้องการ)
+            if (activeTab === 'tables' && selectedOrder && brandId && navigator.onLine) {
+                clearTableOnCloud(brandId, tableLabel, newToken!, localPayId);
+            }
+
+            // 🌟 3. เด้งโชว์ใบเสร็จและรีเซ็ตหน้าจอ
             setCompletedReceipt({
-                id: res.payRecord.id, 
-                created_at: new Date().toISOString(), 
-                total_amount: safePayable,
-                received_amount: payload.receivedAmount, 
-                change_amount: payload.changeAmount, 
-                payment_method: paymentMethod, 
-                cashier: currentProfile, 
-                brand: currentBrand,
-                table_label: res.tableLabel, 
-                items: res.receiptItems
+                id: localPayId, created_at: nowIso, total_amount: safePayable,
+                received_amount: paiOrderData.received_amount, change_amount: paiOrderData.change_amount, 
+                payment_method: paymentMethod, cashier: currentProfile, brand: currentBrand,
+                table_label: tableLabel, items: itemsToSave
             });
 
             setStatusModal({ show: false, type: 'success', title: '', message: '' });
-            setSelectedOrder(null);
             setReceivedAmount(0);
-            setCart([]);
-            localStorage.removeItem('pos_cart');
-            
-            refreshOrders();
-            refreshQuota();
-            refreshTables(); 
-        } else {
-            setStatusModal({ show: true, type: 'error', title: 'ผิดพลาด', message: res.error });
+
+            if (activeTab === 'pos') {
+                setCart([]);
+                localStorage.removeItem('pos_cart');
+            } 
+            else if (activeTab === 'tables' && selectedOrder) {
+                setUnpaidOrders(prev => prev.filter(o => o.table_label !== selectedOrder.table_label));
+                setAllTables(prev => prev.map(t => 
+                    t.label === selectedOrder.table_label 
+                        ? { ...t, status: 'available', access_token: newToken }
+                        : t
+                ));
+                setSelectedOrder(null);
+            }
+
+        } catch (error) {
+            console.error("❌ บันทึกลงเครื่องล้มเหลว:", error);
+            setStatusModal({ show: true, type: 'error', title: 'ข้อผิดพลาดในเครื่อง', message: 'ไม่สามารถบันทึกข้อมูลลงเครื่องได้' });
         }
     };
 
@@ -443,10 +529,9 @@ export function usePayment() {
         handlePayment,
         calculatePrice,
         formatCurrency: (amt: number) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', minimumFractionDigits: 2 }).format(amt || 0),
-        
         refreshTables,
-        toggleAutoKitchen, // ✅ ส่งฟังก์ชันนี้ออกไปแทน setAutoKitchen
-        unlockAudio, // ✅ ส่งฟังก์ชันปลดล็อกออกไป
-        isAudioUnlocked // ✅ ส่งสถานะออกไป
+        toggleAutoKitchen, 
+        unlockAudio, 
+        isAudioUnlocked 
     };
 }

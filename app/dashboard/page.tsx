@@ -1,7 +1,10 @@
+// app/dashboard/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
 import { getDashboardDataAction } from '@/app/actions/dashboardActions';
+import { processPaymentAction } from '@/app/actions/paymentActions'; // ✅ นำเข้า Server Action สำหรับส่งบิลขึ้น Cloud
+import { db } from '@/lib/db'; // ✅ นำเข้า Local DB (IndexedDB)
 import dayjs from 'dayjs';
 import 'dayjs/locale/th';
 import localizedFormat from 'dayjs/plugin/localizedFormat';
@@ -20,6 +23,8 @@ const IconCrown = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="no
 const IconCalendar = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>;
 const IconChevronDown = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>;
 const IconChartLine = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"/></svg>;
+const IconCloudOff = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-600"><path d="M22.61 16.95A5 5 0 0 0 18 10h-1.26a8 8 0 0 0-7.05-6M5 5a8 8 0 0 0 4 15h9a5 5 0 0 0 1.7-.3"/><line x1="1" y1="1" x2="23" y2="23"/></svg>;
+const IconInfo = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>;
 
 export default function DashboardPage() {
     const [viewMode, setViewMode] = useState<string>('month'); 
@@ -42,10 +47,88 @@ export default function DashboardPage() {
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
+    // 🔥 State สำหรับระบบ Sync แบบ Offline-First
+    const [unsyncedQueue, setUnsyncedQueue] = useState<any[]>([]);
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [showSyncBanner, setShowSyncBanner] = useState(false);
+
     useEffect(() => {
         fetchData();
+        checkOfflineData(); // ตรวจสอบบิลที่ค้างในเครื่องทุกครั้งที่เข้ามาหน้านี้
     }, [viewMode, selectedDate]);
 
+    // ==========================================
+    // 🚀 ระบบตรวจจับและดึงคิวจาก IndexedDB
+    // ==========================================
+    const checkOfflineData = async () => {
+        try {
+            const queue = await db.sync_queue.toArray();
+            const pendingPayments = queue.filter(q => q.type === 'PAYMENT' && q.status === 'pending');
+            
+            setUnsyncedQueue(pendingPayments);
+            if (pendingPayments.length > 0) {
+                setShowSyncBanner(true);
+            } else {
+                setShowSyncBanner(false);
+            }
+        } catch (error) {
+            console.error("❌ Error checking offline queue:", error);
+        }
+    };
+
+ // ==========================================
+    // 🚀 ระบบยิงข้อมูลขึ้น Cloud (ก้อนใหญ่ Bundle) + ล้างขยะ
+    // ==========================================
+    const handleSyncNow = async () => {
+        if (unsyncedQueue.length === 0) return;
+        setIsSyncing(true);
+
+        let successCount = 0;
+
+        try {
+            for (const item of unsyncedQueue) {
+                // 1. ส่งขึ้น Cloud
+                const res = await processPaymentAction(item.payload);
+                
+                if (res.success) {
+                    // 2. ถ้ายิงสำเร็จ ลบออกจากคิว
+                    await db.sync_queue.delete(item.id);
+                    
+                    // 🔥 3. ระบบเทศบาล: ล้างข้อมูลออกจากตารางหลักในเครื่องเพื่อคืนพื้นที่ Memory!
+                    const orderId = item.payload.localOrderId;
+                    const payId = item.payload.localPayId;
+
+                    if (orderId && payId) {
+                        await db.transaction('rw', db.orders, db.order_items, db.pai_orders, async () => {
+                            await db.orders.delete(orderId); // ลบหัวบิล
+                            await db.pai_orders.delete(payId); // ลบข้อมูลจ่ายเงิน
+                            await db.order_items.where('order_id').equals(orderId).delete(); // ลบรายการอาหารในบิลนั้นทิ้งทั้งหมด
+                        });
+                    }
+
+                    successCount++;
+                } else {
+                    console.error("❌ Sync Failed for Item:", item.id, res.error);
+                }
+            }
+
+            // สรุปผล
+            if (successCount === unsyncedQueue.length) {
+                setShowSyncBanner(false); 
+            } else {
+                alert(`ซิงค์สำเร็จ ${successCount}/${unsyncedQueue.length} บิล\nบางบิลอาจล้มเหลว กรุณาลองใหม่เมื่ออินเทอร์เน็ตเสถียร`);
+            }
+
+            await checkOfflineData();
+            fetchData();
+
+        } catch (error) {
+            console.error("Sync Error:", error);
+            alert("เกิดข้อผิดพลาดในการซิงค์ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต");
+        } finally {
+            setIsSyncing(false);
+        }
+    };
     const fetchData = async () => {
         setLoading(true);
         const res = await getDashboardDataAction(viewMode, selectedDate.from, selectedDate.to);
@@ -77,7 +160,6 @@ export default function DashboardPage() {
 
     const getDisplayLabel = () => {
         const d = dayjs(selectedDate.from).locale('th');
-        // ✅ ปรับรูปแบบวันที่ให้สั้นลง
         if (viewMode === 'all') return 'ทั้งหมด';
         if (viewMode === 'year') return `ปี ${d.format('BBBB')}`;
         if (viewMode === 'month') return `เดือน ${d.format('MMM YY')}`;
@@ -90,6 +172,60 @@ export default function DashboardPage() {
         <div className="min-h-screen bg-[#F8FAFC] p-3 lg:p-10 font-sans pb-20 lg:pb-10">
             <div className="max-w-7xl mx-auto space-y-4 lg:space-y-8">
                 
+                {/* ========================================== */}
+                {/* 🛡️ แถบแจ้งเตือนบิลออฟไลน์ค้าง (The Sync Banner) */}
+                {/* ========================================== */}
+                {showSyncBanner && (
+                    <div className="bg-amber-50 border-2 border-amber-200/60 rounded-2xl p-4 lg:p-5 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 animate-in slide-in-from-top-4 duration-300">
+                        <div className="flex items-center gap-3 w-full">
+                            <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center shrink-0">
+                                {isSyncing ? (
+                                    <div className="w-6 h-6 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+                                ) : (
+                                    <IconCloudOff />
+                                )}
+                            </div>
+                            <div className="flex-1">
+                                <h3 className="text-base lg:text-lg font-black text-amber-900">
+                                    มีบิลขายหน้าร้านรอซิงค์ <span className="text-amber-600">({unsyncedQueue.length} รายการ)</span>
+                                </h3>
+                                <p className="text-xs lg:text-sm font-medium text-amber-700 mt-0.5 leading-snug">
+                                    ยอดขายถูกบันทึกในเครื่องปลอดภัยแล้ว <br className="md:hidden" />
+                                    แต่<strong className="underline">จะไม่แสดงในกราฟนี้</strong>จนกว่าคุณจะกดซิงค์ข้อมูลขึ้นระบบ
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex gap-2 w-full md:w-auto shrink-0 mt-2 md:mt-0">
+                            <button 
+                                onClick={() => setShowSyncBanner(false)} 
+                                disabled={isSyncing}
+                                className="flex-1 md:flex-none px-4 py-2.5 rounded-xl text-xs lg:text-sm font-bold text-amber-700 bg-transparent hover:bg-amber-100 transition-colors disabled:opacity-50"
+                            >
+                                ข้ามไปก่อน
+                            </button>
+                            <button 
+                                onClick={handleSyncNow} 
+                                disabled={isSyncing}
+                                className="flex-1 md:flex-none px-6 py-2.5 rounded-xl text-xs lg:text-sm font-black bg-amber-500 text-white shadow-lg shadow-amber-500/30 hover:bg-amber-600 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:transform-none disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            >
+                                {isSyncing ? 'กำลังซิงค์ขึ้นระบบ...' : '🚀 อัปเดตยอดขายเดี๋ยวนี้'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* ========================================== */}
+                {/* 🛡️ แถบแจ้งเตือนแพ็กเกจ (Limit Warning) */}
+                {/* ========================================== */}
+                {data?.limitWarning && (
+                    <div className="bg-indigo-50 border border-indigo-200 text-indigo-700 px-4 py-3 rounded-xl text-xs lg:text-sm font-bold flex items-center gap-3 animate-in fade-in">
+                        <span className="flex items-center justify-center shrink-0">
+                            <IconInfo />
+                        </span>
+                        <span>แพ็กเกจ Free หรือแพ็กเกจที่หมดอายุแล้ว จะสามารถดูรายงานย้อนหลังได้สูงสุด <strong className="text-indigo-900">30 วัน</strong> เท่านั้น</span>
+                    </div>
+                )}
+
                 {/* Header & Filter */}
                 <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 lg:bg-transparent lg:shadow-none lg:border-none lg:p-0">
                     <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3">
@@ -151,12 +287,10 @@ export default function DashboardPage() {
                 {/* Charts & Products Container */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
                     
-                    {/* ✅✅✅ แก้ส่วนนี้: เอาระบบเลื่อนออก และใช้ DashboardChart ที่แก้แล้ว */}
                     <div className={`${mobileTab === 'chart' ? 'block' : 'hidden'} lg:block lg:col-span-2`}>
                         <DashboardChart data={data?.salesTrend} loading={loading} />
                     </div>
 
-                    {/* Top Products Section */}
                     <div className={`${mobileTab === 'products' ? 'block' : 'hidden'} lg:block lg:col-span-1`}>
                         <div className="bg-white p-5 lg:p-8 rounded-[24px] lg:rounded-[32px] shadow-[0_2px_20px_-4px_rgba(0,0,0,0.05)] border border-slate-100 flex flex-col h-[350px] lg:h-[450px]">
                             <h3 className="font-bold text-lg lg:text-xl text-slate-800 mb-4 lg:mb-6 flex items-center gap-3">

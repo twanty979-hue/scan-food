@@ -4,9 +4,8 @@ import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import { fetchShopData, submitOrder } from "@/app/actions/shop";
 
-// Config
-const CDN_MENU_URL = "https://xvhibjejvbriotfpunvv.supabase.co/storage/v1/object/public/menus/";
-const CDN_BANNER_URL = "https://xvhibjejvbriotfpunvv.supabase.co/storage/v1/object/public/banners/";
+// 🔥 1. แก้ไข URL รูปภาพให้ดึงจาก Cloudflare (R2) แทน Supabase
+const CDN_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://img.pos-foodscan.com";
 
 const roundToQuarter = (value: number) => Math.round(value * 4) / 4;
 
@@ -47,38 +46,33 @@ export const useShopLogic = (params: any) => {
     setLoading(false);
   }, []);
 
-  const getMenuUrl = (imageName: string) => imageName ? (imageName.startsWith('http') ? imageName : `${CDN_MENU_URL}${brandId}/${imageName}`) : null;
-  const getBannerUrl = (imageName: string) => imageName ? (imageName.startsWith('http') ? imageName : `${CDN_BANNER_URL}${brandId}/${imageName}`) : null;
+  // 🔥 2. แก้ไข Helper Function ให้ใช้ CDN_URL ตัวใหม่
+  const getMenuUrl = (imageName: string) => imageName ? (imageName.startsWith('http') ? imageName : `${CDN_URL}/${imageName}`) : null;
+  const getBannerUrl = (imageName: string) => imageName ? (imageName.startsWith('http') ? imageName : `${CDN_URL}/${imageName}`) : null;
 
   // =========================================================================
-  // 🔥 ฟังก์ชันพระเอก V4: กรองบิลยกเลิกทิ้ง + ตัดราคาเมนูย่อยเหลือ 0
+  // ฟังก์ชันกรองบิลยกเลิกทิ้ง + ตัดราคาเมนูย่อยเหลือ 0
   // =========================================================================
   const transformOrdersForDisplay = useCallback((orders: any[]) => {
     if (!orders || !Array.isArray(orders)) return [];
-
-    // ✅ 1. กรองบิลที่สถานะเป็น 'cancelled' ทิ้งไปเลย (ไม่ต้องโผล่หัวมา)
     const activeOrders = orders.filter(order => order.status !== 'cancelled');
 
     return activeOrders.map(order => {
-      // 2. แปลงร่างรายการอาหารย่อย (ถ้า Cancel -> แก้ชื่อ และแก้ราคาเป็น 0)
       const transformedItems = (order.order_items || []).map((item: any) => {
         if (item.status === 'cancelled') {
           return {
             ...item,
             product_name: `❌ [ยกเลิก] ${item.product_name}`,
-            // บังคับราคาเป็น 0 เพื่อให้สูตรคำนวณในธีม ไม่เอายอดนี้ไปบวก
             price: 0 
           };
         }
         return item;
       });
 
-      // 3. คำนวณราคารวมของบิลนี้ใหม่ (จาก item ที่ราคาโดนแก้แล้ว)
       const newTotalPrice = transformedItems.reduce((sum: number, item: any) => {
         return sum + (Number(item.price) * Number(item.quantity));
       }, 0);
 
-      // 4. ส่งข้อมูลชุดใหม่กลับไป
       return {
         ...order,
         total_price: newTotalPrice, 
@@ -86,13 +80,16 @@ export const useShopLogic = (params: any) => {
       };
     });
   }, []);
-  // =========================================================================
 
   // --- Pricing Logic ---
   const calculatePrice = useCallback((product: any, variant = 'normal') => {
-    let basePrice = product.price;
-    if (variant === 'special') basePrice = product.price_special || product.price;
-    if (variant === 'jumbo') basePrice = product.price_jumbo || product.price;
+    // 🔥 3. ป้องกันบัค Double Discount: ดึงราคาดั้งเดิมจาก State products เสมอ!
+    // ถ้าหาใน State ไม่เจอ ค่อยใช้ product.price ที่โยนเข้ามา
+    const originalProduct = products?.find((p: any) => p.id === product.id) || product;
+
+    let basePrice = Number(originalProduct.price || 0);
+    if (variant === 'special') basePrice = Number(originalProduct.price_special || originalProduct.price);
+    if (variant === 'jumbo') basePrice = Number(originalProduct.price_jumbo || originalProduct.price);
 
     const now = new Date();
     const applicableDiscounts = discounts.filter(d => {
@@ -126,7 +123,7 @@ export const useShopLogic = (params: any) => {
       final: roundedFinal, 
       discount: Math.max(0, roundedOriginal - roundedFinal) 
     };
-  }, [discounts]);
+  }, [discounts, products]); // 👈 เพิ่ม products ใน Dependency
 
   // --- Initialize Effect ---
   useEffect(() => {
@@ -165,7 +162,6 @@ export const useShopLogic = (params: any) => {
         setProducts(d.products || []);
         setDiscounts(d.discounts || []);
         
-        // ✅ จุดที่ 1: ย้อมแมวตอนโหลดครั้งแรก
         setOrdersList(transformOrdersForDisplay(d.orders || [])); 
         
         setIsVerified(true);
@@ -202,9 +198,7 @@ export const useShopLogic = (params: any) => {
     return () => { supabase.removeChannel(channel); };
   }, [realTableId, providedCode]);
 
-  // =========================================================================
-  // ✅ Realtime 2: Order Status Watcher
-  // =========================================================================
+  // --- Realtime 2: Order Status Watcher ---
   useEffect(() => {
     if (!realTableId || !brandId) return;
 
@@ -216,28 +210,17 @@ export const useShopLogic = (params: any) => {
         });
         
         if (res.success && res.data) {
-            // ✅ จุดที่ 2: ย้อมแมวตอน Realtime มา
             setOrdersList(transformOrdersForDisplay(res.data.orders || []));
         }
     };
 
     const channel = supabase.channel(`customer_order_watch_${realTableId}`)
-      .on(
-        'postgres_changes', 
-        { event: 'UPDATE', schema: 'public', table: 'orders', filter: `brand_id=eq.${brandId}` }, 
-        (payload) => { refreshOrders(); }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'order_items' },
-        (payload) => { refreshOrders(); }
-      )
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders', filter: `brand_id=eq.${brandId}` }, () => refreshOrders())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'order_items' }, () => refreshOrders())
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
   }, [realTableId, brandId, combinedId, currentSlug, transformOrdersForDisplay]); 
-  // =========================================================================
-
 
   // --- Cart Actions ---
   const handleAddToCart = (product: any, variant: any, note: string = "") => {
@@ -258,10 +241,11 @@ export const useShopLogic = (params: any) => {
             return newCart;
         }
 
+        // 🔥 4. ปล่อยให้ตะกร้าเก็บราคาที่ลดแล้วไปได้เลย เพราะเราแก้ calculatePrice ให้ฉลาดพอที่จะไม่ลดซ้ำแล้ว!
         return [...prev, { 
             ...product, 
             variant, 
-            price: pricing.final,      
+            price: pricing.final,       
             original_price: pricing.original,
             discount: pricing.discount,       
             quantity: 1, 
@@ -312,8 +296,6 @@ export const useShopLogic = (params: any) => {
 
       setCart([]);
       setActiveTab('status');
-      
-      // ✅ จุดที่ 3: ย้อมแมวตอนสั่งเสร็จ
       setOrdersList(transformOrdersForDisplay(result.orders || [])); 
 
     } catch (err: any) { 

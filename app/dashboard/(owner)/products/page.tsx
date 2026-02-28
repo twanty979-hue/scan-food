@@ -2,6 +2,8 @@
 'use client';
 
 import { useProducts } from '@/hooks/useProducts';
+import Cropper from 'react-easy-crop';
+import { useState, useCallback } from 'react';
 
 // --- ✨ Custom Icons ---
 const IconUtensils = ({ size = 24, className }: any) => <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg>;
@@ -14,6 +16,9 @@ const IconStar = ({ size = 14, className }: any) => <svg width={size} height={si
 const IconX = ({ size = 20 }: any) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
 const IconChevronDown = ({ size = 16 }: any) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6"/></svg>;
 
+// Icon สำหรับ Crop (ซูม)
+const IconZoom = ({ size = 20 }: any) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>;
+
 export default function ProductsPage() {
   const {
     categories, loading, 
@@ -22,8 +27,19 @@ export default function ProductsPage() {
     isModalOpen, setIsModalOpen, isSubmitting, editId, uploading,
     formData, setFormData, fileInputRef,
     filteredProducts,
-    getImageUrl, handleImageUpload, handleSave, handleDelete, handleToggle, openModal
+    getImageUrl, handleImageUpload, handleSave, handleDelete, handleToggle, openModal,
+    // ✂️ ดึง State ระบบ Crop ออกมาจาก Hook
+    imageToCrop, setIsCropModalOpen, isCropModalOpen,
+    setCroppedAreaPixels, handleCropComplete
   } = useProducts();
+
+  // ✂️ Local State สำหรับควบคุมกรอบ Crop และ ซูม
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+
+  const onCropComplete = useCallback((_croppedArea: any, croppedAreaPixels: any) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  }, [setCroppedAreaPixels]);
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-32">
@@ -107,7 +123,6 @@ export default function ProductsPage() {
             </button>
           </div>
         ) : (
-          // ✅✅✅ GRID SYSTEM ปรับปรุงใหม่: Mobile = 2 Columns
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-6">
             {filteredProducts.map((p: any) => (
               <div 
@@ -120,7 +135,7 @@ export default function ProductsPage() {
                 `}
               >
                 {/* Image Area */}
-                <div className="relative aspect-square rounded-xl md:rounded-2xl overflow-hidden bg-slate-100">
+                <div className="relative aspect-square rounded-xl md:rounded-2xl overflow-hidden bg-slate-100 border border-slate-100/50">
                   {p.image_name ? (
                     <img src={getImageUrl(p.image_name) ?? ''} alt={p.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                   ) : (
@@ -138,7 +153,7 @@ export default function ProductsPage() {
                      )}
                   </div>
                   
-                  {/* Status Toggle (Floating on Image for Mobile Compactness) */}
+                  {/* Status Toggle */}
                   <button 
                         onClick={(e) => { e.stopPropagation(); handleToggle(p.id, p.is_available); }}
                         className={`absolute bottom-1.5 right-1.5 w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center shadow-md backdrop-blur-md transition-all active:scale-90 z-20 ${p.is_available ? 'bg-white/90 text-emerald-500 hover:bg-emerald-500 hover:text-white' : 'bg-slate-800/80 text-white'}`}
@@ -146,7 +161,7 @@ export default function ProductsPage() {
                         <div className={`w-2.5 h-2.5 rounded-full ${p.is_available ? 'bg-emerald-500' : 'bg-rose-500'} ${p.is_available ? '' : 'animate-pulse'}`}></div>
                   </button>
 
-                  {/* Actions (Desktop: Hover / Mobile: Always Visible but small) */}
+                  {/* Actions */}
                   <div className="absolute top-1.5 right-1.5 flex flex-col gap-1.5 md:opacity-0 group-hover:opacity-100 transition-all duration-200 md:translate-x-2 group-hover:translate-x-0">
                     <button onClick={() => openModal(p)} className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-white/90 text-slate-600 hover:text-blue-600 hover:bg-white shadow-sm backdrop-blur-sm flex items-center justify-center transition-colors">
                         <IconEdit size={12} className="md:w-[14px] md:h-[14px]"/>
@@ -196,7 +211,9 @@ export default function ProductsPage() {
             <IconPlus size={24}/>
         </button>
 
-        {/* --- Modern Modal (Same logic) --- */}
+        {/* =========================================
+            MODAL 1: สร้าง/แก้ไขเมนู (ตัวหลัก)
+        ============================================= */}
         {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setIsModalOpen(false)}></div>
@@ -206,7 +223,7 @@ export default function ProductsPage() {
                 <div>
                     <h3 className="text-lg font-black text-slate-800">{editId ? 'แก้ไขเมนู' : 'สร้างเมนูใหม่'}</h3>
                 </div>
-                <button onClick={() => setIsModalOpen(false)} className="w-8 h-8 rounded-full bg-slate-50 text-slate-400 hover:bg-slate-100 flex items-center justify-center transition-colors">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="w-8 h-8 rounded-full bg-slate-50 text-slate-400 hover:bg-slate-100 flex items-center justify-center transition-colors">
                     <IconX size={18}/>
                 </button>
               </div>
@@ -216,7 +233,7 @@ export default function ProductsPage() {
                 {/* Image Upload Area */}
                 <div className="flex justify-center">
                   <div className="relative group cursor-pointer w-full" onClick={() => fileInputRef.current?.click()}>
-                    <div className="aspect-video w-full rounded-2xl bg-slate-50 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center overflow-hidden hover:border-blue-400 hover:bg-blue-50/30 transition-all">
+                    <div className="aspect-[4/3] w-full rounded-2xl bg-slate-50 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center overflow-hidden hover:border-blue-400 hover:bg-blue-50/30 transition-all">
                       {formData.image_name ? (
                         <>
                             <img src={getImageUrl(formData.image_name) ?? ''} className="w-full h-full object-cover" />
@@ -314,12 +331,87 @@ export default function ProductsPage() {
                 {/* Footer Buttons */}
                 <div className="pt-2 flex gap-3 pb-safe">
                   <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3.5 rounded-xl font-bold text-slate-500 bg-white border border-slate-200 hover:bg-slate-50 transition-colors">ยกเลิก</button>
-                  <button type="submit" disabled={isSubmitting} className="flex-[2] py-3.5 rounded-xl font-bold text-white bg-slate-900 shadow-lg shadow-slate-900/20 hover:bg-slate-800 hover:shadow-xl hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2">
+                  <button type="submit" disabled={isSubmitting || isCropModalOpen} className="flex-[2] py-3.5 rounded-xl font-bold text-white bg-slate-900 shadow-lg shadow-slate-900/20 hover:bg-slate-800 hover:shadow-xl hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2">
                       {isSubmitting ? <span className="animate-pulse">กำลังบันทึก...</span> : 'บันทึกเมนู'}
                   </button>
                 </div>
 
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* =========================================
+            MODAL 2: ระบบ Crop รูปภาพ (ซ้อนทับ Modal หลัก)
+        ============================================= */}
+        {isCropModalOpen && imageToCrop && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            {/* Backdrop สีเข้มกว่าเดิมนิดหน่อยให้รู้ว่าซ้อนทับ */}
+            <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm transition-opacity" onClick={() => setIsCropModalOpen(false)}></div>
+            
+            <div className="bg-white w-full max-w-lg rounded-[28px] shadow-2xl relative z-10 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-slate-100">
+              
+              {/* Header */}
+              <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
+                    <IconImage size={16} />
+                  </div>
+                  <h3 className="text-lg font-black text-slate-800">จัดตำแหน่งรูปภาพ</h3>
+                </div>
+                <button onClick={() => setIsCropModalOpen(false)} className="w-8 h-8 rounded-full bg-slate-50 text-slate-400 hover:bg-slate-100 flex items-center justify-center transition-colors">
+                  <IconX size={18} />
+                </button>
+              </div>
+
+              {/* Cropper Area */}
+              <div className="relative w-full h-[50vh] sm:h-[400px] bg-slate-50">
+                <Cropper
+                  image={imageToCrop}
+                  crop={crop}
+                  zoom={zoom}
+                  aspect={1} // บังคับสัดส่วน 1:1 สี่เหลี่ยมจัตุรัส
+                  onCropChange={setCrop}
+                  onCropComplete={onCropComplete}
+                  onZoomChange={setZoom}
+                  showGrid={true}
+                  style={{
+                    containerStyle: { background: '#f8fafc' }, // สีพื้นหลังตอน Crop
+                    cropAreaStyle: { border: '2px solid #3b82f6', borderRadius: '1rem', boxShadow: '0 0 0 9999em rgba(15, 23, 42, 0.5)' } // สไตล์กรอบฟ้าๆ ดู Premium
+                  }}
+                />
+              </div>
+
+              {/* Controls & Buttons */}
+              <div className="p-6 bg-white space-y-6">
+                
+                {/* Slider ซูมรูป */}
+                <div className="flex items-center gap-4 px-2">
+                  <div className="text-slate-400"><IconImage size={20} /></div>
+                  <input
+                    type="range"
+                    value={zoom}
+                    min={1}
+                    max={3}
+                    step={0.1}
+                    aria-labelledby="Zoom"
+                    onChange={(e) => setZoom(Number(e.target.value))}
+                    className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600 hover:accent-blue-700"
+                  />
+                  <div className="text-slate-600"><IconZoom size={20} /></div>
+                </div>
+                
+                {/* Footer Buttons */}
+                <div className="flex gap-3 pt-2">
+                  <button onClick={() => setIsCropModalOpen(false)} className="flex-1 py-3.5 rounded-xl font-bold text-slate-500 bg-white border border-slate-200 hover:bg-slate-50 transition-colors">
+                    ยกเลิก
+                  </button>
+                  <button onClick={handleCropComplete} className="flex-1 py-3.5 rounded-xl font-bold text-white bg-blue-600 shadow-lg shadow-blue-500/30 hover:bg-blue-700 hover:shadow-xl hover:-translate-y-0.5 transition-all">
+                    ยืนยันรูปภาพ
+                  </button>
+                </div>
+              </div>
+
             </div>
           </div>
         )}

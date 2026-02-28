@@ -1,7 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getBannersAction, upsertBannerAction, deleteBannerAction } from '@/app/actions/bannerActions';
-// ✅ 1. Import ตัว Hook มาใช้
 import { useGlobalAlert } from '@/components/providers/GlobalAlertProvider';
 
 export type Banner = {
@@ -13,10 +12,19 @@ export type Banner = {
   is_active: boolean;
 };
 
-const CDN_URL = "https://xvhibjejvbriotfpunvv.supabase.co/storage/v1/object/public/banners/"; 
+// 🌟 เปลี่ยนมาใช้ Cloudflare R2 ให้เหมือนหน้าเมนู
+const CDN_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://img.pos-foodscan.com"; 
+
+// Helper function สร้าง Image object
+const createImage = (url: string): Promise<HTMLImageElement> =>
+  new Promise((resolve, reject) => {
+    const image = new Image();
+    image.addEventListener('load', () => resolve(image));
+    image.addEventListener('error', (error) => reject(error));
+    image.src = url;
+  });
 
 export function useBanners() {
-  // ✅ 2. ดึงฟังก์ชัน showAlert และ showConfirm ออกมา
   const { showAlert, showConfirm } = useGlobalAlert();
 
   const [banners, setBanners] = useState<Banner[]>([]);
@@ -34,42 +42,21 @@ export function useBanners() {
     isActive: true,
   });
   
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState('');
   const [currentImageName, setCurrentImageName] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // --- ✂️ STATE สำหรับระบบ CROP รูป ---
+  const [imageToCrop, setImageToCrop] = useState<string | null>(null);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
+  const [isCropModalOpen, setIsCropModalOpen] = useState(false);
 
   const getImageUrl = (imageName: string | null) => {
-    if (!imageName || !brandId) return null;
+    if (!imageName) return null;
+    if (imageName.startsWith('blob:')) return imageName; 
     if (imageName.startsWith('http')) return imageName;
-    return `${CDN_URL}${brandId}/${imageName}`;
-  };
-
-  const compressToWebP = (file: File): Promise<Blob> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (event) => {
-        const img = new Image();
-        img.src = event.target?.result as string;
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          let width = img.width;
-          let height = img.height;
-          const MAX_WIDTH = 1600;
-          if (width > MAX_WIDTH) {
-            height = (MAX_WIDTH / width) * height;
-            width = MAX_WIDTH;
-          }
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) return reject(new Error('Canvas context failed'));
-          ctx.drawImage(img, 0, 0, width, height);
-          canvas.toBlob((blob) => { if (blob) resolve(blob); else reject(new Error('WebP error')); }, 'image/webp', 0.82);
-        };
-      };
-      reader.onerror = (error) => reject(error);
-    });
+    return `${CDN_URL}/${imageName}`; 
   };
 
   const fetchBanners = async () => {
@@ -86,17 +73,77 @@ export function useBanners() {
     fetchBanners();
   }, []);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setImageFile(file);
-      setPreviewUrl(URL.createObjectURL(file));
+  // 1. รับไฟล์เข้ามา แล้วเปิดหน้าต่าง Crop
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    const imageUrl = URL.createObjectURL(file);
+    setImageToCrop(imageUrl);
+    setIsCropModalOpen(true); 
+    e.target.value = ''; 
+  };
+
+  // 2. ฟังก์ชัน Crop และบีบอัดสำหรับ "แบนเนอร์" (ชัดตาแตก)
+  const handleCropComplete = async () => {
+    if (!imageToCrop || !croppedAreaPixels) return;
+
+    try {
+      const image = await createImage(imageToCrop);
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      if (!ctx) throw new Error('No 2d context');
+
+      const TARGET_WIDTH = 1200;
+      const TARGET_HEIGHT = (croppedAreaPixels.height / croppedAreaPixels.width) * TARGET_WIDTH;
+      
+      canvas.width = TARGET_WIDTH;
+      canvas.height = TARGET_HEIGHT;
+
+      ctx.drawImage(
+        image,
+        croppedAreaPixels.x,
+        croppedAreaPixels.y,
+        croppedAreaPixels.width,
+        croppedAreaPixels.height,
+        0,
+        0,
+        TARGET_WIDTH,
+        TARGET_HEIGHT
+      );
+
+      let quality = 0.9;
+      let webpBlob: Blob | null = null;
+      const MAX_BYTES = 100 * 1024; // 100KB
+
+      do {
+        webpBlob = await new Promise((resolve) => {
+          canvas.toBlob((blob) => resolve(blob), 'image/webp', quality);
+        });
+        quality -= 0.1;
+      } while (webpBlob && webpBlob.size > MAX_BYTES && quality >= 0.4);
+
+      if (!webpBlob) throw new Error('Canvas to Blob failed');
+
+      console.log(`✅ อัตราการบีบอัดแบนเนอร์สำเร็จ: ${(webpBlob.size / 1024).toFixed(2)} KB`);
+
+      const fileNameOnly = `${Date.now()}.webp`; 
+      const webpFile = new File([webpBlob], fileNameOnly, { type: 'image/webp' });
+
+      setSelectedFile(webpFile);
+      setPreviewUrl(URL.createObjectURL(webpFile));
+      
+      setIsCropModalOpen(false);
+      setImageToCrop(null);
+
+    } catch (e: any) {
+      showAlert('error', 'การตัดรูปภาพล้มเหลว', e.message);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!brandId || (!imageFile && !editingId)) {
+    if (!brandId || (!selectedFile && !editingId && !currentImageName)) {
         showAlert('warning', 'ข้อมูลไม่ครบ', 'กรุณาเลือกรูปภาพแบนเนอร์');
         return;
     }
@@ -104,16 +151,30 @@ export function useBanners() {
     setIsSubmitting(true);
     try {
       let finalImageName = currentImageName;
+      let oldImageNameToDelete = null;
 
-      if (imageFile) {
-        const webpBlob = await compressToWebP(imageFile);
-        const fileNameOnly = `${Date.now()}.webp`;
-        const uploadPath = `${brandId}/${fileNameOnly}`;
-        
-        const { error: uploadError } = await supabase.storage.from('banners').upload(uploadPath, webpBlob, { contentType: 'image/webp', upsert: true });
-        if (uploadError) throw uploadError;
-        finalImageName = fileNameOnly;
+      if (selectedFile) {
+        const apiFormData = new FormData();
+        apiFormData.append("file", selectedFile);
+        // 🌟 ส่ง Brand ID ไปจัดโฟลเดอร์ใน R2
+        apiFormData.append("folder", brandId || "system");
+
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          body: apiFormData,
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Upload to R2 failed');
+
+        finalImageName = data.fileName;
+
+        if (editingId && currentImageName) {
+            oldImageNameToDelete = currentImageName;
+        }
       }
+
+      if (finalImageName.startsWith('blob:')) { finalImageName = ''; }
 
       const payload = {
         id: editingId,
@@ -127,12 +188,19 @@ export function useBanners() {
       const res = await upsertBannerAction(payload);
       if (!res.success) throw new Error(res.error);
 
+      // 🗑️ สั่งลบรูปเก่าใน R2 (API ลบมี Safety Guard ตรวจสอบให้แล้ว)
+      if (oldImageNameToDelete && !oldImageNameToDelete.startsWith('http')) {
+          fetch('/api/delete-image', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fileName: oldImageNameToDelete })
+          }).catch(err => console.error("Failed to delete old image:", err));
+      }
+
       closeModal();
-      // ✅ 3. แจ้งเตือนเมื่อบันทึกสำเร็จ
       showAlert('success', 'บันทึกสำเร็จ', 'ข้อมูลแบนเนอร์ของคุณถูกอัปเดตเรียบร้อยแล้ว');
       fetchBanners();
     } catch (err: any) {
-      // ✅ 4. แจ้งเตือนเมื่อพลาด
       showAlert('error', 'เกิดข้อผิดพลาด', err.message);
     } finally {
       setIsSubmitting(false);
@@ -140,19 +208,27 @@ export function useBanners() {
   };
 
   const handleDelete = async (id: string) => {
-    // ✅ 5. ใช้ showConfirm พร้อม 'error' เพื่อโชว์ถังขยะแดง
+    const bannerToDelete = banners.find(b => b.id === id);
     const isConfirmed = await showConfirm(
         'ยืนยันการลบ?',
         'คุณแน่ใจหรือไม่ว่าต้องการลบแบนเนอร์นี้ออกจากหน้าเว็บบริการของคุณ?',
         'ลบทิ้ง',
         'ยกเลิก',
-        'error' // 🔥 ถังขยะแดงมาแน่!
+        'error' 
     );
 
     if (!isConfirmed) return;
 
     const res = await deleteBannerAction(id);
     if (res.success) {
+        // 🗑️ ลบรูปจาก R2 เมื่อแบนเนอร์ถูกลบ
+        if (bannerToDelete && bannerToDelete.image_name && !bannerToDelete.image_name.startsWith('http')) {
+             fetch('/api/delete-image', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ fileName: bannerToDelete.image_name })
+             }).catch(err => console.error("Failed to delete banner image:", err));
+        }
         showAlert('success', 'ลบเรียบร้อย', 'แบนเนอร์ถูกนำออกจากระบบแล้ว');
         fetchBanners();
     } else {
@@ -170,13 +246,14 @@ export function useBanners() {
     });
     setCurrentImageName(banner.image_name);
     setPreviewUrl(getImageUrl(banner.image_name) || '');
+    setSelectedFile(null); 
     setIsModalOpen(true);
   };
 
   const closeModal = () => {
     setEditingId(null);
     setFormData({ title: '', linkUrl: '', sortOrder: 0, isActive: true });
-    setImageFile(null);
+    setSelectedFile(null);
     setPreviewUrl('');
     setCurrentImageName('');
     setIsModalOpen(false);
@@ -189,8 +266,10 @@ export function useBanners() {
   return {
     banners, loading, isModalOpen, isSubmitting, editingId,
     formData, updateFormData,
-    imageFile, previewUrl, handleFileChange,
+    previewUrl, handleImageUpload, fileInputRef,
     openEdit, closeModal, handleSubmit, handleDelete, setIsModalOpen,
-    getImageUrl
+    getImageUrl,
+    imageToCrop, setIsCropModalOpen, isCropModalOpen,
+    setCroppedAreaPixels, handleCropComplete
   };
 }

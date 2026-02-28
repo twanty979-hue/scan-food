@@ -1,10 +1,11 @@
 // hooks/useThemes.ts
 import { useState, useEffect, useMemo } from 'react';
-import { supabase } from '@/lib/supabase'; 
+// ลบ import supabase ออก เพราะเราจะดึงรูปจาก Cloudflare โดยตรง
 import { getThemesDataAction, applyThemeAction } from '@/app/actions/themeActions';
 import { useRouter } from 'next/navigation';
 
-const BUCKET_NAME = 'theme-images';
+// 🌟 ตัวแปร URL ของ Cloudflare R2
+const CDN_BASE_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://img.pos-foodscan.com";
 
 export function useThemes() {
     const router = useRouter();
@@ -13,8 +14,6 @@ export function useThemes() {
     const [themes, setThemes] = useState<any[]>([]);
     const [categories, setCategories] = useState<any[]>([]); 
     const [selectedCategory, setSelectedCategory] = useState('ALL'); 
-
-    // ❌ ลบ State filterLifetime ออก
     
     const [loading, setLoading] = useState(true);
     const [brandId, setBrandId] = useState<string | null>(null);
@@ -26,8 +25,8 @@ export function useThemes() {
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(15);
 
-    // --- Responsive Items Logic (คงเดิม) ---
-   useEffect(() => {
+    // --- Responsive Items Logic ---
+    useEffect(() => {
         const calculateItemsPerPage = () => {
             const width = window.innerWidth;
             let columns = 2; 
@@ -45,7 +44,7 @@ export function useThemes() {
         return () => window.removeEventListener('resize', calculateItemsPerPage);
     }, []);
 
-    // --- Init Data (คงเดิม) ---
+    // --- Init Data ---
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
@@ -64,29 +63,24 @@ export function useThemes() {
         fetchData();
     }, [router]);
 
-    // ✅ Logic กรองข้อมูล (ตัด Lifetime ออก เหลือแค่ Category)
+    // ✅ Logic กรองข้อมูล
     const filteredThemes = useMemo(() => {
         let result = themes;
 
-        // 1. กรอง Category
         if (selectedCategory !== 'ALL') {
             result = result.filter((t: any) => t.marketplace_themes?.category_id === selectedCategory);
         }
 
-        // ❌ ลบ Logic กรอง Lifetime ออก
-
         return result;
-    }, [themes, selectedCategory]); // เอา filterLifetime ออกจาก dependency
-
-    // ❌ ลบ toggleLifetimeFilter ออก
+    }, [themes, selectedCategory]);
 
     const handleCategoryChange = (catId: string) => {
         setSelectedCategory(catId);
         setCurrentPage(1);
     };
 
-    // --- Logic: Apply Theme (คงเดิม) ---
-   const handleApplyTheme = async (theme: any) => {
+    // --- Logic: Apply Theme ---
+    const handleApplyTheme = async (theme: any) => {
         if (!isOwner) return alert('เฉพาะเจ้าของร้านเท่านั้นที่เปลี่ยนธีมได้');
         
         const mkt = theme.marketplace_themes;
@@ -105,14 +99,27 @@ export function useThemes() {
         }
     };
 
-    // --- Helpers ---
+    // ✅✅ เปลี่ยนการดึงรูปภาพ (บังคับใช้ Cloudflare R2 และดักจับของเก่า)
     const getImageUrl = (fileName: string | null) => {
-        if (!fileName) return null;
-        const filePath = fileName.startsWith('themes/') ? fileName : `themes/${fileName}`;
-        return supabase.storage.from(BUCKET_NAME).getPublicUrl(filePath).data.publicUrl;
+        if (!fileName || fileName.trim() === '') return '/placeholder.png';
+
+        // 🚨 ดักจับข้อมูลเก่า (ลิงก์ Supabase)
+        if (fileName.includes('supabase.co')) {
+            const cleanFileName = fileName.split('/').pop(); 
+            return `${CDN_BASE_URL}/themes/${cleanFileName}`;
+        }
+
+        // ถ้าเป็นลิงก์ภายนอก
+        if (fileName.startsWith('http')) return fileName;
+
+        // ถ้าระบุโฟลเดอร์ themes/ มาแล้ว
+        if (fileName.startsWith('themes/')) return `${CDN_BASE_URL}/${fileName}`;
+
+        // กรณีทั่วไป (มีแค่ชื่อไฟล์)
+        return `${CDN_BASE_URL}/themes/${fileName}`;
     };
 
-    // --- Pagination (คงเดิม) ---
+    // --- Pagination ---
     const totalPages = Math.ceil(filteredThemes.length / Math.max(1, itemsPerPage));
     const currentThemes = useMemo(() => {
         const start = (currentPage - 1) * itemsPerPage;
@@ -128,7 +135,6 @@ export function useThemes() {
         themes, loading, brandId, currentConfig, isOwner,
         applyingId, currentThemes, currentPage, totalPages,
         changePage, handleApplyTheme, getImageUrl,
-        categories, selectedCategory, handleCategoryChange,
-        // ❌ ไม่ต้อง return filterLifetime, toggleLifetimeFilter แล้ว
+        categories, selectedCategory, handleCategoryChange
     };
 }

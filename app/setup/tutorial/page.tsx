@@ -1,3 +1,4 @@
+//app/setup/tutorial/page.tsx
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
@@ -109,7 +110,6 @@ export default function SetupTutorialPage() {
       const { data: profile } = await supabase.from('profiles').select('brand_id').eq('id', user.id).single();
       
       if (profile?.brand_id) {
-        // ✅ ลบการเช็ค Redirect ออก เพื่อไม่ให้มันดีดหนี
         setBrandId(profile.brand_id);
       } else {
         router.replace('/setup');
@@ -158,12 +158,16 @@ export default function SetupTutorialPage() {
       }));
       await supabase.from('tables').insert(tablesData);
 
-      // Step 3: Banners
+      // ✅✅✅ Step 3: Banners (แก้ไขตรงนี้: ให้เหลือรูปเดียวตามที่ขอ)
       setProgress(60);
       setStatusText('Designing storefront banners...');
       const bannersData = [
-        { brand_id: brandId, image_name: 'https://d1csarkz8obe9u.cloudfront.net/posterpreviews/delicious-food-banner-template-design-cd3994e39458960f4f33e73b8c60edb9_screen.jpg?ts=1645769305', title: 'Welcome', sort_order: 1 },
-        { brand_id: brandId, image_name: 'https://d1csarkz8obe9u.cloudfront.net/posterpreviews/healthy-food-restaurant-banner-design-template-5d8526f015d6a01027536b17714b98d3_screen.jpg?ts=1662349433', title: 'Special Menu', sort_order: 2 }
+        { 
+          brand_id: brandId, 
+          image_name: 'https://img.pos-foodscan.com/268dccbf-a568-4a90-b184-d23811937d9f/1772290694984-1772290692774.webp', 
+          title: 'Welcome', 
+          sort_order: 1 
+        }
       ];
       await supabase.from('banners').insert(bannersData);
 
@@ -194,7 +198,6 @@ export default function SetupTutorialPage() {
       await new Promise(r => setTimeout(r, 800));
       setStep('done');
       
-      // ✅ Redirect to pai_order (เสร็จแล้วค่อยดีดที่นี่)
       setTimeout(() => {
         router.replace('/dashboard/pai_order');
       }, 1500);

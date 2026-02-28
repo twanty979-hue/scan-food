@@ -312,7 +312,12 @@ export function usePayment() {
             let final = basePrice;
             if (d.type === 'percentage') final = basePrice - (basePrice * d.value / 100);
             else if (d.type === 'fixed') final = basePrice - d.value;
+            
             final = Math.max(0, final);
+
+            // ✅ เพิ่มบรรทัดนี้: บังคับปัดเศษให้ตกที่ .00, .25, .50, .75 เสมอ
+            final = Math.round(final * 4) / 4;
+
             if (final < bestPrice) {
                 bestPrice = final;
                 bestDiscountObj = d;

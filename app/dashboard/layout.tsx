@@ -21,9 +21,8 @@ const IconPalette = ({ size = 28 }) => <svg width={size} height={size} viewBox="
 const IconPlusSquare = ({ size = 28 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>;
 const Icondashboard = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 17v-5"/><path d="M12 17v-8"/><path d="M16 17v-3"/></svg>;
 
-// Config: Base URL
-const CDN_AVATAR_URL = "https://xvhibjejvbriotfpunvv.supabase.co/storage/v1/object/public/avatars/";
-const CDN_BRAND_URL = "https://xvhibjejvbriotfpunvv.supabase.co/storage/v1/object/public/brands/";
+// Config: Base URL สำหรับ Cloudflare
+const CDN_BASE_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://img.pos-foodscan.com";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -59,10 +58,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   };
 
   const getAvatarUrl = (path: string | null) => {
-    if (!path) return null;
-    if (path.startsWith('http')) return path;
-    return `${CDN_AVATAR_URL}${path}`;
-  };
+    if (!path) return null;
+    // ถ้าเป็น URL เต็มอยู่แล้ว (เช่น รูปจาก Google Login) ให้ใช้ได้เลย
+    if (path.startsWith('http')) return path; 
+    
+    // ดักไว้เผื่อว่าใน Database เก็บชื่อไฟล์มาแบบมีคำว่า 'profiles/' นำหน้าอยู่แล้ว
+    if (path.startsWith('profiles/')) {
+        return `${CDN_BASE_URL}/${path}`;
+    }
+    
+    // ถ้าใน Database เก็บแค่ชื่อไฟล์เพียวๆ ให้เติมโฟลเดอร์ /profiles/ เข้าไป
+    return `${CDN_BASE_URL}/profiles/${path}`;
+  };
 
   const isOwner = profile?.role === 'owner';
   

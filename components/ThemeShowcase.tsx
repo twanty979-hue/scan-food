@@ -6,21 +6,27 @@ import { useRef } from 'react';
 import MarketplaceCard from '@/app/dashboard/marketplace/components/MarketplaceCard'; 
 import Link from 'next/link';
 
-// ✅ แก้ไขฟังก์ชันดึงรูปภาพให้ตรงกับที่คุณเก็บจริง
-const getImageUrl = (path: string) => {
-  if (!path) return 'https://placehold.co/400x800/png?text=No+Image';
-  if (path.startsWith('http')) return path;
+// 🌟 ประกาศตัวแปร Cloudflare R2 (มาตรฐานเดียวกับทั้งระบบ)
+const CDN_BASE_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://img.pos-foodscan.com";
 
-  // 1. เช็คว่าชื่อ Bucket ของคุณชื่ออะไร? (ผมอิงจากโค้ด useMarketplace ที่คุณเคยส่งมา)
-  // ถ้าชื่อ 'marketplace_assets' ให้แก้ตรงนี้
-  const bucketName = 'theme-images'; 
+// ✅ แก้ไขฟังก์ชันดึงรูปภาพให้วิ่งไปหา Cloudflare R2 และดักจับลิงก์เก่า
+const getImageUrl = (fileName: string | null) => {
+  if (!fileName || fileName.trim() === '') return 'https://placehold.co/400x800/png?text=No+Image';
 
-  // 2. ปกติในโค้ดเก่ามีการเติม prefix 'themes/' ไหม? 
-  // ถ้าไฟล์เก็บในโฟลเดอร์ themes ให้คงบรรทัดนี้ไว้
-  // แต่ถ้าเก็บที่ root (ข้างนอกสุด) ให้แก้เป็น: const cleanPath = path;
-  const cleanPath = path.startsWith('themes/') ? path : `themes/${path}`;
+  // 🚨 ดักจับข้อมูลเก่า (ลิงก์ Supabase)
+  if (fileName.includes('supabase.co')) {
+      const cleanFileName = fileName.split('/').pop(); 
+      return `${CDN_BASE_URL}/themes/${cleanFileName}`;
+  }
 
-  return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${bucketName}/${cleanPath}`;
+  // ถ้าเป็นลิงก์เว็บภายนอก
+  if (fileName.startsWith('http')) return fileName;
+
+  // ถ้าระบุโฟลเดอร์ themes/ มาแล้ว
+  if (fileName.startsWith('themes/')) return `${CDN_BASE_URL}/${fileName}`;
+
+  // กรณีทั่วไป (มีแค่ชื่อไฟล์)
+  return `${CDN_BASE_URL}/themes/${fileName}`;
 };
 
 export default function ThemeShowcase({ themes }: { themes: any[] }) {
@@ -63,7 +69,7 @@ export default function ThemeShowcase({ themes }: { themes: any[] }) {
             <MarketplaceCard
               theme={theme}
               isOwned={false}
-              getImageUrl={getImageUrl} // ส่งฟังก์ชันที่แก้แล้วเข้าไป
+              getImageUrl={getImageUrl} // ✅ ใช้ฟังก์ชันที่อัปเกรดแล้ว
               onClick={() => { window.location.href = '/register'; }}
             />
           </div>

@@ -1,3 +1,4 @@
+// hooks/useProducts.ts
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { 
@@ -6,10 +7,9 @@ import {
     deleteProductAction, 
     toggleProductStatusAction 
 } from '@/app/actions/productActions';
-// ✅ 1. Import ตัว Alert มาใช้
 import { useGlobalAlert } from '@/components/providers/GlobalAlertProvider';
 
-const CDN_URL = "https://xvhibjejvbriotfpunvv.supabase.co/storage/v1/object/public/menus/";
+const CDN_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://img.pos-foodscan.com";
 
 export type Category = { id: string; name: string };
 export type Product = {
@@ -26,8 +26,16 @@ export type Product = {
   brand_id: string;
 };
 
+// Helper function สร้าง Image object
+const createImage = (url: string): Promise<HTMLImageElement> =>
+  new Promise((resolve, reject) => {
+    const image = new Image();
+    image.addEventListener('load', () => resolve(image));
+    image.addEventListener('error', (error) => reject(error));
+    image.src = url;
+  });
+
 export function useProducts() {
-  // ✅ 2. ดึงฟังก์ชัน showAlert และ showConfirm ออกมา
   const { showAlert, showConfirm } = useGlobalAlert();
 
   const [products, setProducts] = useState<Product[]>([]);
@@ -43,6 +51,13 @@ export function useProducts() {
   const [editId, setEditId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  // --- ✂️ STATE สำหรับระบบ CROP รูป ---
+  const [imageToCrop, setImageToCrop] = useState<string | null>(null);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
+  const [isCropModalOpen, setIsCropModalOpen] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '', description: '', price: '', price_special: '', price_jumbo: '',
@@ -65,58 +80,118 @@ export function useProducts() {
   }, []);
 
   const getImageUrl = (imageName: string | null) => {
-    if (!imageName || !brandId) return null;
+    if (!imageName) return null;
+    if (imageName.startsWith('blob:')) return imageName; 
     if (imageName.startsWith('http')) return imageName;
-    return `${CDN_URL}${brandId}/${imageName}`;
+    return `${CDN_URL}/${imageName}`; 
   };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    const imageUrl = URL.createObjectURL(file);
+    setImageToCrop(imageUrl);
+    setIsCropModalOpen(true); 
+    e.target.value = ''; 
+  };
+
+  const handleCropComplete = async () => {
+    if (!imageToCrop || !croppedAreaPixels) return;
+
     try {
-      setUploading(true);
-      if (!e.target.files || e.target.files.length === 0) return;
-      
-      const file = e.target.files[0];
-      const webpBlob = await new Promise<Blob>((resolve, reject) => {
-        const img = document.createElement('img');
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width = img.width; canvas.height = img.height;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0);
-            canvas.toBlob((blob) => { if (blob) resolve(blob); else reject(new Error('Conversion failed')); }, 'image/webp', 0.8);
-          } else reject(new Error('Canvas failed'));
-        };
-        img.onerror = (err) => reject(err);
-        img.src = URL.createObjectURL(file);
-      });
-      
+      const image = await createImage(imageToCrop);
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      if (!ctx) throw new Error('No 2d context');
+
+      const TARGET_SIZE = 600;
+      canvas.width = TARGET_SIZE;
+      canvas.height = TARGET_SIZE;
+
+      ctx.drawImage(
+        image,
+        croppedAreaPixels.x,
+        croppedAreaPixels.y,
+        croppedAreaPixels.width,
+        croppedAreaPixels.height,
+        0,
+        0,
+        TARGET_SIZE,
+        TARGET_SIZE
+      );
+
+      let quality = 0.9;
+      let webpBlob: Blob | null = null;
+      const MAX_BYTES = 30 * 1024; 
+
+      do {
+        webpBlob = await new Promise((resolve) => {
+          canvas.toBlob((blob) => resolve(blob), 'image/webp', quality);
+        });
+        quality -= 0.1;
+      } while (webpBlob && webpBlob.size > MAX_BYTES && quality >= 0.4);
+
+      if (!webpBlob) throw new Error('Canvas to Blob failed');
+
+      console.log(`✅ อัตราการบีบอัดสำเร็จ: ${(webpBlob.size / 1024).toFixed(2)} KB`);
+
       const fileNameOnly = `${Date.now()}.webp`; 
-      const uploadPath = `${brandId}/${fileNameOnly}`; 
+      const webpFile = new File([webpBlob], fileNameOnly, { type: 'image/webp' });
+
+      setSelectedFile(webpFile);
+      setFormData(prev => ({ ...prev, image_name: URL.createObjectURL(webpFile) }));
       
-      const { error: uploadError } = await supabase.storage.from('menus').upload(uploadPath, webpBlob, { contentType: 'image/webp', upsert: true });
-      if (uploadError) throw uploadError;
+      setIsCropModalOpen(false);
+      setImageToCrop(null);
 
-      setFormData(prev => ({ ...prev, image_name: fileNameOnly }));
-
-    } catch (error: any) { 
-        // ✅ 3. ใช้ showAlert เมื่ออัปโหลดพลาด
-        showAlert('error', 'อัปโหลดล้มเหลว', error.message); 
-    } finally { 
-        setUploading(false); 
+    } catch (e: any) {
+      showAlert('error', 'การตัดรูปภาพล้มเหลว', e.message);
     }
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.price || !formData.category_id) { 
-        // ✅ 4. ใช้ showAlert เมื่อกรอกข้อมูลไม่ครบ
         showAlert('warning', 'ข้อมูลไม่ครบถ้วน', 'กรุณากรอกชื่อเมนู ราคา และหมวดหมู่ให้ครบถ้วน'); 
         return; 
     }
     
     setIsSubmitting(true);
     try {
+      let finalImageName = formData.image_name;
+      let oldImageNameToDelete = null; 
+
+      if (selectedFile) {
+        setUploading(true); 
+        const apiFormData = new FormData();
+        apiFormData.append("file", selectedFile);
+        
+        // 🌟 1. ส่ง Brand ID ไปเป็นชื่อโฟลเดอร์ตอนอัปโหลด
+        apiFormData.append("folder", brandId || "system"); 
+
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          body: apiFormData,
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Upload to R2 failed');
+
+        finalImageName = data.fileName;
+
+        if (editId) {
+            const currentProduct = products.find(p => p.id === editId);
+            if (currentProduct && currentProduct.image_name) {
+                oldImageNameToDelete = currentProduct.image_name;
+            }
+        }
+      }
+
+      if (finalImageName.startsWith('blob:')) {
+          finalImageName = '';
+      }
+
       const payload = {
         id: editId,
         name: formData.name, 
@@ -125,40 +200,49 @@ export function useProducts() {
         price_special: formData.price_special ? parseFloat(formData.price_special) : null,
         price_jumbo: formData.price_jumbo ? parseFloat(formData.price_jumbo) : null,
         category_id: formData.category_id, 
-        image_name: formData.image_name,
+        image_name: finalImageName, 
         is_recommended: formData.is_recommended
       };
 
       const res = await upsertProductAction(payload);
       if (!res.success) throw new Error(res.error);
 
+      // 🌟 2. ลบรูปเก่า (API /delete-image จะตรวจสอบ Safety Guard ของร้านต้นแบบให้อัตโนมัติ)
+      if (oldImageNameToDelete) {
+          fetch('/api/delete-image', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fileName: oldImageNameToDelete })
+          }).catch(err => console.error("Failed to delete old image:", err));
+      }
+
       if (editId) {
         setProducts(prev => prev.map(p => p.id === editId ? { ...p, ...res.data } : p));
       } else {
         setProducts(prev => [res.data, ...prev]);
       }
-      setIsModalOpen(false);
       
-      // ✅ 5. แจ้งเตือนเมื่อบันทึกสำเร็จ
+      setIsModalOpen(false);
+      setSelectedFile(null); 
       showAlert('success', 'บันทึกสำเร็จ', `เมนู ${formData.name} ได้รับการอัปเดตแล้ว`);
 
     } catch (error: any) { 
         showAlert('error', 'เกิดข้อผิดพลาด', error.message); 
     } finally { 
         setIsSubmitting(false); 
+        setUploading(false);
     }
   };
 
   const handleDelete = async (id: string) => {
     const product = products.find(p => p.id === id);
-    
     const isConfirmed = await showConfirm(
-    'ยืนยันการลบเมนู?',
-    'คุณต้องการลบรายการนี้ใช่หรือไม่?',
-    'ลบทิ้ง',
-    'ยกเลิก',
-    'error' // ✅ ใส่ตรงนี้เพื่อให้ไอคอนเปลี่ยนเป็นถังขยะสีแดง
-);
+      'ยืนยันการลบเมนู?',
+      'คุณต้องการลบรายการนี้ใช่หรือไม่?',
+      'ลบทิ้ง',
+      'ยกเลิก',
+      'error'
+    );
 
     if (!isConfirmed) return;
     
@@ -170,6 +254,14 @@ export function useProducts() {
         showAlert('error', 'ลบไม่สำเร็จ', res.error);
         setProducts(oldProducts);
     } else {
+        // 🌟 3. ลบรูปเมื่อลบเมนูทิ้ง
+        if (product && product.image_name) {
+             fetch('/api/delete-image', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ fileName: product.image_name })
+             }).catch(err => console.error("Failed to delete image:", err));
+        }
         showAlert('success', 'ลบเรียบร้อย', 'เมนูถูกนำออกจากร้านแล้ว');
     }
   };
@@ -187,6 +279,7 @@ export function useProducts() {
 
   const openModal = (product: Product | null = null) => {
     setEditId(product ? product.id : null);
+    setSelectedFile(null); 
     setFormData({
       name: product?.name || '', 
       description: product?.description || '',
@@ -215,6 +308,8 @@ export function useProducts() {
     isModalOpen, setIsModalOpen, isSubmitting, editId, uploading,
     formData, setFormData, fileInputRef,
     filteredProducts,
-    getImageUrl, handleImageUpload, handleSave, handleDelete, handleToggle, openModal
+    getImageUrl, handleImageUpload, handleSave, handleDelete, handleToggle, openModal,
+    imageToCrop, setImageToCrop, isCropModalOpen, setIsCropModalOpen,
+    setCroppedAreaPixels, handleCropComplete
   };
 }

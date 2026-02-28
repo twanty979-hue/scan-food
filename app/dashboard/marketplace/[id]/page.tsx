@@ -20,7 +20,6 @@ const IconInfo = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="non
 
 declare global { interface Window { Omise: any; } }
 
-// ✅ Type Payment Plans
 type PlanType = 'weekly' | 'monthly' | 'yearly';
 
 export default function ThemeDetailPage() {
@@ -125,41 +124,38 @@ export default function ThemeDetailPage() {
                         </button>
                     </div>
 
-                    {/* ✅ Mockup Container (ใช้ดีไซน์จาก Card แล้ว!) */}
+                    {/* ✅ Mockup Container ปรับสัดส่วนให้ iPad เป็น 3:4 (แนวตั้ง) ให้ตรงกับตอน Crop */}
                     <div className="relative w-full flex justify-center items-start min-h-[450px] md:min-h-[600px]"> 
-                        <div className={`transition-all duration-500 ease-in-out relative ${viewMode === 'mobile' ? 'w-[260px] md:w-[340px]' : 'w-full max-w-[600px] lg:max-w-[800px]'}`}>
+                        <div className={`transition-all duration-500 ease-in-out relative flex justify-center w-full ${viewMode === 'mobile' ? 'max-w-[260px] md:max-w-[320px]' : 'max-w-[340px] md:max-w-[480px]'}`}>
                              
-                             {/* --- Mobile View (High Fidelity CSS Mockup) --- */}
+                             {/* --- Mobile View (9:19.5) --- */}
                              {viewMode === 'mobile' ? (
                                 <div className="relative w-full aspect-[9/19.5]">
-                                    {/* กรอบมือถือแบบสวย (copy จาก Card) */}
                                     <div className="relative h-full w-full rounded-[3.5rem] p-[3px] shadow-[0_0_2px_rgba(0,0,0,0.5),0_20px_40px_-10px_rgba(0,0,0,0.6)] border ring-1 ring-[#111] z-10 overflow-hidden bg-[#363535] border-[#555]">
                                         <div className="absolute inset-0 rounded-[3.5rem] border-[1px] border-white/20 pointer-events-none z-20"></div>
                                         <div className="relative w-full h-full bg-black rounded-[3.2rem] overflow-hidden border-[4px] border-black">
-                                            
                                             {/* Notch */}
                                             <div className="absolute top-[10px] left-1/2 -translate-x-1/2 w-[32%] h-[26px] bg-black rounded-full z-50 flex items-center justify-between px-2 shadow-sm pointer-events-none">
                                                 <div className="w-[30%] h-[60%] bg-[#1a1a1a]/80 rounded-full blur-[0.5px]"></div>
                                                 <div className="w-[20%] h-[60%] bg-[#252525]/80 rounded-full blur-[0.5px]"></div>
                                             </div>
-
                                             {/* Screen Content */}
                                             {activeImage ? (
                                                 <img src={getImageUrl(activeImage)!} className="w-full h-full object-cover" alt="Preview" />
                                             ) : (
                                                 <div className="h-full flex flex-col items-center justify-center text-slate-600 gap-2 bg-slate-100"><div className="w-8 h-8 border-2 border-slate-700 rounded-full"></div><span className="text-xs font-medium">No Preview</span></div>
                                             )}
-
                                             {/* Home Bar */}
                                             <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[35%] h-1 bg-white/40 rounded-full backdrop-blur-md z-40"></div>
                                         </div>
                                     </div>
                                 </div>
                             ) : (
-                                /* --- Tablet View (Simple Frame) --- */
-                                <div className="relative w-full aspect-[4/3]">
-                                    <div className="relative h-full w-full rounded-[2rem] p-[4px] shadow-2xl shadow-slate-300/50 border ring-1 ring-[#111] z-10 overflow-hidden bg-[#363535] border-[#555]">
-                                        <div className="relative w-full h-full bg-black rounded-[1.8rem] overflow-hidden border-[4px] border-black flex items-center justify-center">
+                                /* --- Tablet View (3:4 แนวตั้งตามที่ Crop มา) --- */
+                                <div className="relative w-full aspect-[3/4]">
+                                    <div className="relative h-full w-full rounded-[2rem] p-[6px] shadow-2xl shadow-slate-300/50 border ring-1 ring-[#111] z-10 overflow-hidden bg-[#363535] border-[#555]">
+                                        <div className="absolute inset-0 rounded-[2rem] border-[1px] border-white/20 pointer-events-none z-20"></div>
+                                        <div className="relative w-full h-full bg-black rounded-[1.6rem] overflow-hidden border-[4px] border-black flex items-center justify-center">
                                             {activeImage ? (<img src={getImageUrl(activeImage)!} className="w-full h-full object-cover" alt="Preview" />) : (<span className="text-slate-600 text-xs font-medium">No Preview</span>)}
                                         </div>
                                     </div>
@@ -168,11 +164,15 @@ export default function ThemeDetailPage() {
                         </div>
                     </div>
 
-                    {/* Thumbnails */}
+                    {/* ✅ Thumbnails (ปรับความสูงให้เท่ากันทั้ง 2 โหมด) */}
                     {displayImages.length > 0 && (
-                        <div className="flex gap-2 overflow-x-auto pb-4 w-full px-4 no-scrollbar justify-start md:justify-center">
+                        <div className="flex gap-3 overflow-x-auto pb-4 w-full px-4 no-scrollbar justify-start md:justify-center">
                             {displayImages.map((img, idx) => (
-                                <button key={idx} onClick={() => setActiveImage(img)} className={`relative rounded-lg overflow-hidden transition-all duration-200 border-2 shrink-0 ${activeImage === img ? 'border-blue-600 ring-2 ring-blue-100 scale-105' : 'border-transparent hover:border-slate-300 opacity-80'} ${viewMode === 'mobile' ? 'w-10 h-16' : 'w-16 h-12'}`}>
+                                <button 
+                                    key={idx} 
+                                    onClick={() => setActiveImage(img)} 
+                                    className={`relative rounded-lg overflow-hidden transition-all duration-200 border-2 shrink-0 ${activeImage === img ? 'border-blue-600 ring-2 ring-blue-100 scale-105 shadow-md' : 'border-transparent hover:border-slate-300 opacity-80'} ${viewMode === 'mobile' ? 'w-10 md:w-12 aspect-[9/19.5]' : 'w-14 md:w-[60px] aspect-[3/4]'}`}
+                                >
                                     <img src={getImageUrl(img)!} className="w-full h-full object-cover" />
                                 </button>
                             ))}
@@ -220,11 +220,10 @@ export default function ThemeDetailPage() {
                         {theme.description || 'Experience a modern, responsive design tailored for high conversion.'}
                     </div>
 
-                    {/* ✅ Plan Selection (3 ตัวเลือก: Weekly, Monthly, Yearly) */}
+                    {/* Plan Selection */}
                     {!isActive && (
                         <div className="flex flex-col gap-3">
-                            
-                            {/* 1. Weekly (7 Days) */}
+                            {/* 1. Weekly */}
                             {theme.price_weekly !== null && (
                                 <button onClick={() => setSelectedPlan('weekly')} disabled={!userRole.isOwner} className={`relative p-4 rounded-xl border-2 text-left transition-all active:scale-95 flex justify-between items-center group ${selectedPlan === 'weekly' ? 'border-blue-600 bg-blue-50/50 ring-1 ring-blue-600/20' : 'border-slate-200 bg-white hover:border-blue-300'}`}>
                                     <div>
@@ -235,7 +234,7 @@ export default function ThemeDetailPage() {
                                 </button>
                             )}
 
-                            {/* 2. Monthly (30 Days) */}
+                            {/* 2. Monthly */}
                             {theme.price_monthly !== null && (
                                 <button onClick={() => setSelectedPlan('monthly')} disabled={!userRole.isOwner} className={`relative p-4 rounded-xl border-2 text-left transition-all active:scale-95 flex justify-between items-center group ${selectedPlan === 'monthly' ? 'border-blue-600 bg-blue-50/50 ring-1 ring-blue-600/20' : 'border-slate-200 bg-white hover:border-blue-300'}`}>
                                     <div>
@@ -246,15 +245,10 @@ export default function ThemeDetailPage() {
                                 </button>
                             )}
 
-                            {/* 3. Yearly (365 Days - Best Value) */}
+                            {/* 3. Yearly */}
                             {theme.price_yearly !== null && (
                                 <button onClick={() => setSelectedPlan('yearly')} disabled={!userRole.isOwner} className={`relative p-4 rounded-xl border-2 text-left transition-all active:scale-95 flex justify-between items-center group ${selectedPlan === 'yearly' ? 'border-emerald-600 bg-emerald-50/50 ring-1 ring-emerald-600/20' : 'border-slate-200 bg-white hover:border-emerald-300'}`}>
-                                    
-                                    {/* Badge */}
-                                    <div className="absolute -top-3 right-4 bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
-                                        BEST VALUE
-                                    </div>
-
+                                    <div className="absolute -top-3 right-4 bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">BEST VALUE</div>
                                     <div>
                                         <div className="flex items-center gap-2 mb-1">
                                             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Yearly</span>
@@ -273,7 +267,7 @@ export default function ThemeDetailPage() {
                         <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Included Features</h3>
                         <ul className="space-y-2">
                             <li className="flex items-center gap-3 text-xs md:text-sm font-medium text-slate-700"><div className="w-5 h-5 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 scale-90"><IconCheck /></div> Instant Installation</li>
-                            <li className="flex items-center gap-3 text-xs md:text-sm font-medium text-slate-700"><div className="w-5 h-5 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 scale-90"><IconMobile /></div> Fully Responsive</li>
+                            <li className="flex items-center gap-3 text-xs md:text-sm font-medium text-slate-700"><div className="w-5 h-5 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 scale-90"><IconMobile /></div> Fully Responsive Layout</li>
                         </ul>
                     </div>
 

@@ -3,12 +3,15 @@
 
 import { createClient } from '@supabase/supabase-js';
 
+// 🌟 ตัวแปรดึง URL ของ Cloudflare จาก .env
+const CDN_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://img.pos-foodscan.com";
+
 // ✅ 1. Banner มาตรฐาน (จะถูกบังคับใช้เมื่อหมดโปร)
-// (⚠️ อย่าลืมอัปโหลดรูปชื่อ 'standard_banner_default.jpg' เข้า Storage ของคุณนะครับ)
+// (⚠️ ตอนนี้ Banner พื้นฐานก็ควรเปลี่ยนเป็นชื่อไฟล์ที่อยู่ใน R2 ด้วยนะ หรือเป็น URL ตรงๆ เลย)
 const STANDARD_BANNERS = [
   {
     id: 'default-standard',
-    image_name: 'standard_banner_default.jpg', // 👈 แก้ชื่อไฟล์ตรงนี้ให้ตรงกับรูปใน Storage
+    image_name: 'system/standard_banner_default.jpg', // 👈 ใส่โฟลเดอร์ให้ชัดเจน หรือใช้ชื่อเต็มไปเลย
     title: 'Standard Mode',
     link_url: null,
     sort_order: 0,
@@ -26,6 +29,14 @@ type ShopParams = {
   brandId: string;
   combinedId: string;
   slug: string;
+};
+
+// Helper Function: แปลงชื่อรูปเป็น Cloudflare URL เต็มๆ
+const getImageUrl = (imageName: string | null) => {
+    if (!imageName) return null;
+    if (imageName.startsWith('http')) return imageName;
+    // คืนค่า https://img.pos-foodscan.com/ชื่อรูป.webp
+    return `${CDN_URL}/${imageName}`;
 };
 
 // --- Action 1: ดึงข้อมูลร้านค้า (Initial Data) ---
@@ -75,28 +86,20 @@ export async function fetchShopData(params: ShopParams) {
     if (brandData.theme_mode && brandData.theme_mode !== 'standard') {
         const { data: themeUsage } = await supabaseServer
             .from('themes')
-            // ✅ ดึง expires_at และ purchase_type มาตรวจสอบ
             .select('expires_at, purchase_type, marketplace_themes!inner(theme_mode)')
             .eq('brand_id', brandId)
-            // หาธีมที่ตรงกับ Mode ปัจจุบันของร้าน
             .eq('marketplace_themes.theme_mode', brandData.theme_mode) 
             .single();
 
-        // ตรวจสอบสถานะ Lifetime และ วันหมดอายุ
         const isLifetime = themeUsage?.purchase_type === 'lifetime';
         const isExpired = themeUsage?.expires_at && new Date(themeUsage.expires_at) < new Date();
 
-        // 🚨 เงื่อนไขการตัดสิทธิ์:
-        // 1. หาไม่เจอ (อาจจะแอบเปลี่ยนค่าใน DB เอง)
-        // 2. ไม่ใช่ Lifetime (เป็น Monthly) AND หมดอายุแล้ว
         if (!themeUsage || (!isLifetime && isExpired)) {
             console.log(`⚠️ Theme "${brandData.theme_mode}" Expired for Brand ${brandId}. Reverting to Standard.`);
             
-            // 1. เปลี่ยนค่าในตัวแปรทันที (เพื่อให้หน้าเว็บแสดงผลเป็น Standard เดี๋ยวนี้)
             brandData.theme_mode = 'standard'; 
             isPlanExpired = true;
 
-            // 2. สั่งอัปเดต Database ทันที (ใช้ await เพื่อความชัวร์ว่าค่าเปลี่ยนจริง)
             await supabaseServer
                 .from('brands')
                 .update({ theme_mode: 'standard' })
@@ -120,18 +123,29 @@ export async function fetchShopData(params: ShopParams) {
 
     if (isPlanExpired) {
         console.log("🔒 Plan Expired: Forcing Standard Banners");
-        // ⛔️ ถ้าหมดอายุ: บังคับใช้ Banner มาตรฐานทันที (ไม่สน DB)
         finalBanners = STANDARD_BANNERS as any; 
     }
+
+    // 🚀 NEW LOGIC: แปลง image_name ให้เป็น Cloudflare URL แบบเต็มก่อนส่งไปหน้าบ้าน
+    // เพื่อให้โค้ด UI หน้าบ้านไม่ต้องเขียน CDN_URL ซ้ำซ้อน และใช้รูปได้เลย
+    const mappedBanners = finalBanners.map(b => ({
+      ...b,
+      image_url: getImageUrl(b.image_name) // เพิ่ม property image_url เข้าไป
+    }));
+
+    const mappedProducts = (prodRes.data || []).map(p => ({
+      ...p,
+      image_url: getImageUrl(p.image_name) // เพิ่ม property image_url เข้าไป
+    }));
 
     return {
       success: true,
       data: {
-        brand: brandData, // ✅ ค่านี้จะเป็น 'standard' ถ้าหมดอายุ
+        brand: brandData, 
         tableLabel: tableData.label,
-        banners: finalBanners, // ✅ ค่านี้จะเป็น STANDARD_BANNERS ถ้าหมดอายุ
+        banners: mappedBanners, // ✅ ส่งแบนเนอร์ที่แปลงเป็น R2 URL แล้ว
         categories: catRes.data?.length ? [{ id: "all", name: "All" }, ...catRes.data] : [{ id: "all", name: "All" }],
-        products: prodRes.data || [],
+        products: mappedProducts, // ✅ ส่งเมนูอาหารที่แปลงเป็น R2 URL แล้ว
         discounts: discRes.data || [],
         orders: ordersRes.data || []
       }

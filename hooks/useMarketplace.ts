@@ -1,10 +1,11 @@
 // hooks/useMarketplace.ts
 import { useState, useEffect, useMemo } from 'react';
-import { supabase } from '@/lib/supabase';
+// ลบ import supabase ออกไปเลย เพราะเราไม่ใช้มันดึงรูปแล้ว!
 import { getMarketplaceDataAction } from '@/app/actions/marketplaceActions';
 import { useRouter } from 'next/navigation';
 
-const BUCKET_NAME = 'theme-images';
+// 🌟 ตัวแปร URL ของ Cloudflare R2
+const CDN_BASE_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://img.pos-foodscan.com";
 
 export function useMarketplace() {
     const router = useRouter();
@@ -19,33 +20,28 @@ export function useMarketplace() {
     // Filter States
     const [selectedCategory, setSelectedCategory] = useState('ALL');
     const [ownershipFilter, setOwnershipFilter] = useState<'ALL' | 'OWNED' | 'NOT_OWNED'>('ALL');
-    
-    // ✅ State กรอง Level (เริ่มต้นเป็น ALL)
     const [tierFilter, setTierFilter] = useState('ALL');
     
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(12);
 
     // --- Responsive Items Logic ---
-   // --- Responsive Items Logic ---
-useEffect(() => {
-    const calculateItemsPerPage = () => {
-        const width = window.innerWidth;
-        let columns = 2; // ✅ เริ่มต้นที่ 2 คอลัมน์สำหรับมือถือ
+    useEffect(() => {
+        const calculateItemsPerPage = () => {
+            const width = window.innerWidth;
+            let columns = 2; // เริ่มต้นที่ 2 คอลัมน์สำหรับมือถือ
 
-        if (width >= 1280) columns = 6;       // จอใหญ่มาก
-        else if (width >= 1024) columns = 4;  // จอคอม
-        else if (width >= 768) columns = 3;   // ไอแพดแนวนอน
-        else columns = 2;                     // ✅ มือถือและไอแพดแนวตั้ง (2 คอลัมน์)
+            if (width >= 1280) columns = 6;       // จอใหญ่มาก
+            else if (width >= 1024) columns = 4;  // จอคอม
+            else if (width >= 768) columns = 3;   // ไอแพดแนวนอน
+            else columns = 2;                     // มือถือและไอแพดแนวตั้ง
 
-        // สูตร: จำนวนคอลัมน์ x 3 แถว (เพื่อให้เต็มหน้าจอพอดี)
-        // มือถือ: 2 x 3 = 6 รายการ
-        setItemsPerPage(columns * 3); // เปลี่ยนตัวคูณเป็น 3 หรือ 4 ก็ได้ตามชอบ
-    };
-    calculateItemsPerPage();
-    window.addEventListener('resize', calculateItemsPerPage);
-    return () => window.removeEventListener('resize', calculateItemsPerPage);
-}, []);
+            setItemsPerPage(columns * 3); // จำนวนคอลัมน์ x 3 แถว
+        };
+        calculateItemsPerPage();
+        window.addEventListener('resize', calculateItemsPerPage);
+        return () => window.removeEventListener('resize', calculateItemsPerPage);
+    }, []);
 
     // Init Data
     useEffect(() => {
@@ -68,23 +64,31 @@ useEffect(() => {
         setCurrentPage(1);
     }, [selectedCategory, ownershipFilter, tierFilter]);
 
-    // --- Logic ---
+    // ✅✅ 1. แก้ไข Logic การดึงรูปภาพ (บังคับใช้ Cloudflare R2)
     const getImageUrl = (fileName: string | null) => {
         if (!fileName || fileName.trim() === '') return '/placeholder.png';
+
+        // 🚨 ดักจับกรณีข้อมูลเก่าเป็น URL ของ Supabase
+        if (fileName.includes('supabase.co')) {
+            const cleanFileName = fileName.split('/').pop(); 
+            return `${CDN_BASE_URL}/themes/${cleanFileName}`;
+        }
+
+        // ถ้าเป็นลิงก์เว็บภายนอก (ที่ไม่ใช่ Supabase) ให้ใช้ลิงก์เดิม
         if (fileName.startsWith('http')) return fileName;
-        const filePath = fileName.startsWith('themes/') ? fileName : `themes/${fileName}`;
-        const { data } = supabase.storage.from(BUCKET_NAME).getPublicUrl(filePath);
-        return data.publicUrl;
+
+        // ถ้าระบุโฟลเดอร์ themes/ มาแล้ว
+        if (fileName.startsWith('themes/')) return `${CDN_BASE_URL}/${fileName}`;
+
+        // กรณีทั่วไป: ชื่อไฟล์เพียวๆ
+        return `${CDN_BASE_URL}/themes/${fileName}`;
     };
 
     const goToDetails = (themeId: string) => {
         router.push(`/dashboard/marketplace/${themeId}`);
     };
 
-    // ✅✅ 1. คำนวณจำนวนธีมในแต่ละ Tier (เพื่อนับเลขโชว์ที่ปุ่ม)
     const tierCounts = useMemo(() => {
-        // นับจาก allThemes (หรือจะนับจากหมวดหมู่ที่เลือกก็ได้ ถ้าอยากให้สัมพันธ์กัน)
-        // ในที่นี้ผมนับจาก "หมวดหมู่ที่เลือกอยู่" เพื่อความแม่นยำครับ
         const source = selectedCategory === 'ALL' 
             ? allThemes 
             : allThemes.filter(t => t.category_id === selectedCategory);
@@ -105,21 +109,17 @@ useEffect(() => {
     const filteredThemes = useMemo(() => {
         let result = allThemes;
 
-        // 1. Filter by Category
         if (selectedCategory !== 'ALL') {
             result = result.filter(t => t.category_id === selectedCategory);
         }
 
-        // 2. Filter by Ownership
         if (ownershipFilter === 'OWNED') {
             result = result.filter(t => ownedThemeIds.includes(t.id));
         } else if (ownershipFilter === 'NOT_OWNED') {
             result = result.filter(t => !ownedThemeIds.includes(t.id));
         }
 
-        // 3. ✅ Filter by Tier (Level)
         if (tierFilter !== 'ALL') {
-            // เทียบค่า min_plan (แปลงเป็น lowerCase ให้ชัวร์)
             result = result.filter(t => (t.min_plan || 'free').toLowerCase() === tierFilter.toLowerCase());
         }
 
@@ -139,25 +139,20 @@ useEffect(() => {
     };
 
     return {
-        // Data
         categories,
         currentThemes,
         ownedThemeIds,
         loading,
         currentPlan, 
-        
-        // Pagination info
         currentPage,
         totalPages,
         totalItems: filteredThemes.length,
-        tierCounts, // ✅ ส่งค่าจำนวนนับออกไป
-
-        // Actions / Setters
+        tierCounts,
         selectedCategory, setSelectedCategory,
         ownershipFilter, setOwnershipFilter,
         tierFilter, setTierFilter,
         changePage,
-        getImageUrl,
+        getImageUrl, // ส่งฟังก์ชันที่อัปเกรดแล้วออกไป
         goToDetails
     };
 }

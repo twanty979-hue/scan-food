@@ -71,6 +71,25 @@ export default function PaymentPage() {
     const prevItemsRef = useRef<any[]>([]);
 
     const isLimitReached = limitStatus?.isLocked;
+    // 🌟 ดึง Logic ตัวตึงมาใช้: สร้าง URL โลโก้แบบ Dynamic รองรับหลายสาขา
+    const getCorrectQrLogo = () => {
+        if (!currentBrand?.qr_image_url || !currentBrand?.id) return null;
+        const CDN = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://img.pos-foodscan.com";
+        let finalLogo = currentBrand.qr_image_url;
+
+        if (finalLogo.includes('supabase.co')) {
+            const fileName = finalLogo.split('/').pop();
+            return `${CDN}/${currentBrand.id}/${fileName}`;
+        } else if (!finalLogo.startsWith('http')) {
+            const cleanPath = finalLogo.replace(/^\/+/, '');
+            if (cleanPath.startsWith(currentBrand.id)) {
+                return `${CDN}/${cleanPath}`;
+            } else {
+                return `${CDN}/${currentBrand.id}/${cleanPath}`;
+            }
+        }
+        return finalLogo;
+    };
     const usageText = limitStatus ? `${limitStatus.usage}/${limitStatus.limit}` : '';
     const router = useRouter();
     const showSoundGuard = autoKitchen && !isAudioUnlocked;
@@ -648,8 +667,17 @@ const confirmCashPayment = async () => {
     </div>
 )}
 
-            {qrTableData && <TableQrModal table={qrTableData} brandId={currentBrand?.id} brandSlug={currentBrand?.slug} qrLogoUrl={getFullImageUrl(currentBrand?.qr_image_url)} onClose={() => setQrTableData(null)} limitStatus={limitStatus} />}
-            
+            {qrTableData && (
+                <TableQrModal 
+                    table={qrTableData} 
+                    brandId={currentBrand?.id} 
+                    brandSlug={currentBrand?.slug} 
+                    // ✅ เปลี่ยนมาใช้ฟังก์ชันที่เราเพิ่งสร้าง
+                    qrLogoUrl={getCorrectQrLogo()} 
+                    onClose={() => setQrTableData(null)} 
+                    limitStatus={limitStatus} 
+                />
+            )}
             {statusModal.show && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
                     <div className="bg-white rounded-[48px] p-8 max-w-sm w-full text-center shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-300">

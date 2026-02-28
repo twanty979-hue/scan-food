@@ -3,7 +3,8 @@
 
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useProfile } from '@/hooks/useProfile';
-import { useState, useEffect, Suspense } from 'react'; // ✅ เพิ่ม Suspense
+import { useState, useEffect, Suspense } from 'react'; 
+import Cropper from 'react-easy-crop'; 
 
 // --- 🎨 Custom Icons ---
 const IconUser = ({ size = 24 }: any) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
@@ -19,13 +20,20 @@ function ProfileContent() {
   const {
     loading, submitting, email,
     formData, setFormData,
-    fileInputRef,
-    getImageUrl, handleUpload, handleSave
+    fileInputRef, getImageUrl, 
+    handleSave, onFileChange, // เปลี่ยนจาก handleUpload เป็น onFileChange ตาม Hook ใหม่
+    // ฟังก์ชันและ State สำหรับรูปภาพ
+    imageToCrop, isCropModalOpen, setIsCropModalOpen,
+    setCroppedAreaPixels, handleCropComplete, previewUrl
   } = useProfile();
 
   const searchParams = useSearchParams();
   const router = useRouter();
   const [showError, setShowError] = useState(false);
+
+  // 🌟 เพิ่ม State สำหรับระบบ ครอปรูป
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
 
   useEffect(() => {
     if (searchParams.get('error') === 'premium_required') {
@@ -86,8 +94,9 @@ function ProfileContent() {
                 
                 <div className="relative mb-4 group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
                     <div className="w-32 h-32 rounded-full border-4 border-white shadow-xl overflow-hidden bg-slate-100 flex items-center justify-center">
-                        {formData.avatar_url ? (
-                            <img src={getImageUrl(formData.avatar_url) ?? ''} className="w-full h-full object-cover" />
+                        {/* 🌟 เช็ครูปพรีวิวจากการครอปก่อน ถ้าไม่มีให้แสดงรูปจาก DB */}
+                        {previewUrl || formData.avatar_url ? (
+                            <img src={previewUrl || getImageUrl(formData.avatar_url) || ''} className="w-full h-full object-cover" />
                         ) : (
                             <IconUser size={64} className="text-slate-300" />
                         )}
@@ -95,7 +104,8 @@ function ProfileContent() {
                     <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                         <IconCamera className="text-white" size={32} />
                     </div>
-                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleUpload} />
+                    {/* 🌟 เปลี่ยน onChange เป็น onFileChange */}
+                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={onFileChange} />
                 </div>
 
                 <h2 className="text-2xl font-black text-slate-800">{formData.full_name || 'ไม่ระบุชื่อ'}</h2>
@@ -156,6 +166,43 @@ function ProfileContent() {
           </div>
         )}
       </div>
+
+      {/* --- 🖼️ MODAL สำหรับ CROP รูปภาพ (แก้ให้ลอยตรงกลางจอ) --- */}
+      {isCropModalOpen && imageToCrop && (
+        <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex flex-col items-center justify-center p-4">
+          
+          {/* 🌟 จุดที่แก้: กำหนดความสูง h-[50vh] เพื่อไม่ให้มันขยายจนล้นจอไปติดขอบบน */}
+          <div className="relative w-full max-w-md h-[50vh] min-h-[300px] max-h-[500px] bg-white rounded-3xl overflow-hidden shadow-2xl mb-6">
+            <Cropper
+              image={imageToCrop}
+              crop={crop}
+              zoom={zoom}
+              aspect={1} 
+              onCropChange={setCrop}
+              onZoomChange={setZoom}
+              onCropComplete={(_, pixels) => setCroppedAreaPixels(pixels)}
+            />
+          </div>
+          
+          <div className="flex gap-4 w-full max-w-md">
+             <button 
+                type="button"
+                onClick={() => setIsCropModalOpen(false)}
+                className="flex-1 py-4 bg-white/10 text-white rounded-2xl font-bold hover:bg-white/20 transition-all"
+             >
+                ยกเลิก
+             </button>
+             <button 
+                type="button"
+                onClick={handleCropComplete}
+                className="flex-[2] py-4 bg-blue-500 text-white rounded-2xl font-black shadow-lg shadow-blue-500/40 hover:bg-blue-600 transition-all"
+             >
+                ตัดรูปภาพนี้
+             </button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

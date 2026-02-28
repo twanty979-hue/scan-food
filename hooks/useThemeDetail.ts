@@ -1,58 +1,42 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
-// ✅ Import Type จาก Action เพื่อความชัวร์ (หรือ Hardcode เอาแบบด้านล่างก็ได้)
+// ลบ import { supabase } from '@/lib/supabase'; ออกได้เลย เพราะไม่ได้ใช้ใน Hook แล้ว
 import { getThemeDetailAction, installThemeAction } from '@/app/actions/marketplaceDetailActions';
 import { createPromptPayQRCode, checkOmisePaymentStatus } from '@/app/actions/omiseActions';
 import { useRouter, useParams } from 'next/navigation';
 import dayjs from 'dayjs';
 
-const BUCKET_NAME = 'theme-images';
+// ✅ เปลี่ยน URL ชี้ไปที่ Cloudflare R2 แทน Supabase
+const CDN_BASE_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://img.pos-foodscan.com";
 
-// ✅ สร้าง Type ใหม่สำหรับ 3 แผนนี้เท่านั้น
 type PlanType = 'weekly' | 'monthly' | 'yearly';
 
 export function useThemeDetail() {
     const { id } = useParams();
     const router = useRouter();
 
-    // Data State
     const [theme, setTheme] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [userRole, setUserRole] = useState<{ isOwner: boolean }>({ isOwner: false });
     const [ownership, setOwnership] = useState<{
-        isOwned: boolean;
-        type: string | null; // แก้เป็น string เพื่อรองรับ weekly/yearly
-        expiresAt: string | null;
-        daysLeft: number | null;
-        isExpired: boolean;
+        isOwned: boolean; type: string | null; expiresAt: string | null; daysLeft: number | null; isExpired: boolean;
     }>({ isOwned: false, type: null, expiresAt: null, daysLeft: null, isExpired: false });
 
     const [processing, setProcessing] = useState(false);
-
-    // UI State
     const [viewMode, setViewMode] = useState<'mobile' | 'ipad'>('mobile');
     const [activeImage, setActiveImage] = useState<string | null>(null);
     const [displayImages, setDisplayImages] = useState<string[]>([]);
     
-    // ✅ แก้ State Plan: เริ่มต้นที่ 'monthly' และรองรับ 3 แบบ
     const [selectedPlan, setSelectedPlan] = useState<PlanType>('monthly');
 
-    // Payment State
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [qrCode, setQrCode] = useState<string | null>(null);
     const [chargeId, setChargeId] = useState<string | null>(null);
     const [paymentStatus, setPaymentStatus] = useState<'idle' | 'pending' | 'successful'>('idle');
 
-    // Modal State
     const [alertModal, setAlertModal] = useState<{
-        isOpen: boolean;
-        type: 'success' | 'error' | 'confirm';
-        title: string;
-        message: string;
-        onConfirm?: () => void;
+        isOpen: boolean; type: 'success' | 'error' | 'confirm'; title: string; message: string; onConfirm?: () => void;
     }>({ isOpen: false, type: 'success', title: '', message: '' });
 
-    // --- Init Data ---
     useEffect(() => {
         const fetchData = async () => {
             if (!id) return;
@@ -69,11 +53,8 @@ export function useThemeDetail() {
                     const daysLeft = owned.expires_at ? dayjs(owned.expires_at).diff(dayjs(), 'day') : null;
 
                     setOwnership({
-                        isOwned: true,
-                        type: owned.purchase_type,
-                        expiresAt: owned.expires_at,
-                        daysLeft: daysLeft,
-                        isExpired: isExpired
+                        isOwned: true, type: owned.purchase_type, expiresAt: owned.expires_at,
+                        daysLeft: daysLeft, isExpired: isExpired
                     });
                 } else {
                     setOwnership({ isOwned: false, type: null, expiresAt: null, daysLeft: null, isExpired: false });
@@ -125,7 +106,6 @@ export function useThemeDetail() {
         setProcessing(true);
         setAlertModal(prev => ({ ...prev, isOpen: false })); 
 
-        // ✅ ส่ง selectedPlan ที่เป็น weekly/monthly/yearly ไป
         const res = await installThemeAction(theme.id, verifiedChargeId || null, selectedPlan);
         
         setProcessing(false);
@@ -133,19 +113,13 @@ export function useThemeDetail() {
 
         if (res.success) {
             setAlertModal({
-                isOpen: true,
-                type: 'success',
-                title: 'Installation Successful!',
+                isOpen: true, type: 'success', title: 'Installation Successful!',
                 message: 'Your new theme is ready to use.',
-                onConfirm: () => {
-                    window.location.reload();
-                }
+                onConfirm: () => window.location.reload()
             });
         } else {
             setAlertModal({
-                isOpen: true,
-                type: 'error',
-                title: 'Installation Failed',
+                isOpen: true, type: 'error', title: 'Installation Failed',
                 message: res.error || 'Something went wrong.',
                 onConfirm: () => setAlertModal(prev => ({ ...prev, isOpen: false }))
             });
@@ -162,21 +136,16 @@ export function useThemeDetail() {
             return;
         }
 
-        // ใช้ plan ที่ส่งมา (จากการกดปุ่ม) หรือใช้ state ปัจจุบัน
         const planToBuy = overridePlan || selectedPlan;
 
-        // ✅ คำนวณราคาตาม Plan จริงๆ
         let currentPrice = 0;
         if (planToBuy === 'weekly') currentPrice = theme.price_weekly ?? 0;
         else if (planToBuy === 'monthly') currentPrice = theme.price_monthly ?? 0;
         else if (planToBuy === 'yearly') currentPrice = theme.price_yearly ?? 0;
 
-        // ถ้าเป็นของฟรี (ราคา 0)
         if (currentPrice === 0) {
             setAlertModal({
-                isOpen: true,
-                type: 'confirm',
-                title: 'Confirm Installation',
+                isOpen: true, type: 'confirm', title: 'Confirm Installation',
                 message: `Install "${theme.name}" for free?`,
                 onConfirm: () => performInstall(null)
             });
@@ -184,7 +153,6 @@ export function useThemeDetail() {
         }
 
         setProcessing(true);
-        // ✅ ส่ง planToBuy ไปสร้าง QR Code
         const res = await createPromptPayQRCode(currentPrice, theme.id, planToBuy);
 
         if (res.success && res.qrImage) {
@@ -202,12 +170,12 @@ export function useThemeDetail() {
         setProcessing(false);
     };
 
+    // ✅ แก้ไขให้อ่านรูปจาก Cloudflare เต็มตัว
     const getImageUrl = (fileName: string | null) => {
         if (!fileName) return null;
         if (fileName.startsWith('http')) return fileName;
-        const filePath = fileName.startsWith('themes/') ? fileName : `themes/${fileName}`;
-        const { data } = supabase.storage.from(BUCKET_NAME).getPublicUrl(filePath);
-        return data.publicUrl;
+        if (fileName.startsWith('themes/')) return `${CDN_BASE_URL}/${fileName}`;
+        return `${CDN_BASE_URL}/themes/${fileName}`;
     };
     
     const handleShare = () => { /* ... */ };

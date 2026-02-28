@@ -1,5 +1,5 @@
+// hooks/useSettings.ts
 import { useState, useEffect, useRef } from 'react';
-import { supabase } from '@/lib/supabase';
 import { 
     getBrandSettingsAction, 
     updateBrandSettingsAction, 
@@ -10,9 +10,17 @@ import {
 import { useRouter } from 'next/navigation';
 import { useGlobalAlert } from '@/components/providers/GlobalAlertProvider';
 
-const CDN_URL = "https://xvhibjejvbriotfpunvv.supabase.co/storage/v1/object/public/brands/";
+const CDN_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://img.pos-foodscan.com";
 
 declare global { interface Window { Omise: any; OmiseCard: any; } }
+
+const createImage = (url: string): Promise<HTMLImageElement> =>
+  new Promise((resolve, reject) => {
+    const image = new Image();
+    image.addEventListener('load', () => resolve(image));
+    image.addEventListener('error', (error) => reject(error));
+    image.src = url;
+  });
 
 export function useSettings() {
     const router = useRouter();
@@ -25,7 +33,6 @@ export function useSettings() {
     const [isOwner, setIsOwner] = useState(false);
     const [brandId, setBrandId] = useState<string | null>(null);
     
-    // ✅ เพิ่ม State Period & AutoRenew
     const [period, setPeriod] = useState<'monthly' | 'yearly'>('monthly');
     const [isAutoRenew, setIsAutoRenew] = useState(true); 
 
@@ -35,11 +42,21 @@ export function useSettings() {
 
     const [formData, setFormData] = useState({
         name: '', phone: '', address: '', promptpay_number: '', 
-        logo_url: '', qr_image_url: '', plan: 'free', vat: 0, service_charge: 0, // ✅ แก้ไข: เติม Comma ตรงนี้ให้แล้วครับ
-        expiry: null as string | null // ✅ เพิ่ม field expiry เข้าไป
+        logo_url: '', qr_image_url: '', plan: 'free', vat: 0, service_charge: 0,
+        expiry: null as string | null
     });
 
-   useEffect(() => {
+    // --- ✂️ STATE สำหรับ CROP รูปภาพ ---
+    const [imageToCrop, setImageToCrop] = useState<string | null>(null);
+    const [croppingField, setCroppingField] = useState<'logo_url' | 'qr_image_url' | null>(null);
+    const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
+    const [isCropModalOpen, setIsCropModalOpen] = useState(false);
+    const [pendingFiles, setPendingFiles] = useState<{ logo_url?: File; qr_image_url?: File }>({});
+    
+    // 🌟 พระเอกที่ผมลืมใส่ให้พี่: แยก State สำหรับพรีวิวรูปใหม่ เพื่อไม่ให้ไปทับชื่อรูปเก่าใน DB
+    const [previewUrls, setPreviewUrls] = useState<{ logo_url?: string; qr_image_url?: string }>({});
+
+    useEffect(() => {
         const init = async () => {
             const res = await getBrandSettingsAction();
             if (res.success) {
@@ -47,7 +64,6 @@ export function useSettings() {
                 setIsOwner(res.isOwner || false);
                 
                 if (res.brand) {
-                    // ✅ Logic เลือกวันหมดอายุ (Expiry Logic)
                     let currentExpiry = null;
                     const p = res.brand.plan;
                     if (p === 'basic') currentExpiry = res.brand.expiry_basic;
@@ -64,7 +80,7 @@ export function useSettings() {
                         plan: res.brand.plan || 'free',
                         vat: res.brand.config?.vat || 0, 
                         service_charge: res.brand.config?.service_charge || 0,
-                        expiry: currentExpiry // ✅ เก็บวันหมดอายุลง State
+                        expiry: currentExpiry
                     });
                     
                     if (res.brand.is_auto_renew !== undefined) setIsAutoRenew(res.brand.is_auto_renew);
@@ -77,10 +93,15 @@ export function useSettings() {
         init();
     }, [router]);
 
-    const getImageUrl = (imageName: string | null) => {
-        if (!imageName || !brandId) return null;
+    // 🌟 แก้ไข: ให้เช็คจาก Preview ก่อน ถ้าไม่มีค่อยไปดึงจาก DB
+    const getImageUrl = (imageName: string | null, fieldType?: 'logo_url' | 'qr_image_url') => {
+        if (fieldType && previewUrls[fieldType]) {
+             return previewUrls[fieldType] as string; // โชว์รูป Blob ก่อน
+        }
+        if (!imageName) return null;
+        if (imageName.startsWith('blob:')) return imageName;
         if (imageName.startsWith('http')) return imageName;
-        return `${CDN_URL}${brandId}/${imageName}`;
+        return `${CDN_URL}/${imageName}`; 
     };
 
     const copyBrandId = () => {
@@ -90,22 +111,135 @@ export function useSettings() {
         }
     };
 
+    const handleUpload = (e: React.ChangeEvent<HTMLInputElement>, field: 'logo_url' | 'qr_image_url') => {
+        if (!isOwner || !e.target.files || !e.target.files[0] || !brandId) return;
+        const file = e.target.files[0];
+        const imageUrl = URL.createObjectURL(file);
+        setImageToCrop(imageUrl);
+        setCroppingField(field);
+        setIsCropModalOpen(true);
+        e.target.value = ''; 
+    };
+
+    const handleCropComplete = async () => {
+        if (!imageToCrop || !croppedAreaPixels || !croppingField) return;
+
+        try {
+            const image = await createImage(imageToCrop);
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+
+            const TARGET_SIZE = 300; 
+            canvas.width = TARGET_SIZE;
+            canvas.height = TARGET_SIZE;
+
+            ctx.drawImage(
+                image,
+                croppedAreaPixels.x, croppedAreaPixels.y,
+                croppedAreaPixels.width, croppedAreaPixels.height,
+                0, 0, TARGET_SIZE, TARGET_SIZE
+            );
+
+            let quality = 0.8;
+            let webpBlob: Blob | null = null;
+            const MAX_BYTES = 10 * 1024; 
+
+            do {
+                webpBlob = await new Promise((resolve) => {
+                    canvas.toBlob((blob) => resolve(blob), 'image/webp', quality);
+                });
+                quality -= 0.1;
+            } while (webpBlob && webpBlob.size > MAX_BYTES && quality >= 0.2);
+
+            if (!webpBlob) throw new Error('Failed to create image');
+
+            const fileName = `${croppingField}-${Date.now()}.webp`;
+            const croppedFile = new File([webpBlob], fileName, { type: 'image/webp' });
+            
+            const previewUrl = URL.createObjectURL(croppedFile);
+
+            // 🌟 แก้ไข: เก็บ File ไว้ Upload และเก็บ Preview ไว้โชว์ โดยไม่ไปยุ่งกับ formData 
+            setPendingFiles(prev => ({ ...prev, [croppingField]: croppedFile }));
+            setPreviewUrls(prev => ({ ...prev, [croppingField]: previewUrl }));
+            
+            setIsCropModalOpen(false);
+            setImageToCrop(null);
+
+        } catch (err) {
+            showAlert('error', 'ข้อผิดพลาด', 'ไม่สามารถตัดรูปภาพได้');
+        }
+    };
+
+    const handleSave = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!brandId) return; 
+
+        setSubmitting(true);
+        try {
+            // ดึงชื่อไฟล์ดั้งเดิมจาก DB ไว้ก่อน
+            let finalLogoUrl = formData.logo_url;
+            let finalQrUrl = formData.qr_image_url;
+            let oldImagesToDelete: string[] = [];
+            const uploadQueue = [];
+
+            // 🌟 ตอนนี้ formData.logo_url จะเป็นชื่อไฟล์เดิมจริงๆ แล้ว ไม่ใช่ Blob
+            if (pendingFiles.logo_url) {
+                const fd = new FormData(); fd.append("file", pendingFiles.logo_url); fd.append("folder", brandId);
+                uploadQueue.push(fetch('/api/upload', { method: 'POST', body: fd }).then(r => r.json()).then(d => {
+                    if (formData.logo_url && !formData.logo_url.startsWith('http')) {
+                         oldImagesToDelete.push(formData.logo_url); // เก็บชื่อไฟล์เก่าเตรียมลบ
+                    }
+                    finalLogoUrl = d.fileName; // อัปเดตชื่อไฟล์ใหม่
+                }));
+            }
+
+            if (pendingFiles.qr_image_url) {
+                const fd = new FormData(); fd.append("file", pendingFiles.qr_image_url); fd.append("folder", brandId);
+                uploadQueue.push(fetch('/api/upload', { method: 'POST', body: fd }).then(r => r.json()).then(d => {
+                    if (formData.qr_image_url && !formData.qr_image_url.startsWith('http')) {
+                        oldImagesToDelete.push(formData.qr_image_url); // เก็บชื่อไฟล์เก่าเตรียมลบ
+                    }
+                    finalQrUrl = d.fileName; // อัปเดตชื่อไฟล์ใหม่
+                }));
+            }
+
+            if (uploadQueue.length > 0) await Promise.all(uploadQueue);
+
+            const res = await updateBrandSettingsAction(brandId, {
+                name: formData.name, phone: formData.phone, address: formData.address,
+                promptpay_number: formData.promptpay_number, logo_url: finalLogoUrl, qr_image_url: finalQrUrl
+            });
+
+            if (!res.success) throw new Error((res as any).error || 'Unknown error');
+
+            // 🌟 สั่งลบรูปเก่าทิ้งจริงๆ แล้วครับ
+            oldImagesToDelete.forEach(fileName => {
+                fetch('/api/delete-image', { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify({ fileName }) 
+                }).catch(e => console.error(e));
+            });
+
+            // ล้าง State และอัปเดต DB ใหม่
+            setPendingFiles({});
+            setPreviewUrls({});
+            setFormData(prev => ({ ...prev, logo_url: finalLogoUrl, qr_image_url: finalQrUrl }));
+            showAlert('success', 'บันทึกสำเร็จ', 'ข้อมูลอัปเดตแล้ว');
+        } catch (err: any) {
+            showAlert('error', 'เกิดข้อผิดพลาด', err.message);
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    // ... (ส่วนที่เหลือของ Omise / UpgradePlan เหมือนเดิม) ...
     const createOmiseToken = (amount: number): Promise<string> => {
         return new Promise((resolve, reject) => {
             if (!window.OmiseCard) return reject(new Error("Payment System Loading..."));
-            
-            window.OmiseCard.configure({
-                publicKey: process.env.NEXT_PUBLIC_OMISE_PUBLIC_KEY!,
-                frameLabel: 'Spring POS',
-                submitLabel: 'Pay', 
-                currency: 'thb',
-            });
-
-            window.OmiseCard.open({
-                amount: amount,
-                onCreateTokenSuccess: (token: string) => resolve(token),
-                onFormClosed: () => reject(new Error("Payment cancelled")),
-            });
+            window.OmiseCard.configure({ publicKey: process.env.NEXT_PUBLIC_OMISE_PUBLIC_KEY!, frameLabel: 'Spring POS', submitLabel: 'Pay', currency: 'thb' });
+            window.OmiseCard.open({ amount: amount, onCreateTokenSuccess: (token: string) => resolve(token), onFormClosed: () => reject(new Error("Payment cancelled")) });
         });
     };
 
@@ -114,61 +248,16 @@ export function useSettings() {
             if (!window.Omise) return reject(new Error("Payment System Loading..."));
             window.Omise.setPublicKey(process.env.NEXT_PUBLIC_OMISE_PUBLIC_KEY!);
             window.Omise.createSource('promptpay', { amount, currency: 'thb' }, (statusCode: number, response: any) => {
-                if (statusCode === 200) resolve(response.id);
-                else reject(new Error(response.message));
+                if (statusCode === 200) resolve(response.id); else reject(new Error(response.message));
             });
         });
     };
 
-    const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'logo_url' | 'qr_image_url') => {
-        if (!isOwner || !e.target.files || !e.target.files[0] || !brandId) return;
-        const file = e.target.files[0];
-        const fileExt = file.name.split('.').pop();
-        const fileNameOnly = `${field === 'logo_url' ? 'logo' : 'qr'}_${Date.now()}.${fileExt}`;
-        const uploadPath = `${brandId}/${fileNameOnly}`;
-        try {
-            setSubmitting(true);
-            const { error } = await supabase.storage.from('brands').upload(uploadPath, file, { upsert: true });
-            if (error) throw error;
-            setFormData(prev => ({ ...prev, [field]: fileNameOnly }));
-            showAlert('success', 'อัปโหลดสำเร็จ', 'บันทึกรูปภาพเรียบร้อยแล้ว');
-        } catch (err: any) {
-            showAlert('error', 'อัปโหลดล้มเหลว', err.message);
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
-    const handleSave = async (e: React.FormEvent) => {
-        e.preventDefault();
-        
-        // ✅ ปล่อยให้ปุ่มทำงานแม้ Frontend จะมองว่าไม่ใช่ Owner (ไปตายที่ Backend แทน ถ้าไม่มีสิทธิ์)
-        if (!brandId) return; 
-
-        setSubmitting(true);
-        try {
-            const res = await updateBrandSettingsAction(brandId, {
-                name: formData.name, phone: formData.phone, address: formData.address,
-                promptpay_number: formData.promptpay_number, logo_url: formData.logo_url, qr_image_url: formData.qr_image_url
-            });
-            if (res.success) showAlert('success', 'บันทึกสำเร็จ', 'ข้อมูลอัปเดตแล้ว');
-            else throw new Error((res as any).error || 'Unknown error');
-        } catch (err: any) {
-            showAlert('error', 'เกิดข้อผิดพลาด', err.message);
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
     const handleUpgradePlan = async (newPlan: string, method: 'credit_card' | 'promptpay') => {
         if (!isOwner || !brandId) return;
-        
         const basePrices: Record<string, number> = { free: 0, basic: 25000, pro: 48900, ultimate: 199900 };
         let amount = basePrices[newPlan] || 0;
-
-        if (period === 'yearly') {
-            amount = Math.floor((amount * 12) * 0.8);
-        }
+        if (period === 'yearly') amount = Math.floor((amount * 12) * 0.8);
 
         if (amount === 0 && newPlan === 'free') {
              setSubmitting(true);
@@ -185,7 +274,6 @@ export function useSettings() {
 
         let msg = `ยืนยันสมัคร ${newPlan.toUpperCase()} (${period === 'monthly' ? 'รายเดือน' : 'รายปี'})\nยอดชำระ: ${(amount/100).toLocaleString()} บาท`;
         if (method === 'credit_card' && isAutoRenew) msg += `\n(ระบบจะตัดบัตรอัตโนมัติเมื่อครบกำหนด)`;
-
         const isConfirmed = await showConfirm('ยืนยันการชำระเงิน?', msg, 'ชำระเงิน', 'ยกเลิก');
         if (!isConfirmed) return;
 
@@ -198,7 +286,6 @@ export function useSettings() {
                     setFormData(prev => ({ ...prev, plan: newPlan }));
                     showAlert('success', 'ชำระเงินสำเร็จ!', 'อัปเกรดแพ็กเกจเรียบร้อยแล้ว');
                 } else throw new Error(res.error);
-
             } else {
                 const sourceId = await createPromptPaySource(amount);
                 const res = await createPromptPayChargeAction(brandId, newPlan, period, sourceId);
@@ -239,7 +326,8 @@ export function useSettings() {
         loading, submitting, isOwner, brandId, formData, setFormData, logoInputRef, qrInputRef,
         getImageUrl, copyBrandId, handleUpload, handleSave, 
         handleUpgradePlan, paymentModal, closePaymentModal,
-        isAutoRenew, setIsAutoRenew,
-        period, setPeriod 
+        isAutoRenew, setIsAutoRenew, period, setPeriod,
+        imageToCrop, isCropModalOpen, setIsCropModalOpen,
+        setCroppedAreaPixels, handleCropComplete, croppingField
     };
 }

@@ -276,18 +276,28 @@ export function usePayment() {
         return hasUpdatedDB; 
     }, [autoKitchen, playSound]);
 
-    // 3. ฟังก์ชันหลักที่ทำงานเมื่อมีการแจ้งเตือน (FCM เรียกใช้)
-    const fetchAndProcessOrders = useCallback(async () => {
+    // ==========================================================
+    // 🌟 3. ฟังก์ชันหลักที่ทำงานเมื่อมีการแจ้งเตือน (FCM เรียกใช้) มีการดัก SILENT_UPDATE
+    // ==========================================================
+    const fetchAndProcessOrders = useCallback(async (payload?: any) => {
         if (!brandId) return;
-        console.log("⚡ ได้รับสัญญาณ! กำลังตรวจสอบออเดอร์ใหม่...");
+        console.log("⚡ ได้รับสัญญาณ! กำลังตรวจสอบออเดอร์...", payload);
+
+        // 🌟 ด่านกักเสียง: เช็คว่าถ้าเป็น SILENT_UPDATE ให้แค่รีเฟรชหน้าจอ ไม่ต้องมีเสียง
+        const type = payload?.data?.type;
+        if (type === 'SILENT_UPDATE') {
+            console.log("🔄 เป็นการอัปเดตเงียบ (จ่ายเงิน): ไม่เล่นเสียง และไม่เข้าเครื่องจักรครัว");
+            await refreshOrders(); // สั่งรีเฟรชหน้าจอให้โต๊ะหายแดง
+            return; // 🛑 จบงานแค่นี้ เงียบกริบ!
+        }
+
+        // 🌟 ถ้าไม่ใช่ SILENT_UPDATE (แปลว่ามีออเดอร์ใหม่)
+        const currentOrders = await getUnpaidOrdersAction(brandId); // โหลดออเดอร์มาเช็ค
         
-        // ดึงข้อมูลออเดอร์ปัจจุบันทั้งหมดมาตรวจสอบ
-        const currentOrders = await getUnpaidOrdersAction(brandId);
-        
-        // ส่งให้เครื่องจักรจัดการรับออเดอร์ (ถ้ามี pending)
+        // ส่งให้เครื่องจักรจัดการรับออเดอร์
         await runAutoKitchenLogic(currentOrders);
 
-        // รีเฟรชหน้าจอเพื่อแสดงผลข้อมูลล่าสุด (รวมถึงสถานะที่ถูกเปลี่ยนไป)
+        // รีเฟรชหน้าจอเพื่อแสดงผลข้อมูลล่าสุด
         await refreshOrders();
 
     }, [brandId, refreshOrders, runAutoKitchenLogic]);
@@ -400,7 +410,8 @@ export function usePayment() {
             console.error("⚠️ โหลด Cloud ไม่สำเร็จ:", e);
         }
     };
-// 🔥 ระบบชำระเงิน
+
+    // 🔥 ระบบชำระเงิน
     const handlePayment = async () => {
         const safePayable = Number(payableAmount);
         const safeReceived = Number(receivedAmount);
@@ -411,6 +422,8 @@ export function usePayment() {
             setStatusModal({ show: true, type: 'error', title: 'ยอดเงินไม่พอ', message: 'กรุณารับเงินเพิ่มจากลูกค้า' });
             return;
         }
+
+        // 🛡️ ด่านสกัด: เช็คว่าเครื่องอื่นเพิ่งจ่ายไปเมื่อกี้หรือไม่
         if (activeTab === 'tables' && selectedOrder && navigator.onLine) {
             try {
                 const { data: latestOrder } = await supabase
@@ -434,6 +447,7 @@ export function usePayment() {
                 console.warn("⚠️ ไม่สามารถเช็คสถานะจาก Cloud ได้ ข้ามไปใช้ Local", err);
             }
         }
+
         const change = paymentMethod === 'promptpay' ? 0 : (safeReceived - safePayable);
         const nowIso = dayjs().format(); 
         const localPayId = generateUUID(); 
@@ -578,6 +592,7 @@ export function usePayment() {
             setStatusModal({ show: true, type: 'error', title: 'ข้อผิดพลาดในเครื่อง', message: 'ไม่สามารถบันทึกข้อมูลลงเครื่องได้' });
         }
     };
+    
     const handleSelectTableForQR = async (table: any) => {
         const { success, data } = await getLatestTableDataAction(table.id);
         const updatedTable = (success && data) ? data : table;

@@ -4,7 +4,8 @@ import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 import { app } from '@/lib/firebase';
 import { supabase } from '@/lib/supabase';
 
-export const useFcmToken = (userId: string | undefined, onMessageReceived: () => void) => {
+// 🌟 แก้ไขตรงนี้: เพิ่มให้รับ (payload?: any) เพื่อส่งข้อมูลกลับไปได้
+export const useFcmToken = (userId: string | undefined, onMessageReceived: (payload?: any) => void) => {
     const savedCallback = useRef(onMessageReceived);
 
     useEffect(() => {
@@ -37,7 +38,8 @@ export const useFcmToken = (userId: string | undefined, onMessageReceived: () =>
 
         // ฟังก์ชันรับคำสั่ง Refresh หน้าจอจาก Android
         (window as any).triggerRefreshFromAndroid = () => {
-            savedCallback.current(); 
+            // 🌟 แก้ไขตรงนี้: ส่งค่าหลอกไปบอกว่าเป็นคำสั่งจากแอป Android
+            savedCallback.current({ data: { type: 'ANDROID_REFRESH' } }); 
         };
 
         // 🌟 ดักจับกรณีที่ Android โยน Token มาให้ก่อนที่ React จะโหลดเสร็จ
@@ -95,7 +97,8 @@ export const useFcmToken = (userId: string | undefined, onMessageReceived: () =>
 
                 webUnsubscribe = onMessage(messaging, (payload) => {
                     console.log('🔔 [Web] มีแจ้งเตือนเข้า!', payload);
-                    savedCallback.current(); 
+                    // 🌟 แก้ไขตรงนี้: โยนข้อมูล (payload) ทั้งก้อนกลับไปให้หน้าเว็บเช็คต่อ
+                    savedCallback.current(payload); 
                 });
             } catch (error) {
                 console.error('❌ [Web] FCM Setup Error:', error);

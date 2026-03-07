@@ -41,34 +41,70 @@ export default function ReceiptModal({ receipt, items, onClose }: ReceiptModalPr
     }, 0);
 
     const handlePrint = () => {
-        const content = printRef.current?.innerHTML;
-        const printWindow = window.open('', '', 'width=400,height=600');
-        if (printWindow && content) {
-            printWindow.document.write(`
-                <html>
-                    <head>
-                        <title>Print Receipt</title>
-                        <style>
-                            body { font-family: 'Courier New', monospace; padding: 20px; font-size: 12px; }
-                            .text-center { text-align: center; }
-                            .text-right { text-align: right; }
-                            .font-bold { font-weight: bold; }
-                            .flex { display: flex; justify-content: space-between; }
-                            .border-b { border-bottom: 1px dashed #000; margin: 10px 0; }
-                            .mb-2 { margin-bottom: 5px; }
-                            .text-red { color: red; text-decoration: line-through; }
-                            .text-xs { font-size: 10px; }
-                        </style>
-                    </head>
-                    <body>
-                        ${content}
-                        <script>
-                            window.onload = function() { window.print(); window.close(); }
-                        </script>
-                    </body>
-                </html>
-            `);
-            printWindow.document.close();
+        // 1. จัดเตรียมข้อมูล JSON ส่งให้แอป Android
+        const printData = {
+            brandName: receipt.brand?.name || "ร้านค้า",
+            tableName: receipt.table_label || "Walk-in",
+            orderId: receipt.id.slice(0, 8),
+            date: formatDateReceipt(receipt.created_at),
+            
+            items: items.map(item => {
+                const isCancelled = item.status === 'cancelled';
+                const promo = item.promotion_snapshot;
+                const savedPerUnit = getDiscountValue(promo);
+                
+                return {
+                    name: item.product_name,
+                    qty: item.quantity,
+                    price: item.price,
+                    variant: item.variant !== 'normal' ? item.variant : '',
+                    savedAmount: !isCancelled && savedPerUnit > 0 ? savedPerUnit : 0,
+                    isCancelled: isCancelled
+                }
+            }),
+            totalSaved: totalSaved,
+            totalAmount: receipt.total_amount,
+            receivedAmount: receipt.received_amount || receipt.total_amount,
+            changeAmount: receipt.change_amount || 0,
+            paymentMethod: receipt.payment_method,
+            cashier: receipt.cashier?.full_name || 'System'
+        };
+
+        // 2. เช็คว่ามี AndroidBridge หรือไม่ (เปิดจากแอป Android ของเรา)
+        if (typeof window !== 'undefined' && (window as any).AndroidBridge) {
+            // ส่งไปให้ฝั่ง Android จัดการพิมพ์
+            (window as any).AndroidBridge.printReceipt(JSON.stringify(printData));
+        } else {
+            // 3. Fallback: ถ้าเปิดบนเบราว์เซอร์คอมพิวเตอร์ปกติ ก็ให้พิมพ์แบบ Web เหมือนเดิม
+            const content = printRef.current?.innerHTML;
+            const printWindow = window.open('', '', 'width=400,height=600');
+            if (printWindow && content) {
+                printWindow.document.write(`
+                    <html>
+                        <head>
+                            <title>Print Receipt</title>
+                            <style>
+                                body { font-family: 'Courier New', monospace; padding: 20px; font-size: 12px; }
+                                .text-center { text-align: center; }
+                                .text-right { text-align: right; }
+                                .font-bold { font-weight: bold; }
+                                .flex { display: flex; justify-content: space-between; }
+                                .border-b { border-bottom: 1px dashed #000; margin: 10px 0; }
+                                .mb-2 { margin-bottom: 5px; }
+                                .text-red { color: red; text-decoration: line-through; }
+                                .text-xs { font-size: 10px; }
+                            </style>
+                        </head>
+                        <body>
+                            ${content}
+                            <script>
+                                window.onload = function() { window.print(); window.close(); }
+                            </script>
+                        </body>
+                    </html>
+                `);
+                printWindow.document.close();
+            }
         }
     };
 

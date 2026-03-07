@@ -96,13 +96,14 @@ export async function getPaymentInitialDataAction() {
 }
 
 // --- 2. Fetch Unpaid Orders ---
+// --- 2. Fetch Unpaid Orders ---
 export async function getUnpaidOrdersAction(brandId: string) {
     const supabase = await getSupabase();
-    // ✅ เพิ่มการดึง id, status ให้ชัดเจน
+    // ✅ จุดแก้ที่ 1: ดึงมาทุกสถานะที่ยังไม่ได้จ่ายเงิน
     const { data: rawOrders } = await supabase.from('orders')
         .select(`*, order_items(*)`)
         .eq('brand_id', brandId)
-        .eq('status', 'done') 
+        .in('status', ['pending', 'preparing', 'cooking', 'served', 'done']) // ✅ เปลี่ยนตรงนี้! ให้ดึงมาให้หมด
         .order('created_at', { ascending: false });
 
     if (!rawOrders) return [];
@@ -110,6 +111,7 @@ export async function getUnpaidOrdersAction(brandId: string) {
     const grouped: { [key: string]: any } = {};
     
     rawOrders.forEach(order => {
+        // ... (โค้ดเดิมทั้งหมดในลูป forEach ไม่ต้องแก้ครับ)
         if (order.status === 'cancelled') return;
 
         const table = order.table_label || 'Walk-in';
@@ -120,7 +122,8 @@ export async function getUnpaidOrdersAction(brandId: string) {
                 brand_id: order.brand_id, 
                 total_price: 0, 
                 order_items: [], 
-                original_ids: [] 
+                original_ids: [],
+                status: order.status // ✅ เพิ่มให้มันจำสถานะบิลไว้ด้วย
             };
         }
 
@@ -139,7 +142,6 @@ export async function getUnpaidOrdersAction(brandId: string) {
 
     return Object.values(grouped).filter((g: any) => g.order_items.length > 0);
 }
-
 export async function processPaymentAction(payload: any) {
     const supabase = await getSupabase();
     const { brandId, userId, totalAmount, receivedAmount, changeAmount, paymentMethod, type, selectedOrder, cart, paymentTime } = payload;

@@ -298,6 +298,23 @@ export const useShopLogic = (params: any) => {
       setActiveTab('status');
       setOrdersList(transformOrdersForDisplay(result.orders || [])); 
 
+      // 🚨🚨🚨 [แทรกตรงนี้!] ยิงแจ้งเตือนไปหาพนักงาน (FCM) 🚨🚨🚨
+      try {
+          await fetch('/api/send-notification', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                  brandId: brandId, 
+                  message: `มีออเดอร์ใหม่จาก โต๊ะ ${tableLabel}!` 
+              }),
+          });
+          console.log("📢 ส่งแจ้งเตือนหาพนักงานสำเร็จ!");
+      } catch (notifErr) {
+          console.error("⚠️ ไม่สามารถส่งแจ้งเตือนได้:", notifErr);
+          // ไม่ต้อง throw error ออกไป เพราะถึงแจ้งเตือนไม่ไป แต่ออเดอร์ก็เข้า DB แล้ว
+      }
+      // ====================================================
+
     } catch (err: any) { 
         alert(`Failed to order: ${err.message}`); 
     } finally { 

@@ -18,6 +18,8 @@
     "date-holidays": "^3.26.8",
     "dayjs": "^1.11.19",
     "dexie": "^4.3.0",
+    "firebase": "^12.10.0",
+    "firebase-admin": "^13.7.0",
     "lucide-react": "^0.563.0",
     "next": "16.1.2",
     "omise": "^1.1.0",

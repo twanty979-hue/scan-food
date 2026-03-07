@@ -1,6 +1,6 @@
 //app/dashboard/pai_order/page.tsx
 'use client';
-
+import { useFcmToken } from '@/hooks/useFcmToken';
 import React, { useState, useEffect, useRef } from 'react';
 import { usePayment } from '@/hooks/usePayment';
 import { 
@@ -10,7 +10,7 @@ import {
 import ReceiptModal from './components/ReceiptModal';
 import TableQrModal from '../(owner)/tables/TableQrModal'; 
 import { useRouter } from 'next/navigation';
-
+import KitchenTicketModal from './components/KitchenTicketModal';
 // --- Icons (Styled) ---
 const IconZap = ({ size = 20, className = "" }: any) => (
     <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
@@ -31,6 +31,7 @@ const IconVolume2 = ({ size = 24 }: any) => (
 );
 
 export default function PaymentPage() {
+    
     const {
         activeTab, setActiveTab, loading, 
         autoKitchen, setAutoKitchen,
@@ -53,12 +54,35 @@ export default function PaymentPage() {
         limitStatus,
         refreshTables,
 
-    // ✅✅✅ [เพิ่ม 3 ตัวนี้ต่อท้ายครับ]
     toggleAutoKitchen, 
     isAudioUnlocked,
-    unlockAudio
+    unlockAudio,
+    
+    // ✅ เพิ่ม 3 ตัวนี้ต่อท้ายสุด เพื่อเอาไปให้ FCM สั่งงาน
+    currentUser,
+    
+        fetchAndProcessOrders, // <--- ใช้ตัวนี้แทน
+        playSound,
+        kitchenOrder,
+        setKitchenOrder
     } = usePayment();
+
+    // ✅✅✅ [แทรกก้อนนี้เข้าไปตรงนี้เลยครับ!]
+    useFcmToken(currentUser?.id, () => {
+        console.log("📢 สัญญาณ FCM เข้า! โหลดข้อมูลและเช็กออเดอร์...");
+        // ครอบ try-catch ป้องกันเสียงพังแล้วหยุดทำงาน
+        try {
+            fetchAndProcessOrders(); 
+            refreshTables(); 
+            playSound(); // ถ้าจอดับ/ยังไม่แตะจอ เสียงอาจจะไม่ดัง แต่มันจะไม่ทำให้ fetchAndProcessOrders พัง
+        } catch (e) {
+            console.warn("FCM Handler Error (อาจเกิดจาก Autoplay blocked):", e);
+        }
+    });
+    // ==========================================
+
     const [showMobileCart, setShowMobileCart] = useState(false);
+    // --- State ---
     // --- State ---
     const [showCashModal, setShowCashModal] = useState(false);
 
@@ -744,6 +768,13 @@ const confirmCashPayment = async () => {
             )}
 
             {completedReceipt && <ReceiptModal receipt={completedReceipt} onClose={() => setCompletedReceipt(null)} />}
+                {kitchenOrder && (
+                <KitchenTicketModal 
+                    order={kitchenOrder} 
+                    onClose={() => setKitchenOrder(null)} 
+                    autoPrint={false} // 👈 เปลี่ยนเป็น false เพราะเราให้ระบบหลังบ้านสั่งพิมพ์โดยตรงไปแล้ว
+                />
+            )}
         </div>
     );
 }

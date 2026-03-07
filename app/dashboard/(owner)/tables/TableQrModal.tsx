@@ -32,7 +32,6 @@ interface TableQrModalProps {
 export default function TableQrModal({ table, brandId, brandSlug, qrLogoUrl, onClose, limitStatus }: TableQrModalProps) {
     if (!table) return null;
 
-    // 🔥 ด่านสุดท้าย: ถ้า Limit เกิน -> แสดงหน้า Error แทน QR Code
     const isLocked = limitStatus?.isLocked;
 
     const getOrderUrl = () => {
@@ -47,8 +46,25 @@ export default function TableQrModal({ table, brandId, brandSlug, qrLogoUrl, onC
         return `https://quickchart.io/qr?text=${encodedData}&size=400&ecLevel=H&margin=1`;
     };
 
+    // 🔥 ฟังก์ชันสำหรับสั่งพิมพ์ผ่าน Android App
+    const handlePrintQr = () => {
+        const printData = {
+            brandName: brandSlug.toUpperCase() || "FOODSCAN",
+            tableLabel: table.label,
+            passcode: table.access_token,
+            orderUrl: getOrderUrl()
+        };
+
+        // ตรวจสอบว่าเปิดผ่าน Android WebView ของเราหรือไม่
+        if (typeof window !== 'undefined' && (window as any).AndroidBridge) {
+            (window as any).AndroidBridge.printTableQr(JSON.stringify(printData));
+        } else {
+            // กรณีเปิดบนเบราว์เซอร์ปกติ ให้ใช้คำสั่งพิมพ์ของระบบ
+            window.print();
+        }
+    };
+
     return (
-        // ✅ ปรับ z-index เป็น 400 เพื่อให้แน่ใจว่าอยู่เหนือ Modal เลือกโต๊ะ (z-300) และ Floating Bar (z-150)
         <div className="fixed inset-0 z-[400] grid place-items-center p-4">
             <div className="absolute inset-0 bg-slate-900/85 backdrop-blur-sm cursor-pointer animate-in fade-in duration-200" onClick={onClose}></div>
 
@@ -56,12 +72,12 @@ export default function TableQrModal({ table, brandId, brandSlug, qrLogoUrl, onC
                 
                 {/* Header */}
                 <div className={`p-8 pb-14 text-center relative ${isLocked ? 'bg-red-500' : 'bg-slate-900'}`}>
-                   <button 
-  onClick={onClose} 
-  className="absolute top-6 right-6 z-50 w-10 h-10 bg-white/10 rounded-full flex items-center justify-center text-white hover:bg-white/20 transition-all active:scale-95"
->
-  <IconX size={20} />
-</button>
+                    <button 
+                        onClick={onClose} 
+                        className="absolute top-6 right-6 z-50 w-10 h-10 bg-white/10 rounded-full flex items-center justify-center text-white hover:bg-white/20 transition-all active:scale-95"
+                    >
+                        <IconX size={20} />
+                    </button>
                     <h3 className="text-4xl font-black text-white uppercase mb-1 drop-shadow-sm">โต๊ะ {table.label}</h3>
                     <p className={`${isLocked ? 'text-red-200' : 'text-blue-400'} text-[10px] font-black uppercase tracking-[0.2em]`}>
                         {isLocked ? 'SERVICE UNAVAILABLE' : 'Scan to Order'}
@@ -71,7 +87,6 @@ export default function TableQrModal({ table, brandId, brandSlug, qrLogoUrl, onC
                 {/* Body */}
                 <div className="relative -mt-10 px-8 pb-8 flex flex-col items-center bg-white rounded-t-[40px]">
                     
-                    {/* ✅ CASE 1: ถ้าติด Limit -> โชว์ Error */}
                     {isLocked ? (
                         <div className="flex flex-col items-center pt-10 pb-6 w-full text-center animate-in slide-in-from-bottom-4 duration-300">
                             <div className="w-24 h-24 bg-red-100 text-red-500 rounded-full flex items-center justify-center mb-6 shadow-red-100 shadow-lg">
@@ -90,7 +105,6 @@ export default function TableQrModal({ table, brandId, brandSlug, qrLogoUrl, onC
                             </button>
                         </div>
                     ) : (
-                    /* ✅ CASE 2: ปกติ -> โชว์ QR Code */
                         <>
                             <div className="bg-white p-4 rounded-[3rem] border-[10px] border-white shadow-2xl mb-8 relative z-20 -mt-8 animate-in zoom-in duration-300 delay-75">
                                 <QrCodeWithLogo url={getQRUrl()} logo={qrLogoUrl} />
@@ -105,7 +119,10 @@ export default function TableQrModal({ table, brandId, brandSlug, qrLogoUrl, onC
                                 <a href={getOrderUrl()} target="_blank" rel="noopener noreferrer" className="py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-[11px] uppercase tracking-wider hover:bg-slate-200 transition-all flex items-center justify-center gap-2">
                                     <IconExternalLink size={14} /> ทดสอบลิงก์
                                 </a>
-                                <button onClick={() => window.print()} className="py-4 bg-slate-900 text-white rounded-2xl font-black text-[11px] uppercase tracking-wider shadow-lg hover:bg-blue-600 transition-all flex items-center justify-center gap-2 active:scale-95">
+                                <button 
+                                    onClick={handlePrintQr} 
+                                    className="py-4 bg-slate-900 text-white rounded-2xl font-black text-[11px] uppercase tracking-wider shadow-lg hover:bg-blue-600 transition-all flex items-center justify-center gap-2 active:scale-95"
+                                >
                                     <IconPrinter size={14} /> พิมพ์ QR Code
                                 </button>
                             </div>

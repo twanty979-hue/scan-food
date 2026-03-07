@@ -59,35 +59,43 @@ export default function LoginPage() {
   };
 
   // ฟังก์ชัน Login ปกติ (Logic เดิม)
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setErrorMsg(null);
+// แก้ไขเฉพาะฟังก์ชัน handleLogin ในไฟล์เดิมของพี่นะครับ
 
-    try {
-      const { data: authData, error: loginError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+const handleLogin = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setLoading(true);
+  setErrorMsg(null);
 
-      if (loginError) throw loginError;
-      if (!authData.user) throw new Error("ไม่พบข้อมูลผู้ใช้");
+  try {
+    // ยิงไปที่ API กลางที่เราทำไว้
+    const response = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('brand_id')
-        .eq('id', authData.user.id)
-        .single();
+    const result = await response.json();
 
-      if (!profile?.brand_id) router.push('/setup');
-      else router.push('/dashboard');
-
-    } catch (error: any) {
-      setErrorMsg(error.message);
-      setLoading(false); 
+    if (!response.ok) {
+      throw new Error(result.error || "เกิดข้อผิดพลาดในการเข้าสู่ระบบ");
     }
-  };
 
+    // ✅ สำคัญ: เมื่อ Login ผ่าน API แล้ว ต้องเซต Session ให้ Supabase Client ฝั่ง Browser รู้ด้วย
+    const { error: sessionError } = await supabase.auth.setSession({
+      access_token: result.session.access_token,
+      refresh_token: result.session.refresh_token,
+    });
+
+    if (sessionError) throw sessionError;
+
+    // นำทางไปยังหน้าตามที่ API แนะนำมา
+    router.push(result.redirectTo);
+
+  } catch (error: any) {
+    setErrorMsg(error.message);
+    setLoading(false); 
+  }
+};
  const handleResetPassword = async (e: React.FormEvent) => {
   e.preventDefault();
   setLoading(true);

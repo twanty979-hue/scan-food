@@ -7,7 +7,6 @@ import {
     getPaymentInitialDataAction, 
     getUnpaidOrdersAction, 
     updateOrderStatusAction,
-    getPendingAndPreparingOrdersAction,
     getAllTablesAction, 
     cancelOrderAction,
     cancelOrderItemAction
@@ -32,7 +31,7 @@ export function usePayment() {
     // --- Audio State & Ref ---
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
-
+    const [kitchenOrder, setKitchenOrder] = useState<any>(null);
     // --- State ---
     const [activeTab, setActiveTab] = useState<'tables' | 'pos'>('tables');
     const [loading, setLoading] = useState(true);
@@ -115,6 +114,13 @@ export function usePayment() {
 
     const playSound = useCallback(() => {
         if (!audioRef.current) return;
+
+        // 🌟 เพิ่มเงื่อนไขนี้: ถ้ามี AndroidBridge แปลว่าเปิดในแอป ให้ข้ามการเล่นเสียงบนเว็บไปเลย!
+        if (typeof window !== 'undefined' && (window as any).AndroidBridge) {
+            console.log("📱 กำลังรันใน Android App: ปิดเสียงของเว็บเพื่อไม่ให้ตีกับ Native");
+            return; 
+        }
+
         const audio = audioRef.current;
         audio.currentTime = 0;
         audio.play().catch(e => console.error("Playback failed:", e));
@@ -207,8 +213,13 @@ export function usePayment() {
         unpaidOrdersRef.current = unpaidOrders;
     }, [unpaidOrders]);
 
+    // ==========================================================
+    // 🔄 โซนจัดการออเดอร์อัตโนมัติ (รับออเดอร์อย่างเดียว)
+    // ==========================================================
+
+    // 1. ฟังก์ชันโหลดข้อมูลและอัปเดตหน้าจอ
     const refreshOrders = useCallback(async () => {
-        if (!brandId) return;
+        if (!brandId) return [];
         
         const cloudOrders = await getUnpaidOrdersAction(brandId);
         const localSyncQueue = await db.sync_queue.toArray();
@@ -222,60 +233,66 @@ export function usePayment() {
 
         setUnpaidOrders(trulyUnpaidOrders);
         refreshQuota(); 
+        return trulyUnpaidOrders; 
     }, [brandId, refreshQuota]);
 
-    // --- Realtime Listener ---
-    useEffect(() => {
-        if (!brandId) return;
+    // ==========================================================
+    // 🔥 แก้ไขแล้ว: ให้แค่เปลี่ยนสถานะรับออเดอร์ แต่ ไม่ส่งไปปริ้น
+    // ==========================================================
+    const runAutoKitchenLogic = useCallback(async (ordersToCheck: any[]) => {
+        if (!autoKitchen) return false; 
 
-        const finishOrder = async (orderId: string) => {
-            if (processedOrdersRef.current.has(orderId)) return;
-            const { data: currentOrder } = await supabase.from('orders').select('status').eq('id', orderId).single();
-            if (!currentOrder || currentOrder.status === 'cancelled' || currentOrder.status === 'done') return;
-            await updateOrderStatusAction(orderId, 'done');
-            processedOrdersRef.current.add(orderId);
-            refreshOrders();
-        };
+        let hasUpdatedDB = false;
+        let shouldPlaySound = false; 
 
-        const processOrder = async (order: any) => {
-            if (!autoKitchen) return;
+        for (const order of ordersToCheck) {
             if (order.status === 'pending') {
-                await updateOrderStatusAction(order.id, 'preparing');
-                playSound();
-                setTimeout(() => finishOrder(order.id), 5 * 60 * 1000);
-            } else if (order.status === 'preparing') {
-                const lastUpdate = dayjs(order.updated_at);
-                const diffMins = dayjs().diff(lastUpdate, 'minute', true);
-                if (diffMins >= 5) {
-                    finishOrder(order.id);
-                } else {
-                    setTimeout(() => finishOrder(order.id), (5 - diffMins) * 60 * 1000);
+                console.log(`➡️ เจอออเดอร์ใหม่ ${order.id}! กำลังรับออเดอร์อัตโนมัติ... (ปิดระบบปริ้น)`);
+
+                // ⏳ หน่วงเวลา 2 วิ รอข้อมูลอาหารลงฐานข้อมูลให้ครบ
+                await new Promise(resolve => setTimeout(resolve, 2000));
+
+                const { data: fullOrder, error } = await supabase
+                    .from('orders')
+                    .select('*, order_items(*)')
+                    .eq('id', order.id)
+                    .single();
+
+                // ถ้ามีข้อมูลครบ และมีรายการอาหาร
+                if (!error && fullOrder && fullOrder.order_items && fullOrder.order_items.length > 0) {
+                    
+                    // ✅ สั่งรับออเดอร์ (เปลี่ยนสถานะเป็น preparing)
+                    await updateOrderStatusAction(order.id, 'preparing');
+
+                    // ❌ ลบโค้ดคำสั่งปริ้นผ่าน AndroidBridge ตรงนี้ทิ้งไปทั้งหมด
+
+                    hasUpdatedDB = true;
+                    shouldPlaySound = true; 
                 }
             }
-        };
-
-        if (autoKitchen) {
-            getPendingAndPreparingOrdersAction(brandId).then(orders => {
-                orders.forEach(o => processOrder(o));
-            });
         }
 
-        const orderChannel = supabase.channel('payment_realtime_orders_v3')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `brand_id=eq.${brandId}` }, 
-            (payload) => {
-                setTimeout(() => { refreshOrders(); refreshTables(); }, 500);
-                if (autoKitchen && payload.eventType === 'INSERT') {
-                    const newOrder = payload.new;
-                    if (newOrder.status === 'pending') processOrder(newOrder);
-                }
-            }).subscribe();
+        if (shouldPlaySound) playSound(); 
+        return hasUpdatedDB; 
+    }, [autoKitchen, playSound]);
 
-        const tableChannel = supabase.channel('payment_realtime_tables_v3')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'tables', filter: `brand_id=eq.${brandId}` }, 
-            () => { setTimeout(() => refreshTables(), 500); }).subscribe();
+    // 3. ฟังก์ชันหลักที่ทำงานเมื่อมีการแจ้งเตือน (FCM เรียกใช้)
+    const fetchAndProcessOrders = useCallback(async () => {
+        if (!brandId) return;
+        console.log("⚡ ได้รับสัญญาณ! กำลังตรวจสอบออเดอร์ใหม่...");
+        
+        // ดึงข้อมูลออเดอร์ปัจจุบันทั้งหมดมาตรวจสอบ
+        const currentOrders = await getUnpaidOrdersAction(brandId);
+        
+        // ส่งให้เครื่องจักรจัดการรับออเดอร์ (ถ้ามี pending)
+        await runAutoKitchenLogic(currentOrders);
 
-        return () => { supabase.removeChannel(orderChannel); supabase.removeChannel(tableChannel); };
-    }, [brandId, autoKitchen, refreshOrders, refreshTables, playSound]);
+        // รีเฟรชหน้าจอเพื่อแสดงผลข้อมูลล่าสุด (รวมถึงสถานะที่ถูกเปลี่ยนไป)
+        await refreshOrders();
+
+    }, [brandId, refreshOrders, runAutoKitchenLogic]);
+
+    // ==========================================================
 
     // --- Logic: Pricing ---
     const calculatePrice = useCallback((product: any, variant: string = 'normal') => {
@@ -345,7 +362,7 @@ export function usePayment() {
         return Number(rawTotal.toFixed(2));
     }, [rawTotal, paymentMethod]);
 
-// =========================================================================
+    // =========================================================================
     // ☁️ Helper: ล้างโต๊ะบน Cloud ทันที (ยิงเฉพาะตอนจ่ายเงินโต๊ะ)
     // =========================================================================
     const clearTableOnCloud = async (brandIdStr: string, tableLabelStr: string, newTokenStr: string, payIdStr: string) => {
@@ -353,7 +370,6 @@ export function usePayment() {
             const nowIso = dayjs().format();
             
             // 1. เปลี่ยนออเดอร์ของโต๊ะนี้เป็น paid
-            // 🚨 เอา payment_id ออก! เพราะใบเสร็จยังไม่ขึ้น Cloud (เดี๋ยวตัวปุ่ม Sync ค่อยเอาไปอัปเดตทีหลัง)
             const { error: orderErr } = await supabase.from('orders').update({ 
                 status: 'paid',
                 updated_at: nowIso
@@ -367,7 +383,6 @@ export function usePayment() {
             }
 
             // 2. สับเปลี่ยน Token โต๊ะ
-            // 🚨 เอา status: 'available' ออก! เพื่อป้องกัน Error 400 อัปเดตแค่ Token พอ
             const { error: tableErr } = await supabase.from('tables').update({ 
                 access_token: newTokenStr
             })
@@ -385,10 +400,7 @@ export function usePayment() {
             console.error("⚠️ โหลด Cloud ไม่สำเร็จ:", e);
         }
     };
-
-    // =========================================================================
-    // 🔥 ระบบชำระเงิน
-    // =========================================================================
+// 🔥 ระบบชำระเงิน
     const handlePayment = async () => {
         const safePayable = Number(payableAmount);
         const safeReceived = Number(receivedAmount);
@@ -440,7 +452,6 @@ export function usePayment() {
         };
 
         try {
-            // 🌟 1. บันทึกข้อมูลลง IndexedDB เสมอ (รอปุ่ม Sync ทำงานทีหลัง)
             await db.transaction('rw', 'orders', 'order_items', 'pai_orders', 'sync_queue', async () => {
                 await db.orders.put(newOrderData); 
                 await db.order_items.bulkPut(itemsToSave);
@@ -460,13 +471,45 @@ export function usePayment() {
 
             console.log("✅ บันทึกลงเครื่องสำเร็จ! (รอคิว Sync)");
 
-            // 🌟 2. ถ้ายืนยันการ "ขายโต๊ะ" (Tables) ให้รีบไปเคลียร์ Cloud ทันที!
-            // หมายเหตุ: ถ้าเป็นโหมด POS เงื่อนไขนี้จะไม่ทำงาน (ประหยัดเซิร์ฟตามที่คุณต้องการ)
+            // =========================================================================
+            // 🌟 🖨️ เพิ่มส่วนพิมพ์ใบเสร็จออโต้ตรงนี้ครับ!
+            // =========================================================================
+            if (typeof window !== 'undefined' && (window as any).AndroidBridge) {
+                try {
+                    const printData = {
+                        brandName: String(currentBrand?.name || "ร้านค้า"),
+                        tableName: String(tableLabel),
+                        orderId: String(finalOrderId.slice(0, 8)),
+                        date: String(new Date(nowIso).toLocaleString('th-TH', { 
+                            year: 'numeric', month: 'short', day: 'numeric', 
+                            hour: '2-digit', minute: '2-digit' 
+                        })),
+                        items: itemsToSave.map((item: any) => ({
+                            name: String(item.product_name || item.name || "รายการอาหาร"),
+                            qty: Number(item.quantity),
+                            price: Number(item.price),
+                            isCancelled: Boolean(item.status === 'cancelled')
+                        })),
+                        totalAmount: Number(safePayable),
+                        receivedAmount: Number(paiOrderData.received_amount),
+                        changeAmount: Number(paiOrderData.change_amount),
+                        paymentMethod: String(paymentMethod).toUpperCase(),
+                        cashier: String(currentProfile?.full_name || 'System')
+                    };
+                    
+                    // สั่ง Android ปริ้นทันที
+                    (window as any).AndroidBridge.printReceipt(JSON.stringify(printData));
+                    console.log("🖨️ Auto Print Receipt Triggered");
+                } catch (printErr) {
+                    console.error("❌ Auto Print Error:", printErr);
+                }
+            }
+            // =========================================================================
+
             if (activeTab === 'tables' && selectedOrder && brandId && navigator.onLine) {
                 clearTableOnCloud(brandId, tableLabel, newToken!, localPayId);
             }
 
-            // 🌟 3. เด้งโชว์ใบเสร็จและรีเซ็ตหน้าจอ
             setCompletedReceipt({
                 id: localPayId, created_at: nowIso, total_amount: safePayable,
                 received_amount: paiOrderData.received_amount, change_amount: paiOrderData.change_amount, 
@@ -496,7 +539,6 @@ export function usePayment() {
             setStatusModal({ show: true, type: 'error', title: 'ข้อผิดพลาดในเครื่อง', message: 'ไม่สามารถบันทึกข้อมูลลงเครื่องได้' });
         }
     };
-
     const handleSelectTableForQR = async (table: any) => {
         const { success, data } = await getLatestTableDataAction(table.id);
         const updatedTable = (success && data) ? data : table;
@@ -506,7 +548,7 @@ export function usePayment() {
 
     return {
         activeTab, setActiveTab,
-        loading, autoKitchen, setAutoKitchen,
+        loading, autoKitchen, setAutoKitchen, // ✅ คืนค่าตัวแปรปุ่มกลับมาให้หน้าจอใช้งานได้
         categories, products: selectedCategory === 'ALL' ? products : products.filter((p: any) => p.category_id === selectedCategory),
         unpaidOrders, allTables,
         selectedCategory, setSelectedCategory,
@@ -530,8 +572,13 @@ export function usePayment() {
         calculatePrice,
         formatCurrency: (amt: number) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', minimumFractionDigits: 2 }).format(amt || 0),
         refreshTables,
-        toggleAutoKitchen, 
+        toggleAutoKitchen, // ✅ คืนค่าฟังก์ชันกดปุ่มกลับมาให้หน้าจอใช้งานได้
         unlockAudio, 
-        isAudioUnlocked 
+        isAudioUnlocked ,
+        currentUser,
+        fetchAndProcessOrders,
+        playSound,
+        kitchenOrder, // ✅ คืนค่าตัวแปรกลับมาให้เผื่อพี่มีการใช้ใน UI อื่นๆ
+        setKitchenOrder
     };
 }

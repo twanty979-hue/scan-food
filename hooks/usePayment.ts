@@ -277,27 +277,42 @@ export function usePayment() {
     }, [autoKitchen, playSound]);
 
     // ==========================================================
-    // 🌟 3. ฟังก์ชันหลักที่ทำงานเมื่อมีการแจ้งเตือน (FCM เรียกใช้) มีการดัก SILENT_UPDATE
+    // 🌟 3. ฟังก์ชันหลักที่ทำงานเมื่อมีการแจ้งเตือน (FCM เรียกใช้)
     // ==========================================================
     const fetchAndProcessOrders = useCallback(async (payload?: any) => {
         if (!brandId) return;
-        console.log("⚡ ได้รับสัญญาณ! กำลังตรวจสอบออเดอร์...", payload);
+        
+        console.log("⚡ [DEBUG] FCM Payload Received:", JSON.stringify(payload));
 
-        // 🌟 ด่านกักเสียง: เช็คว่าถ้าเป็น SILENT_UPDATE ให้แค่รีเฟรชหน้าจอ ไม่ต้องมีเสียง
-        const type = payload?.data?.type;
-        if (type === 'SILENT_UPDATE') {
-            console.log("🔄 เป็นการอัปเดตเงียบ (จ่ายเงิน): ไม่เล่นเสียง และไม่เข้าเครื่องจักรครัว");
-            await refreshOrders(); // สั่งรีเฟรชหน้าจอให้โต๊ะหายแดง
-            return; // 🛑 จบงานแค่นี้ เงียบกริบ!
+        // 🌟 ดึงค่า Type และ Message (Title) ออกมาเช็คแบบรัดกุมที่สุด
+        const msgType = payload?.data?.type || payload?.type || '';
+        const msgTitle = payload?.data?.title || payload?.notification?.title || '';
+        const msgBody = payload?.data?.message || payload?.data?.body || '';
+
+        console.log(`🔍 [DEBUG] Type: '${msgType}', Title: '${msgTitle}'`);
+
+        // 🛑 ด่านกักเสียง ไม้ตาย!: เช็คทุกอย่างที่บ่งบอกว่า "นี่คือการอัปเดตสถานะ" ไม่ใช่ออเดอร์ใหม่
+        if (
+            msgType === 'SILENT_UPDATE' || 
+            msgType === 'ANDROID_REFRESH' || 
+            msgTitle.includes('อัปเดต') || 
+            msgBody.includes('อัปเดต')
+        ) {
+            console.log("🔄 ระบบเงียบ (SILENT): แค่รีเฟรชหน้าจอ ไม่ต้องมีเสียง!");
+            await refreshOrders(); // แค่อัปเดตหน้าจอให้โต๊ะหายแดง
+            return; // 🛑 หยุดทันที ห้ามไปเล่นเสียงเด็ดขาด!
         }
 
-        // 🌟 ถ้าไม่ใช่ SILENT_UPDATE (แปลว่ามีออเดอร์ใหม่)
-        const currentOrders = await getUnpaidOrdersAction(brandId); // โหลดออเดอร์มาเช็ค
+        // --- กรณีออเดอร์ใหม่จริงๆ ค่อยมาทำตรงนี้ ---
+        console.log("🔔 ออเดอร์ใหม่เข้า! กำลังรันระบบครัวและเล่นเสียง...");
         
-        // ส่งให้เครื่องจักรจัดการรับออเดอร์
+        // ดึงข้อมูลออเดอร์ล่าสุด
+        const currentOrders = await getUnpaidOrdersAction(brandId);
+        
+        // รันระบบรับออเดอร์อัตโนมัติ (ตัวนี้แหละที่มีคำสั่ง playSound อยู่ข้างใน)
         await runAutoKitchenLogic(currentOrders);
 
-        // รีเฟรชหน้าจอเพื่อแสดงผลข้อมูลล่าสุด
+        // อัปเดตหน้าจอ
         await refreshOrders();
 
     }, [brandId, refreshOrders, runAutoKitchenLogic]);

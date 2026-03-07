@@ -411,7 +411,29 @@ export function usePayment() {
             setStatusModal({ show: true, type: 'error', title: 'ยอดเงินไม่พอ', message: 'กรุณารับเงินเพิ่มจากลูกค้า' });
             return;
         }
-        
+        if (activeTab === 'tables' && selectedOrder && navigator.onLine) {
+            try {
+                const { data: latestOrder } = await supabase
+                    .from('orders')
+                    .select('status')
+                    .eq('id', selectedOrder.id)
+                    .single();
+
+                if (latestOrder && latestOrder.status === 'paid') {
+                    setStatusModal({ 
+                        show: true, 
+                        type: 'error', 
+                        title: 'ชำระเงินแล้ว', 
+                        message: 'ออเดอร์นี้ถูกชำระเงินจากเครื่องอื่นเรียบร้อยแล้ว' 
+                    });
+                    
+                    refreshOrders(); 
+                    return; // 🛑 เบรก! สั่งหยุดทำงานตรงนี้เลย ไม่ลงเครื่อง ไม่ปริ้นใบเสร็จ
+                }
+            } catch (err) {
+                console.warn("⚠️ ไม่สามารถเช็คสถานะจาก Cloud ได้ ข้ามไปใช้ Local", err);
+            }
+        }
         const change = paymentMethod === 'promptpay' ? 0 : (safeReceived - safePayable);
         const nowIso = dayjs().format(); 
         const localPayId = generateUUID(); 

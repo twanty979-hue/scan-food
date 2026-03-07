@@ -529,7 +529,23 @@ export function usePayment() {
             // =========================================================================
 
             if (activeTab === 'tables' && selectedOrder && brandId && navigator.onLine) {
-                clearTableOnCloud(brandId, tableLabel, newToken!, localPayId);
+                // 1. เคลียร์โต๊ะบน Cloud ให้เสร็จก่อน
+                await clearTableOnCloud(brandId, tableLabel, newToken!, localPayId);
+
+                // 2. 🚀 ยิง FCM ไปกระตุ้นเครื่องอื่น (และหน้าเว็บอื่น) ให้รีเฟรชหน้าจอทันที!
+                try {
+                    fetch('/api/send-notification', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            brandId: brandId, 
+                            message: 'UPDATE_SCREEN' // ส่งไปกระตุ้นเฉยๆ
+                        })
+                    });
+                    console.log("📢 ส่ง FCM แจ้งเครื่องอื่นให้อัปเดตหน้าจอแล้ว!");
+                } catch (fcmErr) {
+                    console.error("❌ ยิง FCM พลาด:", fcmErr);
+                }
             }
 
             setCompletedReceipt({

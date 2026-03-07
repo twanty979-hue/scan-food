@@ -15,7 +15,7 @@ if (!admin.apps.length) {
 
 export async function POST(request: Request) {
   try {
-    const { brandId, message } = await request.json();
+    const { brandId, message, type = 'NEW_ORDER', title = 'มีออเดอร์ใหม่!' } = await request.json();
 
     // 🌟 1. ดึงมาทั้ง fcm_token (แอป) และ fcm_token_web (เว็บ)
     const { data: profiles, error } = await supabase
@@ -41,9 +41,9 @@ export async function POST(request: Request) {
         priority: 'high', 
       },
       data: {
-        title: 'มีออเดอร์ใหม่!',
+        title: title,
         body: message || 'กรุณาตรวจสอบหน้าจอ POS',
-        type: 'NEW_ORDER' 
+        type: type 
       }
     });
 

@@ -2,34 +2,55 @@
 import Dexie, { Table } from 'dexie';
 
 export class PosDatabase extends Dexie {
-  // --- Master Data ---
   categories!: Table<any>;
   products!: Table<any>;
   discounts!: Table<any>;
   discount_products!: Table<any>;
-
-  // --- Sales Data ---
   orders!: Table<any>;
   order_items!: Table<any>;
   pai_orders!: Table<any>;
-  
-  // 🔥🔥🔥 พระเอกของเรา ต้องมีบรรทัดนี้นะครับ! ไม่งั้นพัง!
-  sync_queue!: Table<any>; 
+  sync_queue!: Table<any>;
+  stock_drafts!: Table<any>; 
 
   constructor() {
     super('FoodScanOfflineDB');
-    this.version(1).stores({
+    
+    // คงเวอร์ชันเก่าไว้เพื่อความปลอดภัยในการ Migration
+    this.version(2).stores({
       categories: 'id, brand_id',
-      products: 'id, category_id, brand_id',
+      products: 'id, category_id, brand_id, barcode, sku',
       discounts: 'id, brand_id',
       discount_products: '[discount_id+product_id]',
-      
       orders: 'id, status, brand_id, table_label, created_at',
       order_items: 'id, order_id, product_id',
       pai_orders: 'id, order_id, brand_id',
-      
-      // 🔥🔥🔥 และต้องมีบรรทัดนี้ด้วย เพื่อให้ Dexie รู้จักตารางคิว
       sync_queue: '++id, type, status' 
+    });
+
+    this.version(4).stores({
+      categories: 'id, brand_id',
+      products: 'id, category_id, brand_id, barcode, sku',
+      discounts: 'id, brand_id',
+      discount_products: '[discount_id+product_id]',
+      orders: 'id, status, brand_id, table_label, created_at',
+      order_items: 'id, order_id, product_id',
+      pai_orders: 'id, order_id, brand_id',
+      sync_queue: '++id, type, status',
+      stock_drafts: 'id, barcode, name' 
+    });
+
+    // 🌟 จุดที่แก้ไข: Version 5 เพิ่ม Index ให้กับ 'name' ในตาราง products
+    this.version(5).stores({
+      categories: 'id, brand_id',
+      // ✨ เพิ่ม 'name' เข้าไปเพื่อให้ Dexie ยอมให้ใช้คำสั่งค้นหา (.where('name')) ได้
+      products: 'id, category_id, brand_id, barcode, sku, name', 
+      discounts: 'id, brand_id',
+      discount_products: '[discount_id+product_id]',
+      orders: 'id, status, brand_id, table_label, created_at',
+      order_items: 'id, order_id, product_id',
+      pai_orders: 'id, order_id, brand_id',
+      sync_queue: '++id, type, status',
+      stock_drafts: 'id, barcode, name' 
     });
   }
 }

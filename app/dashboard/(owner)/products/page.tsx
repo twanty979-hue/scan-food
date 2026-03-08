@@ -2,6 +2,7 @@
 'use client';
 
 import { useProducts } from '@/hooks/useProducts';
+import { useCategories } from '@/hooks/useCategories'; // ✅ นำเข้า Hook หมวดหมู่
 import Cropper from 'react-easy-crop';
 import { useState, useCallback } from 'react';
 
@@ -15,25 +16,26 @@ const IconImage = ({ size = 32 }: any) => <svg width={size} height={size} viewBo
 const IconStar = ({ size = 14, className }: any) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>;
 const IconX = ({ size = 20 }: any) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
 const IconChevronDown = ({ size = 16 }: any) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6"/></svg>;
-
-// Icon สำหรับ Crop (ซูม)
 const IconZoom = ({ size = 20 }: any) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>;
+const IconLayer = ({ size = 24, className }: any) => <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>;
 
 export default function ProductsPage() {
+  // ✅ 1. ดึง State ของ Products
   const {
-    categories, loading, 
-    selectedCategoryId, setSelectedCategoryId,
-    searchTerm, setSearchTerm,
-    isModalOpen, setIsModalOpen, isSubmitting, editId, uploading,
-    formData, setFormData, fileInputRef,
-    filteredProducts,
+    categories, loading, selectedCategoryId, setSelectedCategoryId,
+    searchTerm, setSearchTerm, isModalOpen, setIsModalOpen, isSubmitting, editId, uploading,
+    formData, setFormData, fileInputRef, filteredProducts,
     getImageUrl, handleImageUpload, handleSave, handleDelete, handleToggle, openModal,
-    // ✂️ ดึง State ระบบ Crop ออกมาจาก Hook
-    imageToCrop, setIsCropModalOpen, isCropModalOpen,
-    setCroppedAreaPixels, handleCropComplete
+    imageToCrop, setIsCropModalOpen, isCropModalOpen, setCroppedAreaPixels, handleCropComplete
   } = useProducts();
 
-  // ✂️ Local State สำหรับควบคุมกรอบ Crop และ ซูม
+  // ✅ 2. ดึง State ของ Categories (เอาเฉพาะที่ใช้สร้าง) ป้องกันชื่อตัวแปรชนกัน
+  const {
+    isModalOpen: isCatModalOpen, setIsModalOpen: setIsCatModalOpen,
+    isSubmitting: isCatSubmitting, formData: catFormData, updateFormData: updateCatFormData,
+    handleSave: handleCatSave, openAddModal: openCatAddModal
+  } = useCategories();
+
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
 
@@ -54,10 +56,9 @@ export default function ProductsPage() {
               </span>
               จัดการเมนู
             </h1>
-            {/* Mobile Add Button (Small Top) */}
-             <button onClick={() => openModal()} className="md:hidden p-2 bg-slate-900 text-white rounded-lg active:scale-95 transition-transform">
+            <button onClick={() => openModal()} className="md:hidden p-2 bg-slate-900 text-white rounded-lg active:scale-95 transition-transform">
                 <IconPlus size={20} />
-             </button>
+            </button>
           </div>
 
           <div className="flex gap-3">
@@ -83,9 +84,9 @@ export default function ProductsPage() {
           </div>
         </div>
 
-        {/* Categories Tabs */}
+        {/* Categories Tabs & Quick Add Button */}
         <div className="max-w-7xl mx-auto mt-4 overflow-x-auto no-scrollbar pb-2">
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
             <button 
                 onClick={() => setSelectedCategoryId('ALL')} 
                 className={`px-3.5 py-1.5 md:px-4 md:py-2 rounded-full text-xs md:text-sm font-bold transition-all border shrink-0 ${selectedCategoryId === 'ALL' ? 'bg-slate-800 text-white border-slate-800 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}
@@ -101,13 +102,20 @@ export default function ProductsPage() {
                 {cat.name}
               </button>
             ))}
+            
+            {/* ✅ ปุ่มเพิ่มหมวดหมู่ (ต่อท้าย Tab) */}
+            <button 
+                onClick={openCatAddModal} 
+                className="px-3.5 py-1.5 md:px-4 md:py-2 rounded-full text-xs md:text-sm font-bold transition-all border shrink-0 flex items-center gap-1.5 border-dashed border-blue-400 text-blue-600 bg-blue-50/50 hover:bg-blue-100"
+            >
+                <IconPlus size={14} /> สร้างหมวดหมู่
+            </button>
           </div>
         </div>
       </div>
 
       {/* --- Main Content --- */}
       <div className="max-w-7xl mx-auto p-4 md:p-6 md:px-10">
-        
         {loading ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6 animate-pulse">
              {[...Array(6)].map((_, i) => <div key={i} className="bg-slate-200 aspect-[4/5] rounded-2xl"></div>)}
@@ -276,7 +284,13 @@ export default function ProductsPage() {
                   </div>
                   
                   <div>
-                    <label className="text-xs font-bold text-slate-500 mb-1.5 block">หมวดหมู่</label>
+                    {/* ✅ ส่วนเลือกหมวดหมู่ ปรับปรุงให้มีปุ่มเพิ่มด้านขวา */}
+                    <div className="flex justify-between items-center mb-1.5">
+                        <label className="text-xs font-bold text-slate-500 block">หมวดหมู่</label>
+                        <button type="button" onClick={openCatAddModal} className="text-[10px] md:text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors">
+                            <IconPlus size={12}/> สร้างหมวดหมู่ใหม่
+                        </button>
+                    </div>
                     <div className="relative">
                         <select 
                             value={formData.category_id} 
@@ -346,9 +360,7 @@ export default function ProductsPage() {
         ============================================= */}
         {isCropModalOpen && imageToCrop && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            {/* Backdrop สีเข้มกว่าเดิมนิดหน่อยให้รู้ว่าซ้อนทับ */}
             <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm transition-opacity" onClick={() => setIsCropModalOpen(false)}></div>
-            
             <div className="bg-white w-full max-w-lg rounded-[28px] shadow-2xl relative z-10 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-slate-100">
               
               {/* Header */}
@@ -370,30 +382,26 @@ export default function ProductsPage() {
                   image={imageToCrop}
                   crop={crop}
                   zoom={zoom}
-                  aspect={1} // บังคับสัดส่วน 1:1 สี่เหลี่ยมจัตุรัส
+                  aspect={1}
                   onCropChange={setCrop}
                   onCropComplete={onCropComplete}
                   onZoomChange={setZoom}
                   showGrid={true}
                   style={{
-                    containerStyle: { background: '#f8fafc' }, // สีพื้นหลังตอน Crop
-                    cropAreaStyle: { border: '2px solid #3b82f6', borderRadius: '1rem', boxShadow: '0 0 0 9999em rgba(15, 23, 42, 0.5)' } // สไตล์กรอบฟ้าๆ ดู Premium
+                    containerStyle: { background: '#f8fafc' },
+                    cropAreaStyle: { border: '2px solid #3b82f6', borderRadius: '1rem', boxShadow: '0 0 0 9999em rgba(15, 23, 42, 0.5)' }
                   }}
                 />
               </div>
 
               {/* Controls & Buttons */}
               <div className="p-6 bg-white space-y-6">
-                
-                {/* Slider ซูมรูป */}
                 <div className="flex items-center gap-4 px-2">
                   <div className="text-slate-400"><IconImage size={20} /></div>
                   <input
                     type="range"
                     value={zoom}
-                    min={1}
-                    max={3}
-                    step={0.1}
+                    min={1} max={3} step={0.1}
                     aria-labelledby="Zoom"
                     onChange={(e) => setZoom(Number(e.target.value))}
                     className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600 hover:accent-blue-700"
@@ -401,16 +409,75 @@ export default function ProductsPage() {
                   <div className="text-slate-600"><IconZoom size={20} /></div>
                 </div>
                 
-                {/* Footer Buttons */}
                 <div className="flex gap-3 pt-2">
-                  <button onClick={() => setIsCropModalOpen(false)} className="flex-1 py-3.5 rounded-xl font-bold text-slate-500 bg-white border border-slate-200 hover:bg-slate-50 transition-colors">
-                    ยกเลิก
-                  </button>
-                  <button onClick={handleCropComplete} className="flex-1 py-3.5 rounded-xl font-bold text-white bg-blue-600 shadow-lg shadow-blue-500/30 hover:bg-blue-700 hover:shadow-xl hover:-translate-y-0.5 transition-all">
-                    ยืนยันรูปภาพ
-                  </button>
+                  <button onClick={() => setIsCropModalOpen(false)} className="flex-1 py-3.5 rounded-xl font-bold text-slate-500 bg-white border border-slate-200 hover:bg-slate-50 transition-colors">ยกเลิก</button>
+                  <button onClick={handleCropComplete} className="flex-1 py-3.5 rounded-xl font-bold text-white bg-blue-600 shadow-lg shadow-blue-500/30 hover:bg-blue-700 hover:shadow-xl hover:-translate-y-0.5 transition-all">ยืนยันรูปภาพ</button>
                 </div>
               </div>
+
+            </div>
+          </div>
+        )}
+
+        {/* =========================================
+            ✅ MODAL 3: สร้างหมวดหมู่ (ดึงมาจาก CategoriesPage)
+        ============================================= */}
+        {isCatModalOpen && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setIsCatModalOpen(false)}></div>
+            <div className="bg-white w-full max-w-sm rounded-[32px] shadow-2xl relative z-10 overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col">
+              
+              <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
+                <div>
+                  <h3 className="text-lg font-black text-slate-800">สร้างหมวดหมู่ใหม่</h3>
+                </div>
+                <button onClick={() => setIsCatModalOpen(false)} className="w-8 h-8 rounded-full bg-slate-50 text-slate-400 hover:bg-slate-100 flex items-center justify-center transition-colors">
+                  <IconX size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={handleCatSave} className="p-6 space-y-5">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 mb-1.5 block uppercase tracking-wider">ชื่อหมวดหมู่</label>
+                  <div className="relative group">
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors">
+                        <IconLayer size={18} />
+                    </div>
+                    <input 
+                      type="text" 
+                      value={catFormData.name}
+                      onChange={(e) => updateCatFormData('name', e.target.value)}
+                      className="w-full pl-11 pr-4 py-3 bg-slate-50 border-transparent focus:bg-white border focus:border-indigo-500 rounded-xl font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:font-normal placeholder:text-slate-400"
+                      placeholder="เช่น ของทอด, เครื่องดื่ม"
+                      autoFocus
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="text-xs font-bold text-slate-500 mb-1.5 block uppercase tracking-wider">ลำดับการแสดงผล</label>
+                  <div className="relative group">
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors font-black text-sm">#</div>
+                    <input 
+                      type="number" 
+                      value={catFormData.sort_order}
+                      onChange={(e) => updateCatFormData('sort_order', parseInt(e.target.value) || 0)}
+                      className="w-full pl-11 pr-4 py-3 bg-slate-50 border-transparent focus:bg-white border focus:border-indigo-500 rounded-xl font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2 flex gap-3 pb-safe">
+                  <button type="button" onClick={() => setIsCatModalOpen(false)} className="flex-1 py-3.5 rounded-xl font-bold text-slate-500 bg-white border border-slate-200 hover:bg-slate-50 transition-all">ยกเลิก</button>
+                  <button 
+                    type="submit" 
+                    disabled={isCatSubmitting || !catFormData.name.trim()}
+                    className="flex-1 py-3.5 rounded-xl font-bold text-white bg-slate-900 hover:bg-slate-800 shadow-lg shadow-slate-900/20 hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {isCatSubmitting ? <span className="animate-pulse">...</span> : 'บันทึก'}
+                  </button>
+                </div>
+              </form>
 
             </div>
           </div>

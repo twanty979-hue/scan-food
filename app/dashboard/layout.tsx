@@ -1,3 +1,4 @@
+// app/dashboard/layout.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -5,7 +6,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
-// --- 🎨 Custom Icons (คงเดิม) ---
+// --- 🎨 Custom Icons ---
 const IconMenu = ({ size = 28 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="18" x2="20" y2="18"/></svg>;
 const IconX = ({ size = 28 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
 const IconChef = ({ size = 28 }) => (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12h20" /><path d="M20 12v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8" /><path d="m4 8 16-4" /><path d="m8.86 6.78-.45-1.81a2 2 0 0 1 1.45-2.43l1.94-.55a2 2 0 0 1 2.43 1.46l.45 1.8" /></svg>);
@@ -20,6 +21,8 @@ const IconShoppingBag = ({ size = 28 }) => <svg width={size} height={size} viewB
 const IconPalette = ({ size = 28 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>;
 const IconPlusSquare = ({ size = 28 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>;
 const Icondashboard = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 17v-5"/><path d="M12 17v-8"/><path d="M16 17v-3"/></svg>;
+// 🌟 เพิ่ม IconBox สำหรับระบบคลังสินค้า
+const IconBox = ({ size = 24 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>;
 
 // Config: Base URL สำหรับ Cloudflare
 const CDN_BASE_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://img.pos-foodscan.com";
@@ -30,17 +33,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [profile, setProfile] = useState<any>(null);
   const [brand, setBrand] = useState<any>(null);
+  const [mounted, setMounted] = useState(false);
 
   const isMarketplaceDetail = /^\/dashboard\/marketplace\/[^/]+$/.test(pathname);
 
   useEffect(() => {
+    setMounted(true);
     const fetchProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.replace('/login'); return; }
       const { data } = await supabase.from('profiles').select('*, brands(*)').eq('id', user.id).single();
       if (data) { 
           setProfile(data); 
-          // Handle brands Array/Object case
           const brandsData = data.brands;
           if (Array.isArray(brandsData) && brandsData.length > 0) {
              setBrand(brandsData[0]);
@@ -58,29 +62,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   };
 
   const getAvatarUrl = (path: string | null) => {
-    if (!path) return null;
-    // ถ้าเป็น URL เต็มอยู่แล้ว (เช่น รูปจาก Google Login) ให้ใช้ได้เลย
-    if (path.startsWith('http')) return path; 
-    
-    // ดักไว้เผื่อว่าใน Database เก็บชื่อไฟล์มาแบบมีคำว่า 'profiles/' นำหน้าอยู่แล้ว
-    if (path.startsWith('profiles/')) {
-        return `${CDN_BASE_URL}/${path}`;
-    }
-    
-    // ถ้าใน Database เก็บแค่ชื่อไฟล์เพียวๆ ให้เติมโฟลเดอร์ /profiles/ เข้าไป
-    return `${CDN_BASE_URL}/profiles/${path}`;
-  };
+    if (!path) return null;
+    if (path.startsWith('http')) return path; 
+    if (path.startsWith('profiles/')) {
+        return `${CDN_BASE_URL}/${path}`;
+    }
+    return `${CDN_BASE_URL}/profiles/${path}`;
+  };
 
   const isOwner = profile?.role === 'owner';
-  
-  // ✅ ตรวจสอบ Plan: เป็น Pro/Ultimate หรือไม่
   const isPremium = ['pro', 'ultimate'].includes(brand?.plan);
-  
 
   const navItems = [
     { 
         name: 'คิดเงิน (POS)', 
-        href: '/dashboard/pai_order', 
+        href: '/dashboard/pai_order_master', 
         icon: IconGrid,
         hidden: !isOwner && !isPremium
     },
@@ -90,7 +86,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         icon: IconChef,
         hidden: !isOwner && !isPremium
     },
-// 🔥 เมนูพนักงาน: ซ่อนถ้า (ไม่ใช่เจ้าของ) AND (ร้านไม่ใช่ Premium)
+    // 🌟 เพิ่มเมนูระบบคลังสินค้า ต่อจาก ออเดอร์ครัว
+    { 
+        name: 'ระบบคลังสินค้า', 
+        href: '/dashboard/inventory', 
+        icon: IconBox,
+        // ซ่อนถ้าร้านไม่ใช่พรีเมียม (หรือแล้วแต่นายจะตั้งเงื่อนไขครับ)
+        hidden: !isOwner && !isPremium
+    },
     { 
         name: '--- จัดการร้าน ---', 
         href: '#', 
@@ -101,12 +104,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'Dashboard', href: '/dashboard', icon: Icondashboard, ownerOnly: true },
     { name: 'ส่วนลด/โปรฯ', href: '/dashboard/discounts', icon: IconTag, ownerOnly: true },
     { name: 'เมนูอาหาร', href: '/dashboard/products', icon: IconPlusSquare, ownerOnly: true },
-    { name: 'ใบเส็จย้อนหลัง', href: '/dashboard/receipts', icon: IconHistory, ownerOnly: true },
+    { name: 'ใบเสร็จย้อนหลัง', href: '/dashboard/receipts', icon: IconHistory, ownerOnly: true },
     { name: 'ตั้งค่าร้าน', href: '/dashboard/settings', icon: IconSettings, ownerOnly: true },
-
-    
-    
-    
     { name: '--- จัดการธีม ---', href: '#', icon: null, separator: true },
     { name: 'เลือกธีมร้าน', href: '/dashboard/theme', icon: IconPalette, isMagic: true }, 
     { name: 'Marketplace', href: '/dashboard/marketplace', icon: IconShoppingBag, isGold: true },
@@ -116,8 +115,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return <>{children}</>;
   }
 
+  if (!mounted) return <div className="min-h-screen bg-slate-50">{children}</div>;
+
   return (
-    <div className="flex min-h-screen bg-slate-50 font-sans text-slate-900">
+    <div className="flex min-h-screen bg-slate-50 font-sans text-slate-900" suppressHydrationWarning>
       <div 
         className={`fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-40 transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         onClick={() => setSidebarOpen(false)}
@@ -133,14 +134,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               Scan-Food
             </span>
           </div>
-          <button onClick={() => setSidebarOpen(false)} className="w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all active:scale-90">
+          <button suppressHydrationWarning onClick={() => setSidebarOpen(false)} className="w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all active:scale-90">
             <IconX size={20} />
           </button>
         </div>
 
         <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1.5 custom-scrollbar">
           {navItems.map((item: any, idx) => {
-            // ✅ Logic การกรอง: ซ่อนถ้า hidden เป็น true หรือไม่ใช่ owner ใน ownerOnly
             if (item.hidden) return null;
             if (item.ownerOnly && !isOwner) return null;
 
@@ -161,7 +161,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     ? 'bg-gradient-to-br from-[#4a00e0] to-[#8e2de2] text-white shadow-md shadow-purple-500/20 hover:scale-105 border border-purple-400/20'
                     : item.isGold 
                     ? 'bg-gradient-to-r from-amber-100 to-yellow-50 text-amber-700 shadow-sm shadow-amber-100 border border-amber-200 hover:scale-105' 
-                    : pathname === item.href 
+                    // 🌟 ทำให้เมนูคลังสินค้า Active เมื่ออยู่หน้าลูกๆ ของ inventory ด้วย
+                    : pathname.startsWith(item.href) && item.href !== '#'
                       ? 'bg-blue-50 text-blue-700 shadow-sm border border-blue-100' 
                       : 'text-slate-500 hover:bg-slate-50 hover:text-blue-600'
                   }`}
@@ -172,7 +173,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         <div className="absolute bottom-2 left-2 text-[7px] opacity-50 animate-pulse delay-75">★</div>
                     </>
                 )}
-                <div className={`transition-transform duration-200 ${pathname === item.href ? 'scale-110' : 'group-hover:scale-110'}`}>
+                <div className={`transition-transform duration-200 ${(pathname.startsWith(item.href) && item.href !== '#') ? 'scale-110' : 'group-hover:scale-110'}`}>
                     {item.icon && <item.icon size={20} />}
                 </div>
                 <span className={item.isGold || item.isMagic ? 'font-black tracking-wide' : ''}>{item.name}</span>
@@ -183,7 +184,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </nav>
 
         <div className="p-4 border-t border-slate-50 bg-white shrink-0">
-          <button onClick={handleLogout} className="w-full py-2.5 rounded-xl bg-slate-100 text-slate-500 hover:bg-red-500 hover:text-white text-[11px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-sm active:scale-95">
+          <button suppressHydrationWarning onClick={handleLogout} className="w-full py-2.5 rounded-xl bg-slate-100 text-slate-500 hover:bg-red-500 hover:text-white text-[11px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-sm active:scale-95">
             <IconLogOut size={16} /> ออกจากระบบ
           </button>
         </div>
@@ -192,7 +193,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="flex-1 flex flex-col min-h-screen transition-all duration-300 w-full"> 
         <header className="bg-white border-b border-slate-100 p-4 relative z-30 flex items-center justify-between shadow-sm/30 bg-white">
           <div className="flex items-center gap-4">
-            <button onClick={() => setSidebarOpen(true)} className="p-2.5 rounded-xl bg-white text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-all shadow-sm border border-slate-200 active:scale-95">
+            <button suppressHydrationWarning onClick={() => setSidebarOpen(true)} className="p-2.5 rounded-xl bg-white text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-all shadow-sm border border-slate-200 active:scale-95">
               <IconMenu size={24} />
             </button>
             <div className="flex flex-col">

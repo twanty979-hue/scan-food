@@ -30,6 +30,7 @@ const generateUUID = () => {
 export function usePayment() {
     // --- Audio State & Ref ---
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    const scanAudioRef = useRef<HTMLAudioElement | null>(null);
     const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
     const [kitchenOrder, setKitchenOrder] = useState<any>(null);
     // --- State ---
@@ -97,6 +98,7 @@ export function usePayment() {
     useEffect(() => {
         if (typeof window !== 'undefined') {
             audioRef.current = new Audio('/sounds/alert.mp3');
+            scanAudioRef.current = new Audio('/sounds/beep.mp3'); // 🌟 เพิ่มบรรทัดนี้
         }
     }, []);
 
@@ -124,6 +126,12 @@ export function usePayment() {
         const audio = audioRef.current;
         audio.currentTime = 0;
         audio.play().catch(e => console.error("Playback failed:", e));
+    }, []);
+
+    const playScanSound = useCallback(() => {
+        if (!scanAudioRef.current) return;
+        scanAudioRef.current.currentTime = 0;
+        scanAudioRef.current.play().catch(e => console.error("Scan sound failed:", e));
     }, []);
 
     const toggleAutoKitchen = () => {
@@ -618,7 +626,11 @@ export function usePayment() {
     return {
         activeTab, setActiveTab,
         loading, autoKitchen, setAutoKitchen, // ✅ คืนค่าตัวแปรปุ่มกลับมาให้หน้าจอใช้งานได้
-        categories, products: selectedCategory === 'ALL' ? products : products.filter((p: any) => p.category_id === selectedCategory),
+        categories, 
+        // 🌟 ซ่อนสินค้าที่เป็นของชำ (retail) ไม่ให้แสดงเป็นปุ่มกด แต่ยังสแกนได้ปกติ
+        products: selectedCategory === 'ALL' 
+            ? products.filter((p: any) => p.item_type !== 'retail') 
+            : products.filter((p: any) => p.category_id === selectedCategory && p.item_type !== 'retail'),
         unpaidOrders, allTables,
         selectedCategory, setSelectedCategory,
         cart, selectedOrder, setSelectedOrder,
@@ -647,6 +659,7 @@ export function usePayment() {
         currentUser,
         fetchAndProcessOrders,
         playSound,
+        playScanSound,
         kitchenOrder, // ✅ คืนค่าตัวแปรกลับมาให้เผื่อพี่มีการใช้ใน UI อื่นๆ
         setKitchenOrder
     };

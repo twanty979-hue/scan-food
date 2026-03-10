@@ -195,15 +195,22 @@ export function usePayment() {
                 } else {
                     throw new Error("Cannot fetch from cloud"); 
                 }
-            } catch (error) {
+           } catch (error) {
                 console.warn("⚠️ Offline Mode: Loading from local Dexie database");
                 const localCats = await db.categories.toArray();
                 const localProds = await db.products.toArray();
                 const localDiscs = await db.discounts.toArray();
+                const localDiscProds = await db.discount_products.toArray(); // 🌟 ดึงตารางความสัมพันธ์มาด้วย
+
+                // 🌟 ประกอบร่างให้เหมือนดึงมาจาก Cloud
+                const mappedDiscounts = localDiscs.map(d => ({
+                    ...d,
+                    discount_products: localDiscProds.filter(dp => dp.discount_id === d.id)
+                }));
                 
                 if (localCats.length > 0) setCategories(localCats);
                 if (localProds.length > 0) setProducts(localProds);
-                if (localDiscs.length > 0) setDiscounts(localDiscs);
+                if (mappedDiscounts.length > 0) setDiscounts(mappedDiscounts); // 🌟 ใช้ตัวที่ประกอบร่างแล้ว
             }
             setLoading(false);
         };
@@ -371,17 +378,33 @@ export function usePayment() {
         return { original: basePrice, final: bestPrice, discount: basePrice - bestPrice, promoDetails: bestDiscountObj };
     }, [discounts, products]);
 
-    // --- Logic: Cart ---
-    const addToCart = useCallback((product: any, variant: string) => {
+  // --- Logic: Cart ---
+    const addToCart = useCallback((product: any, variant: string, note: string = "") => {
+        // 🌟 คำนวณราคาสุทธิและส่วนลดจาก calculatePrice ให้เสร็จสรรพ
         const pricing = calculatePrice(product, variant);
+        
         setCart(prev => {
-            const idx = prev.findIndex(item => item.id === product.id && item.variant === variant);
+            const idx = prev.findIndex(item => item.id === product.id && item.variant === variant && (item.note || "") === note);
+            
             if (idx > -1) {
                 const newCart = [...prev];
                 newCart[idx] = { ...newCart[idx], quantity: newCart[idx].quantity + 1 };
                 return newCart;
             }
-            return [...prev, { id: product.id, name: product.name, variant, price: pricing.final, originalPrice: pricing.original, quantity: 1, image_url: product.image_url, promotion_snapshot: pricing.promoDetails }];
+            
+            return [...prev, { 
+                id: product.id, 
+                name: product.name, 
+                variant, 
+                note, 
+                // 🌟 ใช้ค่าจาก pricing ทังหมด ไม่ใช้ product.price แล้ว
+                price: pricing.final, 
+                original_price: pricing.original, // ใช้ snake_case เพื่อให้ตรงกับ Database
+                discount: pricing.discount,       // ยัดยอดลดลงไปในตะกร้า
+                quantity: 1, 
+                image_url: product.image_url, 
+                promotion_snapshot: pricing.promoDetails 
+            }];
         });
         setVariantModalProduct(null);
     }, [calculatePrice]);
@@ -434,7 +457,7 @@ export function usePayment() {
         }
     };
 
-    // 🔥 ระบบชำระเงิน
+ // 🔥 ระบบชำระเงิน (Optimized: กดปุ๊บ เด้งปั๊บ ทำงานเบื้องหลัง)
     const handlePayment = async () => {
         const safePayable = Number(payableAmount);
         const safeReceived = Number(receivedAmount);
@@ -446,7 +469,7 @@ export function usePayment() {
             return;
         }
 
-        // 🛡️ ด่านสกัด: เช็คว่าเครื่องอื่นเพิ่งจ่ายไปเมื่อกี้หรือไม่
+        // 🛡️ ด่านสกัด: เช็คว่าเครื่องอื่นเพิ่งจ่ายไปเมื่อกี้หรือไม่ (อันนี้ต้องคง await ไว้ เพราะมันเช็คเร็วและสำคัญมาก กันจ่ายซ้ำ)
         if (activeTab === 'tables' && selectedOrder && navigator.onLine) {
             try {
                 const { data: latestOrder } = await supabase
@@ -456,15 +479,9 @@ export function usePayment() {
                     .single();
 
                 if (latestOrder && latestOrder.status === 'paid') {
-                    setStatusModal({ 
-                        show: true, 
-                        type: 'error', 
-                        title: 'ชำระเงินแล้ว', 
-                        message: 'ออเดอร์นี้ถูกชำระเงินจากเครื่องอื่นเรียบร้อยแล้ว' 
-                    });
-                    
+                    setStatusModal({ show: true, type: 'error', title: 'ชำระเงินแล้ว', message: 'ออเดอร์นี้ถูกชำระเงินจากเครื่องอื่นเรียบร้อยแล้ว' });
                     refreshOrders(); 
-                    return; // 🛑 เบรก! สั่งหยุดทำงานตรงนี้เลย ไม่ลงเครื่อง ไม่ปริ้นใบเสร็จ
+                    return; 
                 }
             } catch (err) {
                 console.warn("⚠️ ไม่สามารถเช็คสถานะจาก Cloud ได้ ข้ามไปใช้ Local", err);
@@ -479,14 +496,12 @@ export function usePayment() {
         let tableLabel = 'Walk-in';
         let itemsToSave: any[] = [];
         let orderType = activeTab === 'pos' ? 'pos' : 'table';
-        
         let newToken: string | null = null; 
 
         if (activeTab === 'tables' && selectedOrder) {
             finalOrderId = selectedOrder.id;
             tableLabel = selectedOrder.table_label;
             newToken = Math.random().toString(36).substring(2, 6).toUpperCase(); 
-            
             itemsToSave = selectedOrder.order_items
                 .filter((i: any) => i.status !== 'cancelled')
                 .map((i: any) => ({ ...i, order_id: finalOrderId, updated_at: nowIso }));
@@ -494,8 +509,8 @@ export function usePayment() {
             finalOrderId = generateUUID();
             itemsToSave = cart.map((i: any) => ({
                 id: generateUUID(), order_id: finalOrderId, product_id: i.id, product_name: i.name,
-                quantity: i.quantity, price: i.price, variant: i.variant, promotion_snapshot: i.promotion_snapshot,
-                status: 'active', created_at: nowIso
+                quantity: i.quantity, price: i.price, variant: i.variant, note: i.note, promotion_snapshot: i.promotion_snapshot,
+                original_price: i.original_price, discount: i.discount, status: 'active', created_at: nowIso
             }));
         }
 
@@ -511,11 +526,11 @@ export function usePayment() {
         };
 
         try {
+            // 1. บันทึกลงฐานข้อมูลในเครื่อง (ใช้เวลาแค่ 0.05 วินาที)
             await db.transaction('rw', 'orders', 'order_items', 'pai_orders', 'sync_queue', async () => {
                 await db.orders.put(newOrderData); 
                 await db.order_items.bulkPut(itemsToSave);
                 await db.pai_orders.put(paiOrderData);
-
                 await db.sync_queue.add({
                     type: 'PAYMENT',
                     payload: {
@@ -528,64 +543,9 @@ export function usePayment() {
                 });
             });
 
-            console.log("✅ บันทึกลงเครื่องสำเร็จ! (รอคิว Sync)");
+            console.log("✅ บันทึกลงเครื่องสำเร็จ! (อัปเดต UI ทันที)");
 
-            // =========================================================================
-            // 🌟 🖨️ เพิ่มส่วนพิมพ์ใบเสร็จออโต้ตรงนี้ครับ!
-            // =========================================================================
-            if (typeof window !== 'undefined' && (window as any).AndroidBridge) {
-                try {
-                    const printData = {
-                        brandName: String(currentBrand?.name || "ร้านค้า"),
-                        tableName: String(tableLabel),
-                        orderId: String(finalOrderId.slice(0, 8)),
-                        date: String(new Date(nowIso).toLocaleString('th-TH', { 
-                            year: 'numeric', month: 'short', day: 'numeric', 
-                            hour: '2-digit', minute: '2-digit' 
-                        })),
-                        items: itemsToSave.map((item: any) => ({
-                            name: String(item.product_name || item.name || "รายการอาหาร"),
-                            qty: Number(item.quantity),
-                            price: Number(item.price),
-                            isCancelled: Boolean(item.status === 'cancelled')
-                        })),
-                        totalAmount: Number(safePayable),
-                        receivedAmount: Number(paiOrderData.received_amount),
-                        changeAmount: Number(paiOrderData.change_amount),
-                        paymentMethod: String(paymentMethod).toUpperCase(),
-                        cashier: String(currentProfile?.full_name || 'System')
-                    };
-                    
-                    // สั่ง Android ปริ้นทันที
-                    (window as any).AndroidBridge.printReceipt(JSON.stringify(printData));
-                    console.log("🖨️ Auto Print Receipt Triggered");
-                } catch (printErr) {
-                    console.error("❌ Auto Print Error:", printErr);
-                }
-            }
-            // =========================================================================
-
-            if (activeTab === 'tables' && selectedOrder && brandId && navigator.onLine) {
-                // 1. เคลียร์โต๊ะบน Cloud ให้เสร็จก่อน
-                await clearTableOnCloud(brandId, tableLabel, newToken!, localPayId);
-
-                // 2. 🚀 ยิง FCM สั่งรีเฟรชแบบเงียบๆ (ไม่ให้เด้งแจ้งเตือนออเดอร์ใหม่)
-                try {
-                    fetch('/api/send-notification', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ 
-                            brandId: brandId, 
-                            message: 'อัปเดตสถานะโต๊ะ',
-                            type: 'SILENT_UPDATE', // ส่งสถานะไปบอกว่าเป็นแค่การอัปเดตเงียบๆ
-                            title: 'อัปเดตหน้าจอ'
-                        })
-                    });
-                } catch (fcmErr) {
-                    console.error("❌ ยิง FCM พลาด:", fcmErr);
-                }
-            }
-
+            // 🚀🚀🚀 1. อัปเดตหน้าจอทันที! (เคล็ดลับความเร็ว: โชว์ใบเสร็จให้ลูกค้าดูเลย ไม่ต้องรอ Cloud)
             setCompletedReceipt({
                 id: localPayId, created_at: nowIso, total_amount: safePayable,
                 received_amount: paiOrderData.received_amount, change_amount: paiOrderData.change_amount, 
@@ -599,15 +559,38 @@ export function usePayment() {
             if (activeTab === 'pos') {
                 setCart([]);
                 localStorage.removeItem('pos_cart');
-            } 
-            else if (activeTab === 'tables' && selectedOrder) {
+            } else if (activeTab === 'tables' && selectedOrder) {
                 setUnpaidOrders(prev => prev.filter(o => o.table_label !== selectedOrder.table_label));
-                setAllTables(prev => prev.map(t => 
-                    t.label === selectedOrder.table_label 
-                        ? { ...t, status: 'available', access_token: newToken }
-                        : t
-                ));
+                setAllTables(prev => prev.map(t => t.label === selectedOrder.table_label ? { ...t, status: 'available', access_token: newToken } : t));
                 setSelectedOrder(null);
+            }
+
+            // ☁️☁️☁️ 2. ปล่อยให้ระบบแอบไปทำงานกับ Cloud เบื้องหลัง (ทำงานแบบ Async ไม่ต้องรอ!) 
+            
+            // สั่งพิมพ์ออกเครื่อง (ดีเลย์นิดนึงให้ Modal ใบเสร็จเปิดขึ้นมาก่อน)
+            if (typeof window !== 'undefined' && (window as any).AndroidBridge) {
+                setTimeout(() => {
+                    try {
+                        const printData = {
+                            brandName: String(currentBrand?.name || "ร้านค้า"), tableName: String(tableLabel), orderId: String(finalOrderId.slice(0, 8)),
+                            date: String(new Date(nowIso).toLocaleString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })),
+                            items: itemsToSave.map((item: any) => ({ name: String(item.product_name || item.name || "รายการอาหาร"), qty: Number(item.quantity), price: Number(item.price), isCancelled: Boolean(item.status === 'cancelled'), variant: String(item.variant || 'normal'), note: String(item.note || '') })),
+                            totalAmount: Number(safePayable), receivedAmount: Number(paiOrderData.received_amount), changeAmount: Number(paiOrderData.change_amount), paymentMethod: String(paymentMethod).toUpperCase(), cashier: String(currentProfile?.full_name || 'System')
+                        };
+                        (window as any).AndroidBridge.printReceipt(JSON.stringify(printData));
+                    } catch (printErr) { console.error(printErr); }
+                }, 50); 
+            }
+
+            // สั่งล้างโต๊ะบน Cloud และยิง FCM แจ้งเตือนแบบไม่บล็อกการทำงานหลัก (ลบคำว่า await ออกแล้ว)
+            if (activeTab === 'tables' && brandId && navigator.onLine) {
+                clearTableOnCloud(brandId, tableLabel, newToken!, localPayId).catch(e => console.error("Background clear fail", e));
+
+                fetch('/api/send-notification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ brandId: brandId, message: 'อัปเดตสถานะโต๊ะ', type: 'SILENT_UPDATE', title: 'อัปเดตหน้าจอ' })
+                }).catch(e => console.error("Background FCM fail", e));
             }
 
         } catch (error) {
@@ -616,10 +599,9 @@ export function usePayment() {
         }
     };
     
-    const handleSelectTableForQR = async (table: any) => {
-        const { success, data } = await getLatestTableDataAction(table.id);
-        const updatedTable = (success && data) ? data : table;
-        setQrTableData(updatedTable);
+    // 🌟 แก้ใหม่: ไม่ต้องยิง API แล้ว โยนข้อมูลโต๊ะลง Modal ได้เลย (เพราะมันอัปเดต Token ใหม่ตั้งแต่ตอนคิดเงินแล้ว)
+    const handleSelectTableForQR = (table: any) => {
+        setQrTableData(table);
         setShowTableSelector(false);
     };
 

@@ -54,7 +54,7 @@ export async function upsertProductAction(payload: any) {
   try {
     const brandId = await getMyBrandId(supabase);
     
-    // Construct DB Payload
+   // หาช่วงโค้ดนี้ใน upsertProductAction แล้วเพิ่มบรรทัด options เข้าไปครับ
     const productData = {
         name: payload.name,
         description: payload.description,
@@ -65,7 +65,7 @@ export async function upsertProductAction(payload: any) {
         image_name: payload.image_name,
         is_recommended: payload.is_recommended,
         brand_id: brandId,
-        // ถ้าเป็น Insert ใหม่ ให้เปิดขายเลย
+        options: payload.options || [], // 👈 เพิ่มบรรทัดนี้บรรทัดเดียวครับ
         ...(payload.id ? {} : { is_available: true }) 
     };
 

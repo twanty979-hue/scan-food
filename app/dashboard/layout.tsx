@@ -21,10 +21,8 @@ const IconShoppingBag = ({ size = 28 }) => <svg width={size} height={size} viewB
 const IconPalette = ({ size = 28 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>;
 const IconPlusSquare = ({ size = 28 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>;
 const Icondashboard = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 17v-5"/><path d="M12 17v-8"/><path d="M16 17v-3"/></svg>;
-// 🌟 เพิ่ม IconBox สำหรับระบบคลังสินค้า
 const IconBox = ({ size = 24 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>;
 
-// Config: Base URL สำหรับ Cloudflare
 const CDN_BASE_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://img.pos-foodscan.com";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -64,9 +62,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const getAvatarUrl = (path: string | null) => {
     if (!path) return null;
     if (path.startsWith('http')) return path; 
-    if (path.startsWith('profiles/')) {
-        return `${CDN_BASE_URL}/${path}`;
-    }
+    if (path.startsWith('profiles/')) return `${CDN_BASE_URL}/${path}`;
     return `${CDN_BASE_URL}/profiles/${path}`;
   };
 
@@ -74,33 +70,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const isPremium = ['pro', 'ultimate'].includes(brand?.plan);
 
   const navItems = [
-    { 
-        name: 'คิดเงิน (POS)', 
-        href: '/dashboard/pai_order_master', 
-        icon: IconGrid,
-        hidden: !isOwner && !isPremium
-    },
-    { 
-        name: 'ออเดอร์ (ครัว)', 
-        href: '/dashboard/orders', 
-        icon: IconChef,
-        hidden: !isOwner && !isPremium
-    },
-    // 🌟 เพิ่มเมนูระบบคลังสินค้า ต่อจาก ออเดอร์ครัว
-    { 
-        name: 'ระบบคลังสินค้า', 
-        href: '/dashboard/inventory', 
-        icon: IconBox,
-        // ซ่อนถ้าร้านไม่ใช่พรีเมียม (หรือแล้วแต่นายจะตั้งเงื่อนไขครับ)
-        hidden: !isOwner && !isPremium
-    },
-    { 
-        name: '--- จัดการร้าน ---', 
-        href: '#', 
-        icon: null, 
-        separator: true, 
-        hidden: !isOwner && !isPremium 
-    },
+    { name: 'คิดเงิน (POS)', href: '/dashboard/pai_order', icon: IconGrid, hidden: !isOwner && !isPremium },
+    { name: 'ออเดอร์ (ครัว)', href: '/dashboard/orders', icon: IconChef, hidden: !isOwner && !isPremium },
+    { name: 'ระบบคลังสินค้า', href: '/dashboard/inventory', icon: IconBox, hidden: !isOwner && !isPremium },
+    { name: '--- จัดการร้าน ---', href: '#', icon: null, separator: true, hidden: !isOwner && !isPremium },
     { name: 'Dashboard', href: '/dashboard', icon: Icondashboard, ownerOnly: true },
     { name: 'ส่วนลด/โปรฯ', href: '/dashboard/discounts', icon: IconTag, ownerOnly: true },
     { name: 'เมนูอาหาร', href: '/dashboard/products', icon: IconPlusSquare, ownerOnly: true },
@@ -111,90 +84,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'Marketplace', href: '/dashboard/marketplace', icon: IconShoppingBag, isGold: true },
   ];
 
-  if (isMarketplaceDetail) {
-    return <>{children}</>;
-  }
-
+  if (isMarketplaceDetail) return <>{children}</>;
   if (!mounted) return <div className="min-h-screen bg-slate-50">{children}</div>;
 
   return (
-    <div className="flex min-h-screen bg-slate-50 font-sans text-slate-900" suppressHydrationWarning>
-      <div 
-        className={`fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-40 transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-        onClick={() => setSidebarOpen(false)}
-      />
-
-      <aside className={`fixed top-0 left-0 h-full w-58 bg-white z-50 transition-transform duration-300 ease-out shadow-2xl border-r border-slate-100 flex flex-col ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="h-16 min-h-[64px] px-5 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="text-indigo-600 bg-indigo-50 p-2 rounded-xl shadow-sm border border-indigo-100"> 
-               <IconQRCode size={24} /> 
-            </div>
-            <span className="font-black text-xl tracking-tighter bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">
-              Scan-Food
-            </span>
-          </div>
-          <button suppressHydrationWarning onClick={() => setSidebarOpen(false)} className="w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all active:scale-90">
-            <IconX size={20} />
-          </button>
-        </div>
-
-        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1.5 custom-scrollbar">
-          {navItems.map((item: any, idx) => {
-            if (item.hidden) return null;
-            if (item.ownerOnly && !isOwner) return null;
-            const isActive = item.href === '/dashboard' 
-    ? pathname === '/dashboard' // ถ้าเป็นหน้า Dashboard หลัก ต้องชื่อตรงกันเป๊ะๆ เท่านั้น
-    : pathname.startsWith(item.href) && item.href !== '#'; // หน้าอื่นๆ ใช้ startsWith เหมือนเดิม (เพื่อรองรับ sub-page)
-
-            return item.separator ? (
-              <div key={idx} className="my-4 flex items-center gap-4 mx-4">
-                  <div className="h-px bg-slate-100 flex-1"></div>
-                  <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">{item.name.replace(/---/g, '')}</span>
-                  <div className="h-px bg-slate-100 flex-1"></div>
-              </div>
-            ) : (
-              <Link 
-                key={item.href} 
-                href={item.href}
-                onClick={() => setSidebarOpen(false)}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all group font-bold text-sm relative overflow-hidden shrink-0
-                  ${
-                    item.isMagic 
-                    ? 'bg-gradient-to-br from-[#4a00e0] to-[#8e2de2] text-white shadow-md shadow-purple-500/20 hover:scale-105 border border-purple-400/20'
-                    : item.isGold 
-                    ? 'bg-gradient-to-r from-amber-100 to-yellow-50 text-amber-700 shadow-sm shadow-amber-100 border border-amber-200 hover:scale-105' 
-                    // 🌟 ทำให้เมนูคลังสินค้า Active เมื่ออยู่หน้าลูกๆ ของ inventory ด้วย
-                    : isActive
-            ? 'bg-blue-50 text-blue-700 shadow-sm border border-blue-100' 
-            : 'text-slate-500 hover:bg-slate-50 hover:text-blue-600'
-        }`}
-    >
-                {item.isMagic && (
-                    <>
-                        <div className="absolute top-1 right-2 text-[9px] opacity-70 animate-pulse">✨</div>
-                        <div className="absolute bottom-2 left-2 text-[7px] opacity-50 animate-pulse delay-75">★</div>
-                    </>
-                )}
-                <div className={`transition-transform duration-200 ${(pathname.startsWith(item.href) && item.href !== '#') ? 'scale-110' : 'group-hover:scale-110'}`}>
-                    {item.icon && <item.icon size={20} />}
-                </div>
-                <span className={item.isGold || item.isMagic ? 'font-black tracking-wide' : ''}>{item.name}</span>
-                {item.isGold && <span className="ml-auto bg-amber-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full shadow-sm animate-pulse">NEW</span>}
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="p-4 border-t border-slate-50 bg-white shrink-0">
-          <button suppressHydrationWarning onClick={handleLogout} className="w-full py-2.5 rounded-xl bg-slate-100 text-slate-500 hover:bg-red-500 hover:text-white text-[11px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-sm active:scale-95">
-            <IconLogOut size={16} /> ออกจากระบบ
-          </button>
-        </div>
-      </aside>
-
-      <div className="flex-1 flex flex-col min-h-screen transition-all duration-300 w-full"> 
-        <header className="bg-white border-b border-slate-100 p-4 relative z-30 flex items-center justify-between shadow-sm/30 bg-white">
+    <div className="flex min-h-screen bg-slate-50 font-sans text-slate-900 overflow-x-hidden" suppressHydrationWarning>
+      
+      {/* 🟢 ส่วนเนื้อหาหลัก (Header + Main) */}
+      <div className="flex-1 flex flex-col min-h-screen transition-all duration-300 w-full relative z-10"> 
+        <header className="bg-white border-b border-slate-100 p-4 relative z-30 flex items-center justify-between shadow-sm bg-white">
           <div className="flex items-center gap-4">
             <button suppressHydrationWarning onClick={() => setSidebarOpen(true)} className="p-2.5 rounded-xl bg-white text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-all shadow-sm border border-slate-200 active:scale-95">
               <IconMenu size={24} />
@@ -212,11 +110,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
              <Link href="/dashboard/profile">
                 <div className="w-9 h-9 rounded-full bg-slate-100 overflow-hidden border-2 border-white shadow-md hover:shadow-lg hover:scale-110 hover:border-blue-200 transition-all cursor-pointer active:scale-95">
                     {profile?.avatar_url ? (
-                      <img src={getAvatarUrl(profile.avatar_url) ?? ''} className="w-full h-full object-cover" /> 
+                      <img src={getAvatarUrl(profile.avatar_url) ?? ''} className="w-full h-full object-cover" alt="Profile" /> 
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-slate-400">
-                        <IconUser size={18}/>
-                      </div>
+                      <div className="w-full h-full flex items-center justify-center text-slate-400"><IconUser size={18}/></div>
                     )}
                 </div>
              </Link>
@@ -228,11 +124,69 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </main>
       </div>
 
+      {/* 🔴 ส่วน Sidebar & Backdrop (ย้ายมาไว้ข้างล่างสุด และใช้ z-index สูงสุด) */}
+      
+      {/* Backdrop: z-[9998] */}
+      <div 
+        className={`fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9998] transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        onClick={() => setSidebarOpen(false)}
+      />
+
+      {/* Sidebar: z-[9999] */}
+      <aside className={`fixed top-0 left-0 h-screen w-64 bg-white z-[9999] transition-transform duration-300 ease-out shadow-2xl border-r border-slate-100 flex flex-col ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="h-16 min-h-[64px] px-5 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="text-indigo-600 bg-indigo-50 p-2 rounded-xl shadow-sm border border-indigo-100"><IconQRCode size={24} /></div>
+            <span className="font-black text-xl tracking-tighter bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">Scan-Food</span>
+          </div>
+          <button onClick={() => setSidebarOpen(false)} className="w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all active:scale-90">
+            <IconX size={20} />
+          </button>
+        </div>
+
+        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1.5 custom-scrollbar">
+          {navItems.map((item: any, idx) => {
+            if (item.hidden) return null;
+            if (item.ownerOnly && !isOwner) return null;
+            const isActive = item.href === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(item.href) && item.href !== '#';
+
+            return item.separator ? (
+              <div key={idx} className="my-4 flex items-center gap-4 mx-4">
+                  <div className="h-px bg-slate-100 flex-1"></div>
+                  <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">{item.name.replace(/---/g, '')}</span>
+                  <div className="h-px bg-slate-100 flex-1"></div>
+              </div>
+            ) : (
+              <Link 
+                key={item.href} 
+                href={item.href}
+                onClick={() => setSidebarOpen(false)}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all group font-bold text-sm relative overflow-hidden shrink-0
+                  ${item.isMagic ? 'bg-gradient-to-br from-[#4a00e0] to-[#8e2de2] text-white shadow-md' : 
+                    item.isGold ? 'bg-gradient-to-r from-amber-100 to-yellow-50 text-amber-700 border border-amber-200' : 
+                    isActive ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'text-slate-500 hover:bg-slate-50 hover:text-blue-600'}`}
+              >
+                <div className={`transition-transform duration-200 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`}>
+                    {item.icon && <item.icon size={20} />}
+                </div>
+                <span className={item.isGold || item.isMagic ? 'font-black tracking-wide' : ''}>{item.name}</span>
+                {item.isGold && <span className="ml-auto bg-amber-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full shadow-sm animate-pulse">NEW</span>}
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="p-4 border-t border-slate-50 bg-white shrink-0">
+          <button onClick={handleLogout} className="w-full py-2.5 rounded-xl bg-slate-100 text-slate-500 hover:bg-red-500 hover:text-white text-[11px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 active:scale-95">
+            <IconLogOut size={16} /> ออกจากระบบ
+          </button>
+        </div>
+      </aside>
+
       <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar { width: 5px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
       `}</style>
     </div>
   );

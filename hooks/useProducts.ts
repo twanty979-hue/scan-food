@@ -12,6 +12,16 @@ import { useGlobalAlert } from '@/components/providers/GlobalAlertProvider';
 const CDN_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://img.pos-foodscan.com";
 
 export type Category = { id: string; name: string };
+
+// 🌟 เพิ่ม Type สำหรับตัวเลือกเสริม
+export type ProductOptionChoice = { name: string; price: number };
+export type ProductOption = {
+  name: string;       // เช่น "เลือกเส้น", "เพิ่มท็อปปิ้ง"
+  type: 'single' | 'multiple'; 
+  required: boolean;  
+  choices: ProductOptionChoice[];
+};
+
 export type Product = {
   id: string;
   name: string;
@@ -24,6 +34,7 @@ export type Product = {
   is_available: boolean;
   is_recommended: boolean;
   brand_id: string;
+  options?: ProductOption[]; // 👈 รองรับตัวเลือกเสริม
 };
 
 // Helper function สร้าง Image object
@@ -59,9 +70,17 @@ export function useProducts() {
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
   const [isCropModalOpen, setIsCropModalOpen] = useState(false);
 
+  // 🌟 เพิ่ม options เข้าไปใน formData
   const [formData, setFormData] = useState({
-    name: '', description: '', price: '', price_special: '', price_jumbo: '',
-    category_id: '', image_name: '', is_recommended: false
+    name: '', 
+    description: '', 
+    price: '', 
+    price_special: '', 
+    price_jumbo: '',
+    category_id: '', 
+    image_name: '', 
+    is_recommended: false,
+    options: [] as ProductOption[] // 👈 เก็บค่าตัวเลือกเสริม
   });
 
   const fetchAllData = async () => {
@@ -134,8 +153,6 @@ export function useProducts() {
 
       if (!webpBlob) throw new Error('Canvas to Blob failed');
 
-      console.log(`✅ อัตราการบีบอัดสำเร็จ: ${(webpBlob.size / 1024).toFixed(2)} KB`);
-
       const fileNameOnly = `${Date.now()}.webp`; 
       const webpFile = new File([webpBlob], fileNameOnly, { type: 'image/webp' });
 
@@ -166,8 +183,6 @@ export function useProducts() {
         setUploading(true); 
         const apiFormData = new FormData();
         apiFormData.append("file", selectedFile);
-        
-        // 🌟 1. ส่ง Brand ID ไปเป็นชื่อโฟลเดอร์ตอนอัปโหลด
         apiFormData.append("folder", brandId || "system"); 
 
         const response = await fetch('/api/upload', {
@@ -192,6 +207,7 @@ export function useProducts() {
           finalImageName = '';
       }
 
+      // 🌟 เพิ่ม options เข้าไปใน payload ที่จะส่งไปบันทึก
       const payload = {
         id: editId,
         name: formData.name, 
@@ -201,13 +217,13 @@ export function useProducts() {
         price_jumbo: formData.price_jumbo ? parseFloat(formData.price_jumbo) : null,
         category_id: formData.category_id, 
         image_name: finalImageName, 
-        is_recommended: formData.is_recommended
+        is_recommended: formData.is_recommended,
+        options: formData.options // 👈 เพิ่มบรรทัดนี้ครับเฮีย!
       };
 
       const res = await upsertProductAction(payload);
       if (!res.success) throw new Error(res.error);
 
-      // 🌟 2. ลบรูปเก่า (API /delete-image จะตรวจสอบ Safety Guard ของร้านต้นแบบให้อัตโนมัติ)
       if (oldImageNameToDelete) {
           fetch('/api/delete-image', {
               method: 'POST',
@@ -254,7 +270,6 @@ export function useProducts() {
         showAlert('error', 'ลบไม่สำเร็จ', res.error);
         setProducts(oldProducts);
     } else {
-        // 🌟 3. ลบรูปเมื่อลบเมนูทิ้ง
         if (product && product.image_name) {
              fetch('/api/delete-image', {
                   method: 'POST',
@@ -288,7 +303,8 @@ export function useProducts() {
       price_jumbo: product?.price_jumbo?.toString() || '',
       category_id: product?.category_id || (categories[0]?.id || ''),
       image_name: product?.image_name || '',
-      is_recommended: product?.is_recommended || false
+      is_recommended: product?.is_recommended || false,
+      options: product?.options || [] // 👈 ดึงค่าเก่ามาใส่ หรือให้เป็น array ว่างถ้าสร้างใหม่
     });
     setIsModalOpen(true);
   };

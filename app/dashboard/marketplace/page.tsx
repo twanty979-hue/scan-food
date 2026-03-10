@@ -37,11 +37,9 @@ export default function MarketplacePage() {
         tierFilter, setTierFilter, tierCounts
     } = useMarketplace();
 
-    // ✅ State ควบคุม Dropdown รวมอันเดียว
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const filterRef = useRef<HTMLDivElement>(null);
 
-    // ปิด Dropdown เมื่อคลิกที่อื่น
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (filterRef.current && !filterRef.current.contains(event.target as Node)) {
@@ -53,9 +51,19 @@ export default function MarketplacePage() {
     }, []);
 
     const planLabels: any = { ALL: 'All Plans', free: 'Free', basic: 'Basic', pro: 'Pro', ultimate: 'Ultimate' };
-
-    // เช็คว่ามีการใช้ Filter อยู่ไหม (เพื่อแสดงจุดแจ้งเตือนสีแดง)
     const hasActiveFilter = tierFilter !== 'ALL' || selectedCategory !== 'ALL';
+
+    // 🌟 ฟังก์ชันคำนวณหน้าที่จะแสดง (ตัดหน้าตรงกลางออกและใส่ ...)
+    const getVisiblePages = (current: number, total: number) => {
+        if (total <= 5) return Array.from({ length: total }, (_, i) => i + 1);
+        
+        if (current <= 3) return [1, 2, 3, 4, '...', total];
+        if (current >= total - 2) return [1, '...', total - 3, total - 2, total - 1, total];
+        
+        return [1, '...', current - 1, current, current + 1, '...', total];
+    };
+
+    const visiblePages = getVisiblePages(currentPage, totalPages);
 
     return (
         <div className="min-h-screen bg-[#f8fafc] font-sans pb-24">
@@ -180,7 +188,6 @@ export default function MarketplacePage() {
                         <p className="text-xs text-slate-300 mt-1">Try changing the filters</p>
                     </div>
                 ) : (
-                    /* Grid แสดงผล 3 คอลัมน์จิ๋วๆ ในมือถือ */
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-4 xl:grid-cols-6 gap-2 md:gap-6 xl:gap-8 justify-items-center w-full px-1 sm:px-0 pb-24 md:pb-20 relative z-10">
                         {currentThemes.map((theme: any) => (
                             <MarketplaceCard 
@@ -194,18 +201,50 @@ export default function MarketplacePage() {
                     </div>
                 )}
 
-                {/* Pagination */}
+                {/* 🌟 Pagination (แบบมีจุดไข่ปลา) */}
                 {totalPages > 1 && (
-                    <div className="fixed bottom-6 md:bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 md:gap-4 bg-white/90 backdrop-blur-md p-2 pl-4 md:pl-6 pr-2 rounded-full shadow-2xl border border-slate-200 z-50 animate-in slide-in-from-bottom-10 fade-in duration-700 max-w-[90vw]">
+                    <div className="fixed bottom-6 md:bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 md:gap-4 bg-white/95 backdrop-blur-md p-2 pl-4 md:pl-6 pr-2 rounded-full shadow-2xl border border-slate-200 z-50 animate-in slide-in-from-bottom-10 fade-in duration-700 w-auto max-w-[95vw]">
                          <span className="text-[9px] md:text-[10px] font-black text-slate-400 mr-1 md:mr-2 whitespace-nowrap hidden sm:inline">PAGE NAVIGATION</span>
+                        
                         <div className="flex items-center gap-1 md:gap-2">
-                             <button onClick={() => changePage(Math.max(1, currentPage - 1))} disabled={currentPage === 1} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"><IconArrowLeft /></button>
-                             <div className="flex gap-1 px-1 md:px-2 overflow-x-auto no-scrollbar max-w-[150px] md:max-w-none">
-                                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                                    <button key={page} onClick={() => changePage(page)} className={`w-8 h-8 rounded-full text-[10px] font-black transition-all flex items-center justify-center shrink-0 ${currentPage === page ? 'bg-slate-900 text-white scale-110 shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}>{page}</button>
+                             <button 
+                                onClick={() => changePage(Math.max(1, currentPage - 1))} 
+                                disabled={currentPage === 1} 
+                                className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                             >
+                                <IconArrowLeft />
+                             </button>
+                             
+                             <div className="flex gap-1 md:gap-2 px-1">
+                                {visiblePages.map((page, index) => (
+                                    page === '...' ? (
+                                        <span key={`dots-${index}`} className="w-6 h-8 flex items-center justify-center text-slate-400 font-bold tracking-widest shrink-0">
+                                            ...
+                                        </span>
+                                    ) : (
+                                        <button 
+                                            key={page} 
+                                            onClick={() => changePage(page as number)} 
+                                            className={`w-8 h-8 rounded-full text-[10px] md:text-[11px] font-black transition-all flex items-center justify-center shrink-0 
+                                                ${currentPage === page 
+                                                    ? 'bg-slate-900 text-white scale-110 shadow-lg' 
+                                                    : 'text-slate-400 hover:bg-slate-50'
+                                                }`
+                                            }
+                                        >
+                                            {page}
+                                        </button>
+                                    )
                                 ))}
                             </div>
-                            <button onClick={() => changePage(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"><IconArrowRight /></button>
+                            
+                            <button 
+                                onClick={() => changePage(Math.min(totalPages, currentPage + 1))} 
+                                disabled={currentPage === totalPages} 
+                                className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                            >
+                                <IconArrowRight />
+                            </button>
                         </div>
                     </div>
                 )}

@@ -1,15 +1,10 @@
-//app/dashboard/pai_order/components/ReceiptModal.tsx
 'use client';
 
 import React, { useRef } from 'react';
 
-// --- Icons ---
+// --- Icons (เฉพาะปุ่มด้านนอก ไม่ปริ้นลงบิล) ---
 const IconPrinter = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>;
 const IconX = ({ size = 24 }: { size?: number }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
-const IconStore = ({ size = 16 }: { size?: number }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18"/><path d="M5 21v-7"/><path d="M19 21v-7"/><path d="M2 10l20 0"/><path d="M2 10l2-4h16l2 4"/></svg>;
-const IconUser = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
-const IconTag = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>;
-const IconFileText = ({ size = 18 }: { size?: number }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>;
 
 // --- Helpers ---
 const formatCurrency = (amount: number) => 
@@ -36,46 +31,61 @@ export default function ReceiptModal({ receipt, items, onClose }: ReceiptModalPr
     // 1. เตรียมข้อมูล items
     const displayItems = items || receipt?.items || [];
 
-    // 2. ฟังก์ชันช่วยดึงค่ายอดลด (รองรับทั้ง key เก่าและใหม่)
-    const getDiscountValue = (promo: any) => {
-        if (!promo) return 0;
-        // ✅ เช็คทั้ง savedAmount (POS) และ discount_amount (Database)
-        return Number(promo.savedAmount || promo.discount_amount || 0);
+    // 2. ฟังก์ชันดึงค่ายอดลด (รองรับทั้ง Walk-in และ โต๊ะ)
+    const getDiscountValue = (item: any) => {
+        if (item.discount && Number(item.discount) > 0) return Number(item.discount);
+        const promo = item.promotion_snapshot;
+        if (promo) return Number(promo.savedAmount || promo.discount_amount || promo.discount || 0);
+        return 0;
     };
 
-    // 3. คำนวณยอดประหยัดรวม (Total Saved)
-    const totalSaved = displayItems.reduce((sum: number, item: any) => {
-        if (item.status === 'cancelled') return sum;
-        const savedPerUnit = getDiscountValue(item.promotion_snapshot);
-        return sum + (savedPerUnit * item.quantity);
-    }, 0);
+    // 3. คำนวณยอดแบบละเอียดเพื่อโชว์ท้ายบิล
+    let subTotal = 0;
+    let totalDiscount = 0;
+
+    displayItems.forEach((item: any) => {
+        if (item.status === 'cancelled') return;
+        const savedPerUnit = getDiscountValue(item);
+        // ราคาเต็ม = ราคาที่ขาย + ส่วนลดที่ลดไปแล้ว
+        const originalPricePerUnit = Number(item.price) + savedPerUnit;
+        
+        subTotal += (originalPricePerUnit * item.quantity);
+        totalDiscount += (savedPerUnit * item.quantity);
+    });
+
+    const netTotal = receipt.total_amount;
 
     const handlePrint = () => {
-        // 1. จัดเตรียมข้อมูล JSON ส่งให้แอป Android (ต้องตรงกับที่ Kotlin รอรับ)
         const printData = {
             brandName: receipt.brand?.name || "ร้านค้า",
             tableName: receipt.table_label || "Walk-in",
             orderId: receipt.id.slice(0, 8),
             date: formatDateReceipt(receipt.created_at),
-            items: displayItems.map((item: any) => ({
-                name: item.product_name,
-                qty: item.quantity,
-                price: item.price,
-                isCancelled: item.status === 'cancelled'
-            })),
-            totalAmount: receipt.total_amount,
-            receivedAmount: receipt.received_amount || receipt.total_amount,
+            items: displayItems.map((item: any) => {
+                const saved = getDiscountValue(item);
+                let variantTh = item.variant === 'special' ? 'พิเศษ' : item.variant === 'jumbo' ? 'จัมโบ้' : '';
+                return {
+                    name: item.product_name || item.name,
+                    qty: item.quantity,
+                    price: item.price,
+                    variant: variantTh,
+                    note: item.note || '',
+                    discount: saved * item.quantity,
+                    isCancelled: item.status === 'cancelled'
+                }
+            }),
+            subTotal: subTotal,
+            totalDiscount: totalDiscount,
+            totalAmount: netTotal,
+            receivedAmount: receipt.received_amount || netTotal,
             changeAmount: receipt.change_amount || 0,
             paymentMethod: receipt.payment_method,
             cashier: receipt.cashier?.full_name || 'System'
         };
 
-        // 2. เช็คว่าเปิดผ่านแอป Android หรือไม่
         if (typeof window !== 'undefined' && (window as any).AndroidBridge) {
-            // ส่งข้อมูลไปที่ Kotlin ฟังก์ชัน printReceipt
             (window as any).AndroidBridge.printReceipt(JSON.stringify(printData));
         } else {
-            // 3. Fallback: ถ้าเปิดบนคอมปกติ ให้พิมพ์แบบหน้าต่าง Web เหมือนเดิม
             const content = printRef.current?.innerHTML;
             const printWindow = window.open('', '', 'width=400,height=600');
             if (printWindow && content) {
@@ -84,12 +94,14 @@ export default function ReceiptModal({ receipt, items, onClose }: ReceiptModalPr
                         <head>
                             <title>Print Receipt</title>
                             <style>
-                                body { font-family: 'Courier New', monospace; padding: 20px; font-size: 12px; }
+                                body { font-family: 'Courier New', monospace; padding: 20px; font-size: 12px; color: #000; }
                                 .text-center { text-align: center; }
                                 .text-right { text-align: right; }
                                 .font-bold { font-weight: bold; }
                                 .flex { display: flex; justify-content: space-between; }
                                 .border-b { border-bottom: 1px dashed #000; margin: 10px 0; }
+                                .text-red-500 { color: #000 !important; }
+                                .line-through { text-decoration: line-through; }
                             </style>
                         </head>
                         <body>
@@ -104,10 +116,11 @@ export default function ReceiptModal({ receipt, items, onClose }: ReceiptModalPr
             }
         }
     };
+
     if (!receipt) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[500] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm flex flex-col max-h-[90vh]">
                 
                 {/* Header Actions */}
@@ -140,104 +153,89 @@ export default function ReceiptModal({ receipt, items, onClose }: ReceiptModalPr
                         <div className="border-b border-dashed border-slate-300 my-4"></div>
 
                         {/* 2. รายการสินค้า */}
-                        <div className="space-y-3 mb-4">
-                            {displayItems.length > 0 ? (
-                                displayItems.map((item: any, index: number) => {
-                                    const isCancelled = item.status === 'cancelled';
-                                    const promo = item.promotion_snapshot;
-                                    
-                                    // ✅ เรียกใช้ฟังก์ชันที่รองรับทั้ง 2 ชื่อ
-                                    const savedPerUnit = getDiscountValue(promo);
-                                    const isDiscounted = !isCancelled && savedPerUnit > 0;
-                                    
-                                    // คำนวณราคาเต็ม (เฉพาะเมื่อมีส่วนลดจริงๆ)
-                                    const originalPrice = isDiscounted ? (item.price + savedPerUnit) : item.price;
+                        <div className="space-y-4 mb-4">
+                            {displayItems.map((item: any, index: number) => {
+                                const isCancelled = item.status === 'cancelled';
+                                const savedPerUnit = getDiscountValue(item);
+                                const isDiscounted = !isCancelled && savedPerUnit > 0;
+                                const originalPricePerUnit = Number(item.price) + savedPerUnit;
 
-                                    return (
-                                        <div key={index} className={`flex justify-between items-start ${isCancelled ? 'text-red-400' : ''}`}>
-                                            <div className="flex-1 pr-2">
-                                                <div className={isCancelled ? 'line-through decoration-red-400' : ''}>
-                                                    <span className="font-bold">{item.quantity}x</span> {item.product_name}
-                                                </div>
-                                                <div className="flex flex-wrap gap-1 mt-0.5">
-                                                    {item.variant !== 'normal' && (
-                                                        <span className="text-[10px] text-slate-500 bg-slate-100 px-1 rounded">
-                                                            {item.variant}
-                                                        </span>
-                                                    )}
-                                                    
-                                                    {/* ✅ แสดงป้าย SAVE (แก้เรื่องชื่อโปรโมชั่นหายด้วย) */}
-                                                    {isDiscounted && (
-                                                        <div className="flex items-center gap-1 text-[10px] text-red-500 font-bold bg-red-50 px-1.5 py-0.5 rounded w-fit">
-                                                            <IconTag /> SAVE {formatCurrency(savedPerUnit * item.quantity)}
-                                                            {/* ถ้ามีชื่อโชว์ชื่อ ถ้าไม่มีไม่ต้องโชว์วงเล็บว่างๆ */}
-                                                            {promo.name ? ` (${promo.name})` : ''}
-                                                        </div>
-                                                    )}
-                                                    
-                                                    {isCancelled && (
-                                                        <span className="text-[10px] font-bold bg-red-100 text-red-600 px-1.5 rounded">
-                                                            ยกเลิก
-                                                        </span>
-                                                    )}
-                                                </div>
+                                // แปลงไซส์เป็นไทย
+                                const variantTh = item.variant === 'special' ? 'พิเศษ' : item.variant === 'jumbo' ? 'จัมโบ้' : '';
+
+                                return (
+                                    <div key={index} className={`flex justify-between items-start ${isCancelled ? 'text-slate-400' : ''}`}>
+                                        <div className="flex-1 pr-2">
+                                            <div className={isCancelled ? 'line-through' : 'font-bold'}>
+                                                <span>{item.quantity}x</span> {item.product_name || item.name}
                                             </div>
-                                            <div className="text-right">
-                                                {/* ✅ แสดงราคาเต็มขีดฆ่า */}
+                                            
+                                            <div className="flex flex-col gap-0.5 mt-0.5 text-[11px] pl-4 text-slate-500">
+                                                {variantTh && <span>- {variantTh}</span>}
+                                                {item.note && <span>** {item.note}</span>}
                                                 {isDiscounted && (
-                                                    <p className="text-[10px] text-slate-400 line-through font-bold">
-                                                        {formatCurrency(originalPrice * item.quantity)}
-                                                    </p>
+                                                    <span className="text-red-500 font-bold italic">
+                                                        (ส่วนลด: -{formatCurrency(savedPerUnit * item.quantity)})
+                                                    </span>
                                                 )}
-                                                <p className={`font-black ${isCancelled ? 'line-through text-red-300' : (isDiscounted ? 'text-red-500' : 'text-slate-900')}`}>
-                                                    {formatCurrency(item.price * item.quantity)}
-                                                </p>
+                                                {isCancelled && <span className="text-red-500 font-bold">(ยกเลิกแล้ว)</span>}
                                             </div>
                                         </div>
-                                    );
-                                })
-                            ) : (
-                                <p className="text-center text-slate-400 italic">ไม่พบรายการสินค้า</p>
-                            )}
+                                        
+                                        <div className="text-right">
+                                            {isDiscounted && (
+                                                <p className="text-[10px] text-slate-400 line-through">
+                                                    {formatCurrency(originalPricePerUnit * item.quantity)}
+                                                </p>
+                                            )}
+                                            <p className={`font-black ${isCancelled ? 'line-through' : (isDiscounted ? 'text-red-500' : 'text-slate-900')}`}>
+                                                {formatCurrency(item.price * item.quantity)}
+                                            </p>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
 
                         <div className="border-b border-dashed border-slate-300 my-4"></div>
 
-                        {/* 3. ยอดรวม & ส่วนลด */}
-                        <div className="space-y-1 text-slate-600">
-                            {/* ✅ แสดงยอดรวมประหยัด (ถ้ามี) */}
-                            {totalSaved > 0 && (
-                                <div className="flex justify-between text-sm text-red-500 bg-red-50 p-2 rounded-lg border border-red-100 mb-2">
-                                    <span className="font-bold uppercase flex items-center gap-1"><IconTag /> ประหยัดไป</span>
-                                    <span className="font-black">- {formatCurrency(totalSaved)}</span>
+                        {/* 3. ยอดรวม & ส่วนลดแบบละเอียด */}
+                        <div className="space-y-1 text-slate-600 text-[12px]">
+                            <div className="flex justify-between items-center">
+                                <span>ยอดรวม (Subtotal)</span>
+                                <span>{formatCurrency(subTotal)}</span>
+                            </div>
+                            
+                            {totalDiscount > 0 && (
+                                <div className="flex justify-between items-center text-red-500 font-bold">
+                                    <span>ส่วนลดรวม (Discount)</span>
+                                    <span>-{formatCurrency(totalDiscount)}</span>
                                 </div>
                             )}
-                            <div className="flex justify-between items-center text-lg font-black text-slate-900">
+
+                            <div className="flex justify-between items-center text-lg font-black text-slate-900 pt-2 mt-2 border-t border-slate-200">
                                 <span>ยอดรวมสุทธิ</span>
-                                <span>{formatCurrency(receipt.total_amount)}</span>
+                                <span>{formatCurrency(netTotal)}</span>
                             </div>
                         </div>
 
                         <div className="border-b border-dashed border-slate-300 my-4"></div>
 
                         {/* 4. รายละเอียดการชำระเงิน */}
-                        <div className="space-y-2">
+                        <div className="space-y-2 text-xs">
                             <div className="flex justify-between items-center">
-                                <span className="font-bold">ชำระโดย</span>
-                                <span className="uppercase font-bold bg-slate-100 px-2 rounded text-xs py-0.5">
-                                    {receipt.payment_method}
-                                </span>
+                                <span className="font-bold uppercase">ชำระโดย / {receipt.payment_method}</span>
                             </div>
                             
                             {(receipt.received_amount > 0 || receipt.change_amount > 0) && (
                                 <>
                                     <div className="flex justify-between items-center">
                                         <span>รับเงิน (Received)</span>
-                                        <span>{formatCurrency(receipt.received_amount || receipt.total_amount)}</span>
+                                        <span>{formatCurrency(receipt.received_amount || netTotal)}</span>
                                     </div>
-                                    <div className="flex justify-between items-center text-slate-900">
+                                    <div className="flex justify-between items-center text-slate-900 font-bold">
                                         <span>เงินทอน (Change)</span>
-                                        <span className="font-bold">{formatCurrency(receipt.change_amount || 0)}</span>
+                                        <span>{formatCurrency(receipt.change_amount || 0)}</span>
                                     </div>
                                 </>
                             )}
@@ -245,23 +243,22 @@ export default function ReceiptModal({ receipt, items, onClose }: ReceiptModalPr
 
                         <div className="border-b border-dashed border-slate-300 my-6"></div>
 
-                        {/* Footer */}
+                        {/* 5. Footer */}
                         <div className="text-center space-y-1">
-                            <div className="flex items-center justify-center gap-1 text-[10px] text-slate-400 uppercase">
+                            <div className="text-[10px] text-slate-400 uppercase">
                                 Cashier: {receipt.cashier?.full_name || 'System'}
                             </div>
-                            <p className="text-xs font-bold mt-4">ขอบคุณที่ใช้บริการ</p>
-                            <p className="text-[10px] text-slate-400">Thank you</p>
+                            <p className="text-xs font-bold mt-4 uppercase">ขอบคุณที่ใช้บริการ / THANK YOU</p>
                         </div>
 
                     </div>
                 </div>
 
-                {/* Footer Actions */}
+                {/* Footer Buttons */}
                 <div className="p-4 bg-slate-50 border-t border-slate-100 rounded-b-2xl">
                     <button 
                         onClick={handlePrint} 
-                        className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-800 transition-all shadow-lg shadow-slate-200"
+                        className="w-full bg-slate-900 text-white py-4 rounded-xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-slate-800 transition-all shadow-lg active:scale-95"
                     >
                         <IconPrinter /> พิมพ์ใบเสร็จ
                     </button>

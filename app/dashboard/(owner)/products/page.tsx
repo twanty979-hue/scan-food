@@ -330,6 +330,157 @@ export default function ProductsPage() {
                   </div>
                 </div>
 
+{/* 🌟 เริ่มส่วน UI: ตัวเลือกเสริม (Options / Add-ons) - แบบเน้นระบุรายการ (ไม่มีราคา) 🌟 */}
+<div className="bg-slate-50 p-3 md:p-5 rounded-2xl border border-slate-100">
+  <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
+    <div className="flex items-center gap-2">
+      <div className="w-1.5 h-5 bg-purple-500 rounded-full"></div>
+      <span className="text-sm md:text-xs font-bold text-slate-700 uppercase tracking-wider">
+        ตัวเลือกเสริม (เช่น เลือกเส้น, ความหวาน)
+      </span>
+    </div>
+    <button
+      type="button"
+      onClick={() => setFormData({
+        ...formData, 
+        options: [...(formData.options || []), { name: '', type: 'single', required: false, choices: [{name: '', price: 0}] }]
+      })}
+      className="w-full sm:w-auto text-[11px] md:text-xs font-black text-purple-600 bg-purple-100 px-4 py-2.5 sm:py-1.5 rounded-xl hover:bg-purple-200 transition-all flex items-center justify-center gap-2 shadow-sm active:scale-95"
+    >
+      <IconPlus size={16} /> เพิ่มกลุ่มตัวเลือก
+    </button>
+  </div>
+
+  <div className="space-y-4">
+    {(formData.options || []).map((opt: any, optIndex: number) => (
+      <div key={optIndex} className="bg-white border border-slate-200 rounded-[20px] p-4 md:p-4 relative group/opt shadow-sm">
+        
+        {/* ปุ่มลบกลุ่ม */}
+        <button 
+          type="button" 
+          onClick={() => {
+            const newOpts = [...formData.options];
+            newOpts.splice(optIndex, 1);
+            setFormData({...formData, options: newOpts});
+          }} 
+          className="absolute -top-2 -right-2 w-8 h-8 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all shadow-md z-10"
+        >
+          <IconX size={14}/>
+        </button>
+
+        {/* ตั้งค่ากลุ่ม */}
+        <div className="flex flex-col gap-3 mb-4">
+          <div className="w-full">
+            <label className="text-[10px] font-bold text-slate-400 ml-1 mb-1 block uppercase tracking-tighter">ชื่อกลุ่มตัวเลือก</label>
+            <input 
+              type="text" 
+              value={opt.name} 
+              onChange={e => {
+                const newOpts = [...formData.options];
+                newOpts[optIndex].name = e.target.value;
+                setFormData({...formData, options: newOpts});
+              }} 
+              placeholder="เช่น เลือกเส้น, เพิ่มหวาน" 
+              className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl text-sm font-bold text-slate-800 outline-none transition-all" 
+              required 
+            />
+          </div>
+          
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[10px] font-bold text-slate-400 ml-1 mb-1 block uppercase tracking-tighter">ประเภทการเลือก</label>
+              <select 
+  value={opt.type} 
+  onChange={e => {
+    const newOpts = [...formData.options];
+    // 🌟 เติม as "single" | "multiple" เข้าไปข้างหลังครับ
+    newOpts[optIndex].type = e.target.value as "single" | "multiple"; 
+    setFormData({...formData, options: newOpts});
+  }} 
+  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 focus:border-purple-500 rounded-xl text-xs font-bold text-slate-700 outline-none appearance-none cursor-pointer"
+>
+  <option value="single">เลือกได้ 1 อย่าง</option>
+  <option value="multiple">เลือกได้หลายอย่าง</option>
+</select>
+            </div>
+            
+            <div className="flex flex-col">
+              <label className="text-[10px] font-bold text-slate-400 ml-1 mb-1 block uppercase tracking-tighter">ความจำเป็น</label>
+              <label className={`flex items-center justify-center gap-2 cursor-pointer h-full px-3 rounded-xl border-2 transition-all ${opt.required ? 'bg-purple-50 border-purple-200 text-purple-600' : 'bg-slate-50 border-slate-100 text-slate-400'}`}>
+                <input 
+                  type="checkbox" 
+                  checked={opt.required} 
+                  onChange={e => {
+                    const newOpts = [...formData.options];
+                    newOpts[optIndex].required = e.target.checked;
+                    setFormData({...formData, options: newOpts});
+                  }} 
+                  className="hidden" 
+                />
+                <span className="text-[11px] font-black uppercase">{opt.required ? 'ต้องเลือก' : 'ไม่บังคับ'}</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        {/* รายการตัวเลือก (Choices) - ตัดช่องราคาออกแล้ว */}
+        <div className="space-y-2 pl-3 border-l-2 border-purple-100">
+          <label className="text-[10px] font-bold text-slate-400 ml-1 mb-1 block uppercase">รายการย่อย</label>
+          {opt.choices.map((choice: any, choiceIdx: number) => (
+            <div key={choiceIdx} className="flex gap-2 items-center">
+              <div className="flex-1">
+                <input 
+                  type="text" 
+                  value={choice.name} 
+                  onChange={e => {
+                    const newOpts = [...formData.options];
+                    newOpts[optIndex].choices[choiceIdx].name = e.target.value;
+                    setFormData({...formData, options: newOpts});
+                  }} 
+                  placeholder="ระบุรายการ " 
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl text-sm outline-none transition-all font-medium" 
+                  required 
+                />
+              </div>
+              
+              <button 
+                type="button" 
+                onClick={() => {
+                  const newOpts = [...formData.options];
+                  newOpts[optIndex].choices.splice(choiceIdx, 1);
+                  setFormData({...formData, options: newOpts});
+                }} 
+                className="p-2 text-slate-300 hover:text-rose-500 active:scale-90 transition-all shrink-0" 
+                disabled={opt.choices.length === 1}
+              >
+                <IconTrash size={18}/>
+              </button>
+            </div>
+          ))}
+          <button 
+            type="button" 
+            onClick={() => {
+              const newOpts = [...formData.options];
+              newOpts[optIndex].choices.push({name: '', price: 0});
+              setFormData({...formData, options: newOpts});
+            }} 
+            className="text-[11px] font-black text-purple-600 bg-purple-50 px-4 py-2 rounded-lg hover:bg-purple-100 flex items-center gap-1 mt-2 transition-all active:scale-95"
+          >
+            + เพิ่มรายการย่อย
+          </button>
+        </div>
+
+      </div>
+    ))}
+    
+    {(!formData.options || formData.options.length === 0) && (
+      <div className="text-center py-8 border-2 border-dashed border-slate-200 rounded-[24px] bg-white/50">
+        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">ไม่มีตัวเลือกเสริม</p>
+        <p className="text-slate-300 text-[10px] mt-1">คลิก "เพิ่มกลุ่มตัวเลือก" เพื่อระบุรายละเอียดเส้นหรือท็อปปิ้ง</p>
+      </div>
+    )}
+  </div>
+</div>
                 {/* Toggle Recommended */}
                 <label className="flex items-center gap-4 p-4 rounded-xl border border-slate-100 cursor-pointer hover:bg-slate-50 transition-colors group">
                   <div className={`w-12 h-6 rounded-full p-1 transition-colors duration-300 flex items-center ${formData.is_recommended ? 'bg-amber-400 justify-end' : 'bg-slate-200 justify-start'}`}>

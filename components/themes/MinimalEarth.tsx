@@ -386,7 +386,7 @@ export default function App({ state, actions, helpers }: any) {
                                      </div>
                                      <div className={`px-3 py-1 text-[10px] uppercase tracking-widest border rounded-full
                                         ${o.status === 'pending' ? 'border-amber-200 text-amber-700 bg-amber-50' : 'border-emerald-200 text-emerald-700 bg-emerald-50'}`}>
-                                         {o.status === 'pending' ? 'Cooking' : 'Served'}
+                                         {o.status === 'pending' ? 'รอรับ' : 'กำลังทำ'}
                                      </div>
                                 </div>
 

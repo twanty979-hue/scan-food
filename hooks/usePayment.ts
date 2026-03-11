@@ -568,19 +568,64 @@ export function usePayment() {
             // ☁️☁️☁️ 2. ปล่อยให้ระบบแอบไปทำงานกับ Cloud เบื้องหลัง (ทำงานแบบ Async ไม่ต้องรอ!) 
             
             // สั่งพิมพ์ออกเครื่อง (ดีเลย์นิดนึงให้ Modal ใบเสร็จเปิดขึ้นมาก่อน)
-            if (typeof window !== 'undefined' && (window as any).AndroidBridge) {
-                setTimeout(() => {
-                    try {
-                        const printData = {
-                            brandName: String(currentBrand?.name || "ร้านค้า"), tableName: String(tableLabel), orderId: String(finalOrderId.slice(0, 8)),
-                            date: String(new Date(nowIso).toLocaleString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })),
-                            items: itemsToSave.map((item: any) => ({ name: String(item.product_name || item.name || "รายการอาหาร"), qty: Number(item.quantity), price: Number(item.price), isCancelled: Boolean(item.status === 'cancelled'), variant: String(item.variant || 'normal'), note: String(item.note || '') })),
-                            totalAmount: Number(safePayable), receivedAmount: Number(paiOrderData.received_amount), changeAmount: Number(paiOrderData.change_amount), paymentMethod: String(paymentMethod).toUpperCase(), cashier: String(currentProfile?.full_name || 'System')
-                        };
-                        (window as any).AndroidBridge.printReceipt(JSON.stringify(printData));
-                    } catch (printErr) { console.error(printErr); }
-                }, 50); 
-            }
+// สั่งพิมพ์ออกเครื่อง (ดีเลย์นิดนึงให้ Modal ใบเสร็จเปิดขึ้นมาก่อน)
+if (typeof window !== 'undefined' && (window as any).AndroidBridge) {
+    setTimeout(() => {
+        try {
+            // 1. ฟังก์ชันช่วยดึงค่ายอดลด (เหมือนใน ReceiptModal)
+            const getDiscountValue = (item: any) => {
+                if (item.discount && Number(item.discount) > 0) return Number(item.discount);
+                const promo = item.promotion_snapshot;
+                if (promo) return Number(promo.savedAmount || promo.discount_amount || promo.discount || 0);
+                return 0;
+            };
+
+            // 2. คำนวณยอด Subtotal และ Total Discount
+            let calcSubTotal = 0;
+            let calcTotalDiscount = 0;
+
+            const mappedItems = itemsToSave.map((item: any) => {
+                const savedPerUnit = getDiscountValue(item);
+                const isCancelled = Boolean(item.status === 'cancelled');
+                
+                if (!isCancelled) {
+                    // ราคาเต็ม = ราคาที่ขาย + ส่วนลดที่ลดไปแล้ว
+                    const originalPricePerUnit = Number(item.price) + savedPerUnit;
+                    calcSubTotal += (originalPricePerUnit * Number(item.quantity));
+                    calcTotalDiscount += (savedPerUnit * Number(item.quantity));
+                }
+
+                return {
+                    name: String(item.product_name || item.name || "รายการอาหาร"), 
+                    qty: Number(item.quantity), 
+                    price: Number(item.price), 
+                    isCancelled: isCancelled, 
+                    variant: String(item.variant || 'normal'), 
+                    note: String(item.note || ''),
+                    discount: savedPerUnit * Number(item.quantity) // 🌟 เพิ่มบรรทัดนี้: ส่งส่วนลดต่อรายการไปให้ Android
+                };
+            });
+
+            // 3. จัดเตรียมข้อมูลพิมพ์
+            const printData = {
+                brandName: String(currentBrand?.name || "ร้านค้า"), 
+                tableName: String(tableLabel), 
+                orderId: String(finalOrderId.slice(0, 8)),
+                date: String(new Date(nowIso).toLocaleString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })),
+                items: mappedItems, // 🌟 ใช้ items ที่ถูก map และใส่ discount แล้ว
+                subTotal: calcSubTotal,         // 🌟 เพิ่มบรรทัดนี้: ส่งยอดรวมก่อนลด
+                totalDiscount: calcTotalDiscount, // 🌟 เพิ่มบรรทัดนี้: ส่งยอดลดรวมทั้งหมด
+                totalAmount: Number(safePayable), 
+                receivedAmount: Number(paiOrderData.received_amount), 
+                changeAmount: Number(paiOrderData.change_amount), 
+                paymentMethod: String(paymentMethod).toUpperCase(), 
+                cashier: String(currentProfile?.full_name || 'System')
+            };
+            
+            (window as any).AndroidBridge.printReceipt(JSON.stringify(printData));
+        } catch (printErr) { console.error(printErr); }
+    }, 50); 
+}
 
             // สั่งล้างโต๊ะบน Cloud และยิง FCM แจ้งเตือนแบบไม่บล็อกการทำงานหลัก (ลบคำว่า await ออกแล้ว)
             if (activeTab === 'tables' && brandId && navigator.onLine) {

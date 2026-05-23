@@ -136,78 +136,44 @@ export default function SetupTutorialPage() {
     return tzList.filter(t => t.searchString.includes(lowerSearch));
   }, [searchTz, tzList]);
 
-  // --- Main Logic ---
-  const handleStartSetup = async () => {
-    // 1. Validate Form
-    if (!brandId || !selectedTz) return;
+const handleStartSetup = async () => {
+  if (!brandId || !selectedTz) return;
 
-    setStep('processing');
-    setLoading(true);
+  setStep('processing');
+  setLoading(true);
 
-    try {
-      // Step 1: Timezone
-      setProgress(20);
-      setStatusText('Setting up store timezone...');
-      await supabase.from('brands').update({ timezone: selectedTz.value }).eq('id', brandId);
+  try {
+    // ✅ เรียก API ตัวเดียวทำหน้าที่ทุกอย่าง (Timezone, Tables, Banners, Products)
+    // เรายังสามารถจำลอง Progress bar (Fake Progress) ได้เพื่อให้ User รู้สึกว่าระบบกำลังทำงาน
+    setProgress(30);
+    setStatusText('Configuring database...');
 
-      // Step 2: Tables
-      setProgress(40);
-      setStatusText('Generating default tables...');
-      const tablesData = Array.from({ length: 10 }, (_, i) => ({
-        brand_id: brandId, label: `T-${i + 1}`, capacity: 4, status: 'available', access_token: generateRandomToken() 
-      }));
-      await supabase.from('tables').insert(tablesData);
+    const response = await fetch('/api/setup/tutorial', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        brandId: brandId,
+        timezone: selectedTz.value,
+      }),
+    });
 
-      // ✅✅✅ Step 3: Banners (แก้ไขตรงนี้: ให้เหลือรูปเดียวตามที่ขอ)
-      setProgress(60);
-      setStatusText('Designing storefront banners...');
-      const bannersData = [
-        { 
-          brand_id: brandId, 
-          image_name: 'https://img.pos-foodscan.com/268dccbf-a568-4a90-b184-d23811937d9f/1772290694984-1772290692774.webp', 
-          title: 'Welcome', 
-          sort_order: 1 
-        }
-      ];
-      await supabase.from('banners').insert(bannersData);
+    if (!response.ok) throw new Error("Setup failed");
 
-      // Step 4: Products
-      setProgress(80);
-      setStatusText('Importing sample menu items...');
-      const { data: sourceCats } = await supabase.from('categoriesphotoadmin').select('*');
-      const { data: sourceImages } = await supabase.from('images').select('*');
+    setProgress(100);
+    setStatusText('Setup Completed!');
+    await new Promise(r => setTimeout(r, 800));
+    setStep('done');
+    
+    setTimeout(() => {
+      router.replace('/dashboard/pai_order');
+    }, 1500);
 
-      if (sourceCats && sourceImages) {
-        const catMap: Record<number, string> = {};
-        for (const cat of sourceCats) {
-          const { data: newCat } = await supabase.from('categories').insert({ brand_id: brandId, name: cat.name, is_active: true }).select().single();
-          if (newCat) catMap[cat.id] = newCat.id;
-        }
-        const productsToInsert = sourceImages.map((img, index) => ({
-          brand_id: brandId,
-          name: img.name, image_name: img.url, price: img.price || 0,
-          category_id: img.category_id ? catMap[img.category_id] : null,
-          is_available: true, is_recommended: index < 4 
-        }));
-        await supabase.from('products').insert(productsToInsert);
-      }
-
-      // Done
-      setProgress(100);
-      setStatusText('Setup Completed!');
-      await new Promise(r => setTimeout(r, 800));
-      setStep('done');
-      
-      setTimeout(() => {
-        router.replace('/dashboard/pai_order');
-      }, 1500);
-
-    } catch (err: any) {
-      alert('Error: ' + err.message);
-      setStep('config');
-      setLoading(false);
-    }
-  };
+  } catch (err: any) {
+    alert('Error: ' + err.message);
+    setStep('config');
+    setLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 font-sans text-slate-800">

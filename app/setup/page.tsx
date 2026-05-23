@@ -1,3 +1,5 @@
+
+//app/setup
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -65,33 +67,39 @@ export default function ProfileSetupPage() {
     }
   };
 
-  // 3. Save Profile
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.fullName || !userId) return;
+// เปลี่ยนเฉพาะฟังก์ชัน handleSave ในไฟล์เดิมครับนาย
+const handleSave = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!formData.fullName || !userId) return;
 
-    setLoading(true);
-    try {
-      // Upsert: ถ้าไม่มีก็สร้าง ถ้ามีก็อัปเดต
-      const { error } = await supabase.from('profiles').upsert({
-        id: userId,
-        full_name: formData.fullName,
+  setLoading(true);
+  try {
+    // ✅ ยิงไปที่ API กลางที่เราเพิ่งสร้าง
+    const response = await fetch('/api/setup/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: userId,
+        fullName: formData.fullName,
         phone: formData.phone,
-        avatar_url: formData.avatarUrl,
-        updated_at: new Date().toISOString()
-      });
+        avatarUrl: formData.avatarUrl,
+      }),
+    });
 
-      if (error) throw error;
+    const result = await response.json();
 
-      // ✅ บันทึกเสร็จ -> ไปหน้าตั้งค่าร้านต่อ
-      router.push('/setup/brand'); 
-
-    } catch (err: any) {
-      alert('Error: ' + err.message);
-    } finally {
-      setLoading(false);
+    if (!response.ok) {
+      throw new Error(result.error || "บันทึกไม่สำเร็จ");
     }
-  };
+
+    router.push('/setup/brand'); 
+
+  } catch (err: any) {
+    alert('Error: ' + err.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 font-sans text-slate-900">

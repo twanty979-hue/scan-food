@@ -32,42 +32,38 @@ export default function BrandSetupPage() {
     init();
   }, [router]);
 
-  // --- Handler: Create Brand ---
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!shopName || !userId) return;
-    setLoading(true);
-    
-    try {
-      // 1. สร้าง Brand ใหม่
-      const { data: brand, error: brandErr } = await supabase.from('brands').insert({
-        name: shopName, 
-        phone: shopPhone, 
-        plan: 'free', 
-        status: 'trial'
-      }).select().single();
-      
-      if (brandErr) throw brandErr;
+const handleCreate = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!shopName || !userId) return;
+  setLoading(true);
+  
+  try {
+    // ✅ เรียก API กลางตัวเดียว จบทั้งสร้างแบรนด์และอัปเดตโปรไฟล์
+    const response = await fetch('/api/setup/brand', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: userId,
+        shopName: shopName,
+        shopPhone: shopPhone,
+      }),
+    });
 
-      // 2. อัปเดต Profile ให้เป็น Owner ของ Brand นั้น
-      const { error: profileErr } = await supabase.from('profiles').update({
-        brand_id: brand.id, 
-        role: 'owner', 
-        updated_at: new Date().toISOString()
-      }).eq('id', userId);
-      
-      if (profileErr) throw profileErr;
+    const result = await response.json();
 
-      // 3. ไปหน้า Tutorial หรือ Dashboard
-      router.push('/setup/tutorial'); 
-
-    } catch (err: any) { 
-      alert(err.message); 
-    } finally { 
-      setLoading(false); 
+    if (!response.ok) {
+      throw new Error(result.error || "สร้างร้านไม่สำเร็จ");
     }
-  };
 
+    // ไปหน้าถัดไป
+    router.push('/setup/tutorial'); 
+
+  } catch (err: any) { 
+    alert(err.message); 
+  } finally { 
+    setLoading(false); 
+  }
+};
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 font-sans text-slate-900">
       <div className="max-w-md w-full">

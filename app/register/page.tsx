@@ -46,36 +46,43 @@ export default function RegisterPage() {
     }
   };
 
-  const handleEmailSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setErrorMsg(null);
+const handleEmailSignup = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setLoading(true);
+  setErrorMsg(null);
 
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback?next=/setup`,
-        },
+  try {
+    // ✅ เปลี่ยนมาเรียก API กลาง
+    const response = await fetch('/api/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || "เกิดข้อผิดพลาดในการสมัครสมาชิก");
+    }
+
+    if (result.session) {
+      // ถ้าสมัครแล้วได้ Session เลย (ไม่ต้องยืนยันอีเมล)
+      await supabase.auth.setSession({
+        access_token: result.session.access_token,
+        refresh_token: result.session.refresh_token,
       });
-
-      if (error) throw error;
-
-      if (data.session) {
-        // กรณีไม่ต้องยืนยันอีเมล (บาง Setting ของ Supabase)
-        router.replace('/setup');
-      } else {
-        // ✅ กรณีต้องยืนยันอีเมล: เปลี่ยน State เพื่อแสดงหน้า Success
-        setIsSuccess(true);
-        setLoading(false);
-      }
-
-    } catch (error: any) {
-      setErrorMsg(error.message);
+      router.replace('/setup');
+    } else {
+      // ถ้าต้องยืนยันอีเมล
+      setIsSuccess(true);
       setLoading(false);
     }
-  };
+
+  } catch (error: any) {
+    setErrorMsg(error.message);
+    setLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#E0F7FA] via-white to-[#E3F2FD] relative overflow-hidden p-4 font-sans text-slate-800">

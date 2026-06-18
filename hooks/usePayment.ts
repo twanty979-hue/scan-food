@@ -27,6 +27,19 @@ const generateUUID = () => {
     });
 };
 
+const generateTableToken = () => Math.random().toString(36).substring(2, 8).toUpperCase();
+const uniqueTokens = (tokens: any[]) => Array.from(new Set((tokens || []).filter(Boolean).map(String)));
+const getTableTokens = (table: any) => {
+    const tokens = Array.isArray(table?.access_tokens) ? table.access_tokens.filter(Boolean).map(String) : [];
+    if (tokens.length > 0) return uniqueTokens(tokens);
+    return table?.access_token ? [String(table.access_token)] : [];
+};
+const removeUsedTokens = (currentTokens: any[], usedTokens: any[]) => {
+    const used = new Set(uniqueTokens(usedTokens));
+    const remaining = uniqueTokens(currentTokens).filter(token => !used.has(token));
+    return remaining.length > 0 ? remaining : [generateTableToken()];
+};
+
 export function usePayment() {
     // --- Audio State & Ref ---
     const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -421,7 +434,7 @@ export function usePayment() {
     // =========================================================================
     // ☁️ Helper: ล้างโต๊ะบน Cloud ทันที (ยิงเฉพาะตอนจ่ายเงินโต๊ะ)
     // =========================================================================
-    const clearTableOnCloud = async (brandIdStr: string, tableLabelStr: string, newTokenStr: string, payIdStr: string) => {
+    const clearTableOnCloud = async (brandIdStr: string, tableLabelStr: string, usedTokens: string[], payIdStr: string) => {
         try {
             const nowIso = dayjs().format();
             
@@ -438,9 +451,20 @@ export function usePayment() {
                 console.error("❌ ล้างออเดอร์บน Cloud พลาด (409/อื่นๆ):", orderErr.message);
             }
 
+            const { data: tableData } = await supabase
+                .from('tables')
+                .select('access_token, access_tokens')
+                .eq('brand_id', brandIdStr)
+                .eq('label', tableLabelStr)
+                .single();
+
+            const tokensToRemove = uniqueTokens(usedTokens).length > 0 ? usedTokens : [tableData?.access_token];
+            const nextTokens = removeUsedTokens(getTableTokens(tableData), tokensToRemove);
+
             // 2. สับเปลี่ยน Token โต๊ะ
             const { error: tableErr } = await supabase.from('tables').update({ 
-                access_token: newTokenStr
+                access_token: nextTokens[0],
+                access_tokens: nextTokens
             })
             .eq('brand_id', brandIdStr)
             .eq('label', tableLabelStr);
@@ -450,7 +474,7 @@ export function usePayment() {
             }
 
             if (!orderErr && !tableErr) {
-                console.log(`🚀 เคลียร์โต๊ะบน Cloud เรียบร้อย: โต๊ะ ${tableLabelStr} (Token ใหม่: ${newTokenStr})`);
+                console.log(`🚀 เคลียร์โต๊ะบน Cloud เรียบร้อย: โต๊ะ ${tableLabelStr} (Token เหลือ: ${nextTokens.length})`);
             }
         } catch (e) {
             console.error("⚠️ โหลด Cloud ไม่สำเร็จ:", e);
@@ -496,12 +520,13 @@ export function usePayment() {
         let tableLabel = 'Walk-in';
         let itemsToSave: any[] = [];
         let orderType = activeTab === 'pos' ? 'pos' : 'table';
-        let newToken: string | null = null; 
+        let nextTableTokens: string[] = []; 
 
         if (activeTab === 'tables' && selectedOrder) {
             finalOrderId = selectedOrder.id;
             tableLabel = selectedOrder.table_label;
-            newToken = Math.random().toString(36).substring(2, 6).toUpperCase(); 
+            const tableForPayment = allTables.find(t => t.label === selectedOrder.table_label);
+            nextTableTokens = removeUsedTokens(getTableTokens(tableForPayment), selectedOrder.table_access_tokens || []);
             itemsToSave = selectedOrder.order_items
                 .filter((i: any) => i.status !== 'cancelled')
                 .map((i: any) => ({ ...i, order_id: finalOrderId, updated_at: nowIso }));
@@ -537,7 +562,7 @@ export function usePayment() {
                         brandId, userId: currentUser?.id, totalAmount: safePayable, receivedAmount: paiOrderData.received_amount,
                         changeAmount: paiOrderData.change_amount, paymentMethod, type: activeTab,
                         selectedOrder: activeTab === 'tables' ? selectedOrder : null, cart: activeTab === 'pos' ? cart : [],
-                        localOrderId: finalOrderId, localPayId, tableLabel, paymentTime: nowIso, newAccessToken: newToken 
+                        localOrderId: finalOrderId, localPayId, tableLabel, paymentTime: nowIso
                     },
                     status: 'pending'
                 });
@@ -561,7 +586,7 @@ export function usePayment() {
                 localStorage.removeItem('pos_cart');
             } else if (activeTab === 'tables' && selectedOrder) {
                 setUnpaidOrders(prev => prev.filter(o => o.table_label !== selectedOrder.table_label));
-                setAllTables(prev => prev.map(t => t.label === selectedOrder.table_label ? { ...t, status: 'available', access_token: newToken } : t));
+                setAllTables(prev => prev.map(t => t.label === selectedOrder.table_label ? { ...t, status: 'available', access_token: nextTableTokens[0], access_tokens: nextTableTokens } : t));
                 setSelectedOrder(null);
             }
 
@@ -632,7 +657,7 @@ if (typeof window !== 'undefined' && (window as any).AndroidBridge) {
 
             // สั่งล้างโต๊ะบน Cloud และยิง FCM แจ้งเตือนแบบไม่บล็อกการทำงานหลัก (ลบคำว่า await ออกแล้ว)
             if (activeTab === 'tables' && brandId && navigator.onLine) {
-                clearTableOnCloud(brandId, tableLabel, newToken!, localPayId).catch(e => console.error("Background clear fail", e));
+                clearTableOnCloud(brandId, tableLabel, selectedOrder?.table_access_tokens || [], localPayId).catch(e => console.error("Background clear fail", e));
 
                 fetch('/api/send-notification', {
                     method: 'POST',

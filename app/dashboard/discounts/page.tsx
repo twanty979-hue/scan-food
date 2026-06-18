@@ -30,18 +30,34 @@ export default function DiscountsPage() {
     <div className="min-h-screen bg-slate-50 p-6 md:p-10 text-slate-900 font-sans pb-32">
       <div className="max-w-7xl mx-auto">
         
-        {/* Header */}
+        {/* Header (แก้ไข: เปลี่ยนไอคอนส่วนลดให้คลิกเปิดสไลด์บาร์ได้) */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
           <div>
-            <h1 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3">
-              <span className="p-3 bg-gradient-to-br from-orange-500 to-red-500 text-white rounded-2xl shadow-lg shadow-orange-500/30">
-                <IconTag size={28} />
-              </span>
-              โปรโมชัน & ส่วนลด
-            </h1>
+            {/* 🏷️ เอาปุ่มครอบไอคอนส่วนลดและหัวข้อ จิ้มแล้วกางสไลด์บาร์เมนูหลักทันที */}
+            <button
+              type="button"
+              onClick={() => {
+                // ระบบไร้สาย: ค้นหาปุ่มเปิดเมนูหลักของแผง Layout แล้วสั่งกดจำลองให้ทันที
+                const layoutMenuBtn = document.querySelector('header button');
+                if (layoutMenuBtn instanceof HTMLElement) {
+                  layoutMenuBtn.click();
+                }
+              }}
+              className="flex items-center text-left group active:scale-95 transition-transform duration-200"
+              title="เปิดเมนูสไลด์บาร์"
+            >
+              <h1 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3 group-hover:text-orange-600 transition-colors">
+                {/* ไอคอนส่วนลดจะขยายและเอียงนิดๆ เมื่อมีเมาส์มาชี้หรือนิ้วมาแตะ เพิ่มความโมเดิร์นคลีน */}
+                <span className="p-3 bg-gradient-to-br from-orange-500 to-red-500 text-white rounded-2xl shadow-lg shadow-orange-500/30 transition-transform duration-200 group-hover:scale-110 group-hover:-rotate-12">
+                  <IconTag size={28} />
+                </span>
+                โปรโมชัน & ส่วนลด
+              </h1>
+            </button>
             <p className="text-slate-500 font-bold text-sm mt-2 ml-1">จัดการแคมเปญลดราคาเพื่อกระตุ้นยอดขาย</p>
           </div>
           
+          {/* ปุ่มสร้างโปรโมชันของเดิมคงไว้ครบถ้วนครับ */}
           <button 
             onClick={() => setIsModalOpen(true)}
             className="hidden md:flex bg-slate-900 hover:bg-orange-600 text-white px-6 py-4 rounded-2xl font-black shadow-xl hover:shadow-orange-600/30 items-center gap-3 transition-all active:scale-95 group"

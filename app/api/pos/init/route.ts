@@ -2,11 +2,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
 export async function OPTIONS() {
   return new NextResponse(null, {
     status: 204,
@@ -18,25 +13,42 @@ export async function OPTIONS() {
   });
 }
 
+// 🔐 Helper: แกะ Token
+const getSupabaseAndBrandId = async (request: Request) => {
+  const authHeader = request.headers.get('authorization');
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { global: { headers: { Authorization: authHeader || '' } } }
+  );
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) throw new Error('Unauthorized');
+
+  const { data: profile } = await supabase
+    .from('profiles').select('brand_id').eq('id', user.id).single();
+
+  if (!profile?.brand_id) throw new Error('No brand assigned');
+  return { supabase, brandId: profile.brand_id };
+};
+
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const brandId = searchParams.get('brand_id');
+    // 🚀 ใช้ Token ดึงสิทธิ์แทน URL
+    const { supabase, brandId } = await getSupabaseAndBrandId(request);
 
-    if (!brandId) {
-      return NextResponse.json(
-        { error: "Missing brand_id" }, 
-        { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } }
-      );
-    }
-
-    const [categoriesRes, productsRes, retailRes, discountsRes, tablesRes] = await Promise.all([
-      supabaseAdmin.from('categories').select('*').eq('brand_id', brandId).order('sort_order'),
-      // 🔥 ใส่ .eq('brand_id', brandId) กลับคืนมาตรงนี้ครับนาย!
-      supabaseAdmin.from('products').select('*').eq('brand_id', brandId).eq('is_available', true), 
-      supabaseAdmin.from('product_master').select('*').eq('brand_id', brandId).eq('is_active', true), 
-      supabaseAdmin.from('discounts').select(`*, discount_products(product_id)`).eq('brand_id', brandId).eq('is_active', true),
-      supabaseAdmin.from('tables').select('*').eq('brand_id', brandId).order('label')
+    const [categoriesRes, productsRes, retailRes, discountsRes, tablesRes, unpaidOrdersRes] = await Promise.all([
+      supabase.from('categories').select('*').eq('brand_id', brandId).order('sort_order'),
+      supabase.from('products').select('*').eq('brand_id', brandId).eq('is_available', true), 
+      supabase.from('product_master').select('*').eq('brand_id', brandId).eq('is_active', true), 
+      supabase.from('discounts').select(`*, discount_products(product_id)`).eq('brand_id', brandId).eq('is_active', true),
+      supabase.from('tables').select('*').eq('brand_id', brandId).order('label'),
+      supabase
+        .from('orders')
+        .select('*, order_items(*)')
+        .eq('brand_id', brandId)
+        
+        .in('status', ['pending', 'preparing', 'done'])
     ]);
 
     const formattedFood = (productsRes.data || []).map(p => ({ ...p, item_type: 'food' }));
@@ -54,16 +66,18 @@ export async function GET(request: Request) {
       categories: categoriesRes.data || [],
       products: allCombinedProducts,
       discounts: discountsRes.data || [],
-      tables: tablesRes.data || []
+      tables: tablesRes.data || [],
+      unpaid_orders: unpaidOrdersRes.data || [] 
     });
 
     response.headers.set('Access-Control-Allow-Origin', '*');
     return response;
 
   } catch (error: any) {
+    const status = error.message === 'Unauthorized' ? 401 : 500;
     return NextResponse.json(
       { success: false, error: error.message }, 
-      { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } }
+      { status, headers: { 'Access-Control-Allow-Origin': '*' } }
     );
   }
 }

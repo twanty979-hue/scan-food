@@ -42,22 +42,14 @@ type PlanType = 'weekly' | 'monthly' | 'yearly';
 
 export default function ThemeDetailPage() {
     const {
-        theme, loading, ownership, processing, userRole,
+        theme, loading, ownership, processing, userRole, coins,
         viewMode, setViewMode, activeImage, setActiveImage, displayImages,
         getImageUrl, handleGetTheme, handleShare, router,
-        showPaymentModal, qrCode, paymentStatus, closePaymentModal
+        showPaymentModal, closePaymentModal, confirmCoinPurchase,
+        selectedPlan, setSelectedPlan, alertModal, closeAlertModal
     } = useThemeDetail();
-
-    const [selectedPlan, setSelectedPlan] = useState<PlanType>('monthly');
-    const [paymentMethod, setPaymentMethod] = useState<'promptpay' | 'credit_card'>('promptpay');
-    const [ccLoading, setCcLoading] = useState(false);
     
     const carouselRef = useRef<HTMLDivElement>(null);
-
-    const cardNumberRef = useRef<HTMLInputElement>(null);
-    const cardNameRef = useRef<HTMLInputElement>(null);
-    const cardExpiryRef = useRef<HTMLInputElement>(null);
-    const cardCvcRef = useRef<HTMLInputElement>(null);
 
     // ✅ รวบรวมข้อมูลแพ็กเกจที่มี เพื่อนำมาทำ Slider
     const availablePlans = useMemo(() => {
@@ -126,38 +118,6 @@ export default function ThemeDetailPage() {
         }
     };
 
-    const handleCreditCardPaymentInternal = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setCcLoading(true);
-        try {
-            window.Omise.setPublicKey(process.env.NEXT_PUBLIC_OMISE_PUBLIC_KEY);
-            const cardData = {
-                name: cardNameRef.current?.value,
-                number: cardNumberRef.current?.value?.replace(/\s/g, ''),
-                expiration_month: cardExpiryRef.current?.value?.split('/')[0].trim(),
-                expiration_year: cardExpiryRef.current?.value?.split('/')[1].trim(),
-                security_code: cardCvcRef.current?.value,
-            };
-
-            window.Omise.createToken('card', cardData, async (status: number, resp: any) => {
-                if (status === 200) {
-                    const res = await createCreditCardCharge(currentPrice, resp.id, theme.id, selectedPlan);
-                    if (res.success) {
-                        await installThemeAction(theme.id, res.chargeId ?? null, selectedPlan);
-                        window.location.reload();
-                    } else {
-                        alert(res.error || "ชำระเงินไม่สำเร็จ");
-                    }
-                } else {
-                    alert(resp.message || "ข้อมูลบัตรไม่ถูกต้อง");
-                }
-                setCcLoading(false);
-            });
-        } catch (err) {
-            setCcLoading(false);
-        }
-    };
-
     if (loading) return <div className="min-h-screen flex items-center justify-center text-slate-400 font-medium tracking-wide">กำลังโหลด...</div>;
     if (!theme) return <div className="min-h-screen flex items-center justify-center text-red-500 font-medium">ไม่พบธีมที่ค้นหา</div>;
 
@@ -173,9 +133,18 @@ export default function ThemeDetailPage() {
                     <button onClick={() => router.push('/dashboard/marketplace')} className="flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors text-xs md:text-sm font-bold bg-slate-100/50 px-3 py-1.5 rounded-lg active:scale-95">
                         <IconArrowLeft /> ย้อนกลับ
                     </button>
-                    <button onClick={handleShare} className="p-2 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-blue-600 transition-all active:scale-95">
-                        <IconShare />
-                    </button>
+                    
+                    <div className="flex items-center gap-3">
+                        {/* Coin Balance Display */}
+                        <div className="flex items-center gap-1.5 bg-amber-50 px-3 py-1.5 rounded-full border border-amber-200 shadow-sm cursor-help" title="ยอดเหรียญคงเหลือของคุณ">
+                            <img src="/cion.png" alt="Coin" className="w-5 h-5 object-contain drop-shadow-sm" />
+                            <span className="text-[13px] md:text-sm font-black text-amber-700 tracking-tight">{coins.toLocaleString()}</span>
+                        </div>
+
+                        <button onClick={handleShare} className="p-2 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-blue-600 transition-all active:scale-95">
+                            <IconShare />
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -268,7 +237,11 @@ export default function ThemeDetailPage() {
                                 <div className="p-2.5 bg-emerald-500 text-white rounded-full shadow-md"><IconCheck size={20} /></div>
                                 <div>
                                     <p className="text-sm font-black uppercase tracking-widest">แพ็กเกจปัจจุบันของคุณ</p>
-                                    <p className="text-xs font-medium mt-0.5 opacity-80">แพ็กเกจจะหมดอายุในอีก <span className="font-bold">{ownership.daysLeft} วัน</span></p>
+                                    <p className="text-xs font-medium mt-0.5 opacity-80">
+                                        {ownership.type === 'free' || ownership.type === 'lifetime'
+                                            ? 'ธีมนี้ใช้งานได้ตลอด'
+                                            : <>แพ็กเกจจะหมดอายุในอีก <span className="font-bold">{ownership.daysLeft} วัน</span></>}
+                                    </p>
                                 </div>
                             </div>
                         ) : (
@@ -327,7 +300,7 @@ export default function ThemeDetailPage() {
                                                     {/* ราคา */}
                                                     <div className="flex items-end justify-center gap-1 relative z-10">
                                                         <span className="text-5xl md:text-6xl font-black text-slate-900 tracking-tighter">
-                                                            ฿{(plan.price ?? 0).toLocaleString()}
+                                                            {(plan.price ?? 0).toLocaleString()} <span className="text-2xl text-slate-600">เหรียญ</span>
                                                         </span>
                                                     </div>
                                                     
@@ -381,74 +354,49 @@ export default function ThemeDetailPage() {
                 </div>
             </div>
 
-            {/* Payment Modal */}
+            {/* Payment Modal (Coin Purchase) */}
             {showPaymentModal && (
                 <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-slate-900/70 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white rounded-t-[28px] md:rounded-[24px] shadow-2xl w-full max-w-[400px] relative animate-in slide-in-from-bottom-10 md:zoom-in-95 duration-300 overflow-hidden max-h-[90vh] overflow-y-auto">
-                        <button onClick={closePaymentModal} disabled={paymentStatus === 'successful'} className="absolute top-4 right-4 p-2 bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200 transition-colors disabled:opacity-0 z-20">
+                        <button onClick={closePaymentModal} disabled={processing} className="absolute top-4 right-4 p-2 bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200 transition-colors disabled:opacity-0 z-20">
                             <IconX />
                         </button>
                         
                         <div className="p-6 md:p-8 flex flex-col items-center text-center gap-6">
                             <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center shadow-inner mb-2">
-                                <IconCreditCard size={32} />
+                                <img src="/cion.png" alt="Coin" className="w-10 h-10 object-contain drop-shadow-sm" />
                             </div>
 
                             <div>
-                                <h3 className="text-xl font-black text-slate-900">ชำระเงิน</h3>
+                                <h3 className="text-xl font-black text-slate-900">ยืนยันการสั่งซื้อ</h3>
                                 <p className="text-sm text-slate-500 mt-1">แพ็กเกจ{selectedPlan === 'weekly' ? 'รายสัปดาห์' : selectedPlan === 'monthly' ? 'รายเดือน' : 'รายปี'}</p>
-                                <p className="text-3xl font-black text-slate-900 mt-2">฿{currentPrice.toLocaleString()}</p>
+                                <div className="flex items-center justify-center gap-2 mt-2">
+                                    <p className="text-3xl font-black text-slate-900">{currentPrice.toLocaleString()}</p>
+                                    <img src="/cion.png" alt="Coin" className="w-8 h-8 object-contain" />
+                                </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-2 w-full p-1.5 bg-slate-100 rounded-xl">
-                                <button onClick={() => setPaymentMethod('promptpay')} className={`py-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${paymentMethod === 'promptpay' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}>
-                                    <IconQr size={16}/> พร้อมเพย์
-                                </button>
-                                <button onClick={() => setPaymentMethod('credit_card')} className={`py-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${paymentMethod === 'credit_card' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}>
-                                    <IconCreditCard size={16}/> บัตรเครดิต
-                                </button>
+                            <div className="w-full bg-slate-50 p-4 rounded-xl border border-slate-100 flex justify-between items-center">
+                                <span className="text-sm font-bold text-slate-600">ยอดคงเหลือของคุณ</span>
+                                <div className="flex items-center gap-1.5">
+                                    <span className={`text-lg font-black ${coins < currentPrice ? 'text-red-500' : 'text-emerald-600'}`}>{coins.toLocaleString()}</span>
+                                    <img src="/cion.png" alt="Coin" className="w-5 h-5 object-contain" />
+                                </div>
                             </div>
 
-                            <div className="w-full">
-                                {paymentMethod === 'promptpay' ? (
-                                    <div className="flex flex-col items-center gap-4 bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
-                                        <div className="bg-white p-2 rounded-xl shadow-sm border border-slate-100">
-                                            {qrCode ? (
-                                                <img src={qrCode} alt="QR Code สำหรับชำระเงิน" className="w-full aspect-square object-contain rounded-lg" />
-                                            ) : (
-                                                <div className="w-48 h-48 flex items-center justify-center text-slate-400 bg-slate-50 rounded-lg animate-pulse text-xs font-bold">กำลังสร้าง QR Code...</div>
-                                            )}
-                                        </div>
-                                        {paymentStatus === 'successful' ? (
-                                            <div className="w-full py-3 bg-emerald-100 text-emerald-700 rounded-xl font-bold text-sm flex items-center justify-center gap-2"><IconCheck /> ชำระเงินสำเร็จ!</div>
-                                        ) : (
-                                            <div className="text-slate-400 text-xs font-bold animate-pulse uppercase tracking-wider">กำลังรอการสแกน...</div>
-                                        )}
+                            <div className="w-full mt-2">
+                                {coins < currentPrice ? (
+                                    <div className="w-full py-4 bg-red-50 text-red-600 rounded-xl text-sm font-bold border border-red-100">
+                                        เหรียญของคุณไม่เพียงพอ
                                     </div>
                                 ) : (
-                                    <form onSubmit={handleCreditCardPaymentInternal} className="flex flex-col gap-4 text-left w-full">
-                                        <div className="space-y-1.5">
-                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">หมายเลขบัตร</label>
-                                            <input ref={cardNumberRef} type="text" placeholder="0000 0000 0000 0000" className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all placeholder:text-slate-300" required />
-                                        </div>
-                                        <div className="space-y-1.5">
-                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">ชื่อบนบัตร</label>
-                                            <input ref={cardNameRef} type="text" placeholder="SOMCHAI JAI-DEE" className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 uppercase transition-all placeholder:text-slate-300" required />
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div className="space-y-1.5">
-                                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">วันหมดอายุ</label>
-                                                <input ref={cardExpiryRef} type="text" placeholder="MM/YY" className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-center outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all placeholder:text-slate-300" required />
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">CVC</label>
-                                                <input ref={cardCvcRef} type="tel" placeholder="123" className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-center outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all placeholder:text-slate-300" required />
-                                            </div>
-                                        </div>
-                                        <button type="submit" disabled={ccLoading} className="mt-4 w-full py-4 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-blue-600 transition-all disabled:opacity-50 active:scale-95 shadow-xl shadow-slate-200">
-                                            {ccLoading ? 'กำลังประมวลผล...' : `ชำระเงิน ฿${currentPrice.toLocaleString()}`}
-                                        </button>
-                                    </form>
+                                    <button 
+                                        onClick={() => confirmCoinPurchase(selectedPlan)} 
+                                        disabled={processing} 
+                                        className="w-full py-4 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-blue-600 transition-all disabled:opacity-50 active:scale-95 shadow-xl shadow-slate-200"
+                                    >
+                                        {processing ? 'กำลังประมวลผล...' : `ยืนยันชำระเงิน ${currentPrice.toLocaleString()} เหรียญ`}
+                                    </button>
                                 )}
                             </div>
                         </div>

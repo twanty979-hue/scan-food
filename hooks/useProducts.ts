@@ -193,7 +193,9 @@ export function useProducts() {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Upload to R2 failed');
 
-        finalImageName = data.fileName;
+        // ✅ แก้จุดนี้: เอา CDN_URL มาบวกสลิตต์แปะหน้าชื่อไฟล์เข้าไปเลย!
+        // ผลลัพธ์ใน DB จะกลายเป็น "https://img.pos-foodscan.com/268dccbf-a568...webp" ทันที
+        finalImageName = `${CDN_URL}/${data.fileName}`;
 
         if (editId) {
             const currentProduct = products.find(p => p.id === editId);
@@ -225,10 +227,13 @@ export function useProducts() {
       if (!res.success) throw new Error(res.error);
 
       if (oldImageNameToDelete) {
+          // ✅ สกัดเอาแค่ชื่อไฟล์ท้าย URL ส่งไปลบใน Cloudflare R2
+          const shortFileName = oldImageNameToDelete.split('/').pop();
+
           fetch('/api/delete-image', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ fileName: oldImageNameToDelete })
+              body: JSON.stringify({ fileName: shortFileName }) // ส่งชื่อไฟล์สั้นไปลบ
           }).catch(err => console.error("Failed to delete old image:", err));
       }
 
@@ -262,19 +267,22 @@ export function useProducts() {
 
     if (!isConfirmed) return;
     
-    const oldProducts = [...products];
+    const originalData = [...products];
     setProducts(prev => prev.filter((p: any) => p.id !== id));
 
     const res = await deleteProductAction(id);
     if (!res.success) {
         showAlert('error', 'ลบไม่สำเร็จ', res.error);
-        setProducts(oldProducts);
+        setProducts(originalData);
     } else {
         if (product && product.image_name) {
+             // ✅ สกัดเอาแค่ชื่อไฟล์ท้าย URL ส่งไปลบเหมือนกันครับเฮีย
+             const shortFileName = product.image_name.split('/').pop();
+
              fetch('/api/delete-image', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ fileName: product.image_name })
+                  body: JSON.stringify({ fileName: shortFileName })
              }).catch(err => console.error("Failed to delete image:", err));
         }
         showAlert('success', 'ลบเรียบร้อย', 'เมนูถูกนำออกจากร้านแล้ว');

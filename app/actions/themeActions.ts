@@ -22,6 +22,8 @@ async function getMyBrandInfo(supabase: any) {
   return { brandId: profile.brand_id, isOwner: profile.role === 'owner' };
 }
 
+const PURCHASED_THEME_TYPES = ['free', 'weekly', 'monthly', 'yearly', 'lifetime'];
+
 // ----------------------------------------------------------------------
 // 🏆 HELPER: คำนวณ Plan ปัจจุบัน (คงเดิม 100%)
 // ----------------------------------------------------------------------
@@ -50,88 +52,9 @@ export async function syncThemesWithPlan(
     periodToAdd?: 'monthly' | 'yearly',
     chargeIdForCheck?: string // 🆕 เพิ่ม: ส่ง Charge ID มาเช็คเพื่อความชัวร์ (ถ้ามี)
 ) {
-    let verifiedPeriodToAdd = periodToAdd;
-    
-    if (chargeIdForCheck) {
-        const { data: log } = await supabase
-            .from('payment_logs')
-            .select('period')
-            .eq('charge_id', chargeIdForCheck)
-            .single();
-            
-        if (log?.period) {
-            verifiedPeriodToAdd = log.period; // ยึดค่าจาก Log เป็นหลัก
-            console.log(`🛡️ [ThemeSync] Double-checked Log: Using period '${verifiedPeriodToAdd}'`);
-        }
-    }
-    // 1. กำหนดสิทธิ์ Tier
-    let allowedTiers: string[] = [];
-    if (plan === 'free') allowedTiers = ['free'];
-    else if (plan === 'basic') allowedTiers = ['free', 'basic'];
-    else if (plan === 'pro') allowedTiers = ['free', 'basic', 'pro'];
-    else if (plan === 'ultimate') allowedTiers = ['free', 'basic', 'pro', 'ultimate'];
-
-    // 2. ดึง ID ธีมที่แถมฟรี
-    const { data: allowedThemes } = await supabase.from('marketplace_themes').select('id').in('min_plan', allowedTiers).eq('is_active', true).eq('is_free_with_plan', true);
-    const allowedIds = allowedThemes?.map((t: any) => t.id) || [];
-
-    let deleteQuery = supabase.from('themes').delete().eq('brand_id', brandId).eq('purchase_type', 'subscription');
-    if (allowedIds.length > 0) deleteQuery = deleteQuery.not('marketplace_theme_id', 'in', `(${allowedIds.join(',')})`);
-    await deleteQuery;
-
-    if (allowedIds.length > 0) {
-        const { data: existingThemes } = await supabase
-            .from('themes')
-            .select('marketplace_theme_id, purchase_type, expires_at')
-            .eq('brand_id', brandId)
-            .in('marketplace_theme_id', allowedIds);
-
-        const existingMap = new Map();
-        existingThemes?.forEach((t: any) => existingMap.set(t.marketplace_theme_id, t));
-
-        const records = allowedIds.map((id: string) => {
-            const existing = existingMap.get(id);
-            let finalPurchaseType = 'subscription'; 
-            let finalExpiresAt = planExpiry; 
-
-            if (existing) {
-                const now = dayjs();
-                const existingExpiry = existing.expires_at ? dayjs(existing.expires_at) : now;
-                const isPaidType = ['weekly', 'monthly', 'yearly'].includes(existing.purchase_type);
-
-                if (isPaidType) {
-                    finalPurchaseType = existing.purchase_type; 
-                    
-                    // ✅ ใช้ verifiedPeriodToAdd ที่เช็คจาก Log แล้ว
-                    if (verifiedPeriodToAdd) {
-                        const daysToAdd = verifiedPeriodToAdd === 'monthly' ? 30 : 365;
-                        const baseDate = existingExpiry.isAfter(now) ? existingExpiry : now;
-                        finalExpiresAt = baseDate.add(daysToAdd, 'day').toISOString();
-                    } else {
-                        // Logic เดิม (Idle Check)
-                        const planExpDate = planExpiry ? dayjs(planExpiry) : now;
-                        if (planExpDate.isAfter(existingExpiry)) finalExpiresAt = planExpiry;
-                        else finalExpiresAt = existing.expires_at;
-                    }
-                } else {
-                    finalPurchaseType = 'subscription';
-                    finalExpiresAt = planExpiry;
-                }
-            }
-
-            return {
-                brand_id: brandId,
-                marketplace_theme_id: id,
-                purchase_type: finalPurchaseType,
-                expires_at: finalExpiresAt,
-                updated_at: new Date().toISOString()
-            };
-        });
-
-        if (records.length > 0) {
-            await supabase.from('themes').upsert(records, { onConflict: 'brand_id, marketplace_theme_id' });
-        }
-    }
+    // Theme access is purchase-only now. Keep this exported for older callers,
+    // but never create plan-granted `subscription` theme rows.
+    return;
 }
 
 // --- Main Action ---
@@ -155,16 +78,15 @@ export async function getThemesDataAction() {
         .single();
 
     // 3. คำนวณ Plan จริง & Force Sync
-    const { plan: effectivePlan, expiry: activeExpiry } = calculateEffectivePlan(brand);
-    await syncThemesWithPlan(supabase, brandId, effectivePlan, activeExpiry);
+    const { plan: effectivePlan } = calculateEffectivePlan(brand);
 
     // 4. Update Plan
     if (brand && brand.plan !== effectivePlan) {
         await supabase.from('brands').update({ plan: effectivePlan }).eq('id', brandId);
     }
 
-    // 5. ดึง Themes (✅ เพิ่ม category_id เข้าไปใน query)
-    const { data: themes } = await supabase.from('themes')
+    // 5. ดึง Themes ที่ร้านซื้อ/ถือสิทธิ์อยู่จริง
+    const { data: ownedThemes } = await supabase.from('themes')
         .select(`
           id, purchase_type, expires_at, marketplace_theme_id,
           marketplace_themes ( 
@@ -173,11 +95,39 @@ export async function getThemesDataAction() {
           )
         `)
         .eq('brand_id', brandId)
+        .in('purchase_type', PURCHASED_THEME_TYPES)
         .order('created_at', { ascending: false });
+
+    // 5.1 ดึงธีมฟรีจาก Marketplace มาแสดงอัตโนมัติ โดยไม่สร้างสิทธิ์ตาม plan
+    const { data: freeMarketplaceThemes } = await supabase
+        .from('marketplace_themes')
+        .select(`
+          id, name, slug, image_url, theme_mode, category_id, description,
+          marketplace_categories ( name )
+        `)
+        .eq('is_active', true)
+        .eq('min_plan', 'free')
+        .order('created_at', { ascending: false });
+
+    const ownedThemeIds = new Set((ownedThemes || []).map((t: any) => t.marketplace_theme_id));
+    const freeThemeRows = (freeMarketplaceThemes || [])
+        .filter((theme: any) => !ownedThemeIds.has(theme.id))
+        .map((theme: any) => ({
+            id: `free-${theme.id}`,
+            purchase_type: 'free',
+            expires_at: null,
+            marketplace_theme_id: theme.id,
+            marketplace_themes: theme,
+        }));
+    const themes = [...(ownedThemes || []), ...freeThemeRows];
 
     // 6. Kill Switch
     if (brand?.theme_mode && brand.theme_mode !== 'standard') {
-        const activeThemeExists = themes?.some((t: any) => t.marketplace_themes.theme_mode === brand.theme_mode);
+        const activeThemeExists = themes?.some((t: any) => {
+            const isPermanent = t.purchase_type === 'free' || t.purchase_type === 'lifetime';
+            const isUsable = isPermanent || Boolean(t.expires_at && dayjs(t.expires_at).isAfter(dayjs()));
+            return t.marketplace_themes.theme_mode === brand.theme_mode && isUsable;
+        });
         if (!activeThemeExists) {
             await supabase.from('brands').update({ theme_mode: 'standard' }).eq('id', brandId);
             brand.theme_mode = 'standard';
@@ -224,13 +174,27 @@ export async function applyThemeAction(slug: string, themeMode: string) {
         if (!isOwner) throw new Error("Permission denied");
         
         if (themeMode !== 'standard') {
-             const { data: targetTheme } = await supabase.from('themes').select('expires_at, purchase_type, marketplace_themes!inner(theme_mode)').eq('brand_id', brandId).eq('marketplace_themes.theme_mode', themeMode).single();
+             const { data: targetTheme } = await supabase
+                .from('themes')
+                .select('expires_at, purchase_type, marketplace_themes!inner(theme_mode)')
+                .eq('brand_id', brandId)
+                .eq('marketplace_themes.theme_mode', themeMode)
+                .in('purchase_type', PURCHASED_THEME_TYPES)
+                .single();
              if (targetTheme) {
                  const isLifetime = targetTheme.purchase_type === 'lifetime';
                  const isExpired = targetTheme.expires_at && dayjs(targetTheme.expires_at).isBefore(dayjs());
                  if (!isLifetime && isExpired) throw new Error("Theme expired");
              } else {
-                 throw new Error("Theme not owned");
+                 const { data: freeTheme } = await supabase
+                    .from('marketplace_themes')
+                    .select('id')
+                    .eq('theme_mode', themeMode)
+                    .eq('is_active', true)
+                    .eq('min_plan', 'free')
+                    .maybeSingle();
+
+                 if (!freeTheme) throw new Error("Theme not owned");
              }
         }
         const { error } = await supabase.from('brands').update({ slug, theme_mode: themeMode, updated_at: new Date().toISOString() }).eq('id', brandId);

@@ -21,7 +21,14 @@ export async function getPaymentHistoryAction() {
       .eq('id', user.id)
       .single();
 
-    if (!profile?.brand_id) return { success: true, history: [] };
+    if (!profile?.brand_id) return { success: true, history: [], coinLogs: [], coins: 0 };
+
+    // ดึง Coins ปัจจุบัน
+    const { data: brand } = await supabase.from('brands')
+      .select('coins')
+      .eq('id', profile.brand_id)
+      .single();
+    const currentCoins = brand?.coins || 0;
 
     // 2. ดึงข้อมูล Payment Logs ตามปกติ
     const { data: logs, error: logsError } = await supabase
@@ -32,12 +39,21 @@ export async function getPaymentHistoryAction() {
 
     if (logsError) throw logsError;
 
-    // 3. รวบรวม ID ของธีมทั้งหมด (เฉพาะรายการที่เป็น buy_theme)
+    // 3. ดึงข้อมูล Coin Logs
+    const { data: coinLogs, error: coinLogsError } = await supabase
+      .from('coin_logs')
+      .select('*')
+      .eq('brand_id', profile.brand_id)
+      .order('created_at', { ascending: false });
+      
+    if (coinLogsError) throw coinLogsError;
+
+    // 4. รวบรวม ID ของธีมทั้งหมด (จากทั้ง payment_logs และ coin_logs)
     const themeIds = logs
       .filter(log => log.type === 'buy_theme' && log.plan_detail)
       .map(log => log.plan_detail);
 
-    // 4. ดึงชื่อธีมจากตาราง marketplace_themes ทีเดียว (เพื่อลดการยิง Database หลายรอบ)
+    // 5. ดึงชื่อธีมจากตาราง marketplace_themes ทีเดียว (เพื่อลดการยิง Database หลายรอบ)
     let themesMap: Record<string, string> = {};
     
     if (themeIds.length > 0) {
@@ -53,7 +69,7 @@ export async function getPaymentHistoryAction() {
       }
     }
 
-    // 5. ปรุงข้อมูลใหม่ ใส่ชื่อธีม (displayName) เข้าไปให้เลย Frontend จะได้ใช้ง่ายๆ
+    // 6. ปรุงข้อมูลใหม่ ใส่ชื่อธีม (displayName) เข้าไปให้เลย Frontend จะได้ใช้ง่ายๆ
     const enrichedHistory = logs.map(log => {
       let displayName = log.plan_detail; // ค่าเริ่มต้นคือ ID (กันเหนียว)
 
@@ -71,7 +87,12 @@ export async function getPaymentHistoryAction() {
       };
     });
 
-    return { success: true, history: enrichedHistory };
+    return { 
+      success: true, 
+      history: enrichedHistory,
+      coinLogs: coinLogs || [],
+      coins: currentCoins
+    };
 
   } catch (error: any) {
     console.error('Fetch History Error:', error);

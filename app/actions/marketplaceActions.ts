@@ -4,6 +4,8 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
+const PURCHASED_THEME_TYPES = ['free', 'weekly', 'monthly', 'yearly', 'lifetime'];
+
 async function getSupabase() {
   const cookieStore = await cookies();
   return createServerClient(
@@ -22,6 +24,7 @@ export async function getMarketplaceDataAction() {
     
     let brandId = null;
     let ownedThemeIds: any[] = [];
+    let coins = 0;
 
     // 2. ถ้ามี User ค่อยไปดึงข้อมูล Brand และ Theme ที่ซื้อแล้ว
     if (user) {
@@ -34,10 +37,18 @@ export async function getMarketplaceDataAction() {
       brandId = profile?.brand_id;
 
       if (brandId) {
+        const { data: brand } = await supabase
+          .from('brands')
+          .select('coins')
+          .eq('id', brandId)
+          .single();
+        coins = brand?.coins || 0;
+
         const { data: ownedThemes } = await supabase
           .from('themes')
           .select('marketplace_theme_id')
-          .eq('brand_id', brandId);
+          .eq('brand_id', brandId)
+          .in('purchase_type', PURCHASED_THEME_TYPES);
           
         ownedThemeIds = ownedThemes?.map((t: any) => t.marketplace_theme_id) || [];
       }
@@ -61,7 +72,8 @@ export async function getMarketplaceDataAction() {
         categories: categoriesRes.data || [],
         themes: themesRes.data || [],
         ownedThemeIds,
-        brandId
+        brandId,
+        coins
     };
 
   } catch (error: any) {

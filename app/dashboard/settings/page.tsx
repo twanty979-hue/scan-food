@@ -1,31 +1,33 @@
-// app/dashboard/settings/page.tsx
+﻿// app/dashboard/settings/page.tsx
 'use client';
 
-import { useState } from 'react';
-import Script from 'next/script';
+import { Suspense, useState } from 'react';
 import Link from 'next/link';
 import { useSettings } from '@/hooks/useSettings';
 import Cropper from 'react-easy-crop'; 
 
-import { IconShop, IconSave, IconUsers, IconLock, IconCrown, IconHistory, IconFileText } from './components/Icons'; 
+import { IconShop, IconSave, IconUsers, IconLock, IconCrown, IconHistory, IconPrinter } from './components/Icons'; 
 import ShopSettingsForm from './components/ShopSettingsForm';
 import CurrentPlanCard from './components/CurrentPlanCard';
 import UpgradePlanModal from './components/UpgradePlanModal';
-import PaymentQrModal from './components/PaymentQrModal';
+// 🚨 ลบ PaymentQrModal และ Script ของ Omise ออกไปแล้ว
 
-export default function SettingsPage() {
+function SettingsPageContent() {
   const {
     loading, submitting, isOwner, formData, setFormData,
     qrInputRef, logoInputRef, getImageUrl, handleUpload, handleSave, 
-    handleUpgradePlan, paymentModal, closePaymentModal,
+    handleUpgradePlan, paymentModal, closePaymentModal, // เก็บไว้กัน Error เผื่อใน hook ยังเหลือซาก
     period, setPeriod,
     imageToCrop, isCropModalOpen, setIsCropModalOpen,
-    setCroppedAreaPixels, handleCropComplete, croppingField
+    setCroppedAreaPixels, handleCropComplete, croppingField,
+    dbPlans, isFirstTimeBuyer 
   } = useSettings();
 
   const [activeTab, setActiveTab] = useState<'shop' | 'plan'>('shop'); 
   const [showUpgradePanel, setShowUpgradePanel] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'credit_card' | 'promptpay'>('promptpay');
+  
+  // 🚨 ลบ state paymentMethod ออกไปแล้ว เพราะ Beam จัดการให้หมด
+
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
 
@@ -43,19 +45,40 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-24 md:pb-10 relative">
-      <Script src="https://cdn.omise.co/omise.js" strategy="lazyOnload" />
+      {/* 🚨 ลบ <Script src="https://cdn.omise.co/omise.js" /> ออกไปแล้ว หน้าเว็บโหลดไวขึ้น! */}
 
-      {/* --- Header --- */}
+      {/* --- Header (ปรับปรุงใหม่: จิ้มไอคอนร้านค้าเพื่อเปิดเมนูสไลด์บาร์ได้ 100%) --- */}
       <header className="sticky top-0 z-30 bg-[#F8FAFC]/90 backdrop-blur-md px-4 md:px-10 py-4 flex justify-between items-center border-b border-slate-200/60 transition-all">
          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-white shadow-lg shadow-slate-900/10">
-                <IconShop size={20} />
-            </div>
-            <div>
-                <h1 className="text-lg md:text-xl font-black text-slate-900 tracking-tight">ตั้งค่าร้านค้า</h1>
-                <p className="hidden md:block text-xs text-slate-500 font-medium">จัดการข้อมูลและสถานะร้านค้า</p>
-            </div>
+            
+            {/* 🏪 ครอบปุ่มคลิกจำลองระบบไร้สายให้ตัวบล็อกไอคอนร้านค้าและหัวข้อหลัก */}
+            <button
+              type="button"
+              onClick={() => {
+                // ค้นหาปุ่มทริกเกอร์เปิดเมนูหลักบนแผง Layout แล้วสั่งกดให้อัตโนมัติทันที
+                const layoutMenuBtn = document.querySelector('header button');
+                if (layoutMenuBtn instanceof HTMLElement) {
+                  layoutMenuBtn.click();
+                }
+              }}
+              className="flex items-center text-left group active:scale-95 transition-transform duration-200"
+              title="เปิดเมนูสไลด์บาร์"
+            >
+              <h1 className="text-lg md:text-xl font-black text-slate-900 tracking-tight flex items-center gap-3 group-hover:text-indigo-600 transition-colors">
+                {/* เพิ่มอนิเมชัน Hover เด้งดึ๋งและหมุนเบาๆ ให้ตัวกล่องร้านค้าดูมีมิติสไตล์วัยรุ่นสร้างตัว */}
+                <div className="w-10 h-10 bg-slate-900 text-white rounded-xl flex items-center justify-center shadow-lg shadow-slate-900/10 transition-transform duration-200 group-hover:scale-110 group-hover:rotate-12 group-hover:bg-indigo-600">
+                    <IconShop size={20} />
+                </div>
+                <div className="flex flex-col leading-tight">
+                    <span>ตั้งค่าร้านค้า</span>
+                    <span className="hidden md:block text-xs text-slate-500 font-medium group-hover:text-indigo-400 transition-colors mt-0.5">จัดการข้อมูลและสถานะร้านค้า</span>
+                </div>
+              </h1>
+            </button>
+
          </div>
+         
+         {/* ปุ่มกดบันทึกข้อมูลของเดิมคงอยู่ครบถ้วน ปลอดภัยดีไม่มีเออร์เรอร์ครับ */}
          <button 
             onClick={handleSave} 
             disabled={submitting} 
@@ -101,20 +124,29 @@ export default function SettingsPage() {
                         <Link href="/dashboard/settings/billing" className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center justify-center gap-1.5 hover:border-indigo-200 hover:shadow-md transition-all group cursor-pointer h-24">
                             <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform"><IconHistory size={16} /></div>
                             <div className="text-center">
-                                <span className="font-bold text-slate-700 text-xs block">ประวัติการชำระเงิน</span>
+                                <span className="font-bold text-slate-700 text-xs block">ประวัติชำระเงิน</span>
                                 <span className="text-[10px] text-slate-400 leading-tight block">ดูบิลย้อนหลัง</span>
                             </div>
                         </Link>
+                        
+                        <Link href="/dashboard/settings/printer" className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center justify-center gap-1.5 hover:border-orange-200 hover:shadow-md transition-all group cursor-pointer h-24">
+                            <div className="w-8 h-8 bg-orange-50 text-orange-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform"><IconPrinter size={16} /></div>
+                            <div className="text-center">
+                                <span className="font-bold text-slate-700 text-xs block">ตั้งค่าเครื่องพิมพ์</span>
+                                <span className="text-[10px] text-slate-400 leading-tight block">สลิปและใบเสร็จ</span>
+                            </div>
+                        </Link>
+
                         {canManageStaff ? (
-                            <Link href="/dashboard/settingss" className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center justify-center gap-1.5 hover:border-indigo-200 hover:shadow-md transition-all group cursor-pointer h-24">
+                            <Link href="/dashboard/settingss" className="col-span-2 bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center justify-center gap-1.5 hover:border-emerald-200 hover:shadow-md transition-all group cursor-pointer h-20">
                                 <div className="w-8 h-8 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform"><IconUsers size={16} /></div>
                                 <div className="text-center">
                                     <span className="font-bold text-slate-700 text-xs block">จัดการพนักงาน</span>
-                                    <span className="text-[10px] text-slate-400 leading-tight block">เพิ่ม/ลบ สิทธิ์</span>
+                                    <span className="text-[10px] text-slate-400 leading-tight block">เพิ่ม/ลบ สิทธิ์การเข้าร้าน</span>
                                 </div>
                             </Link>
                         ) : (
-                            <button onClick={() => setShowUpgradePanel(true)} className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center justify-center gap-1.5 hover:border-indigo-200 hover:shadow-md transition-all group cursor-pointer relative overflow-hidden h-24">
+                            <button onClick={() => setShowUpgradePanel(true)} className="col-span-2 bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center justify-center gap-1.5 hover:border-indigo-200 hover:shadow-md transition-all group cursor-pointer relative overflow-hidden h-20">
                                 <div className="absolute top-2 right-2"><IconLock size={12} className="text-slate-300"/></div>
                                 <div className="w-8 h-8 bg-slate-50 text-slate-400 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform"><IconUsers size={16} /></div>
                                 <div className="text-center">
@@ -153,10 +185,10 @@ export default function SettingsPage() {
             
             <div className="p-4 flex gap-3 bg-white">
                <button type="button" onClick={() => setIsCropModalOpen(false)} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all active:scale-95">
-                  ยกเลิก
+                 ยกเลิก
                </button>
                <button type="button" onClick={handleCropComplete} className="flex-1 py-3 bg-slate-900 text-white rounded-xl font-black shadow-lg hover:bg-indigo-600 transition-all active:scale-95">
-                  ตกลง
+                 ตกลง
                </button>
             </div>
           </div>
@@ -164,8 +196,25 @@ export default function SettingsPage() {
       )}
 
       {/* Other Modals */}
-      <UpgradePlanModal show={showUpgradePanel} onClose={() => setShowUpgradePanel(false)} period={period} setPeriod={setPeriod as any} paymentMethod={paymentMethod} setPaymentMethod={setPaymentMethod} currentPlanKey={formData.plan || 'free'} submitting={submitting} handleUpgradePlan={handleUpgradePlan as any} />
-      <PaymentQrModal isOpen={paymentModal.isOpen} onClose={closePaymentModal} qrImage={paymentModal.qrImage} />
+      <UpgradePlanModal 
+        show={showUpgradePanel} 
+        onClose={() => setShowUpgradePanel(false)} 
+        period={period} 
+        setPeriod={setPeriod as any} 
+        // 🚨 เอา paymentMethod ออกแล้ว
+        currentPlanKey={formData.plan || 'free'} 
+        submitting={submitting} 
+        handleUpgradePlan={handleUpgradePlan as any} 
+        dbPlans={dbPlans} 
+        isFirstTimeBuyer={isFirstTimeBuyer} 
+      />
     </div>
+  );
+}
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<div className="h-screen flex items-center justify-center bg-slate-50 text-slate-400">กำลังโหลด...</div>}>
+      <SettingsPageContent />
+    </Suspense>
   );
 }

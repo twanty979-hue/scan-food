@@ -221,10 +221,30 @@ export default function KitchenPage() {
             <div className="max-w-[1600px] mx-auto">
                 <div className="flex flex-col gap-4 mb-6 md:flex-row md:items-center md:justify-between">
                     <div className="flex items-center justify-between gap-4">
-                        <h1 className="text-2xl md:text-3xl font-black flex items-center gap-2 text-slate-800">
-                            <IconChef size={24} className="md:w-8 md:h-8" /> 
-                            <span>ครัว</span>
-                        </h1>
+                        
+                        {/* 🌟 เปลี่ยนเฉพาะชุดคำสั่งตรงนี้: ครอบปุ่มคลิกให้ตัวอักษรและไอคอนครัว จิ้มแล้ว Sidebar เด้งทันที */}
+                        <button
+                            type="button"
+                            onClick={() => {
+                                // ยิงสายสัญญาณไร้สาย: วิ่งไปค้นหาปุ่มเปิดเมนูหลักบน Layout แล้วสั่งสั่งคลิกจำลองให้ทันที
+                                const layoutMenuBtn = document.querySelector('header button');
+                                if (layoutMenuBtn instanceof HTMLElement) {
+                                    layoutMenuBtn.click();
+                                }
+                            }}
+                            className="flex items-center gap-2 text-left group active:scale-95 transition-transform duration-200"
+                            title="คลิกไอคอนเพื่อเปิดเมนูสไลด์บาร์"
+                        >
+                            <h1 className="text-2xl md:text-3xl font-black flex items-center gap-2 text-slate-800 group-hover:text-blue-600 transition-colors">
+                                {/* เติมเอฟเฟกต์เด้งดึ๋งต้อนรับเมาส์สไตล์โมเดิร์นคลีนๆ */}
+                                <div className="transition-transform duration-200 group-hover:scale-110 group-hover:rotate-12 text-slate-800 group-hover:text-blue-600">
+                                    <IconChef size={24} className="md:w-8 md:h-8" /> 
+                                </div>
+                                <span>ครัว</span>
+                            </h1>
+                        </button>
+
+                        {/* ปุ่มเปิด/ปิดสวิตช์ Auto Accept ตัวเดิมของนายคงไว้ครบถ้วน */}
                         <button onClick={toggleAutoAccept} className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all ${autoAccept ? 'bg-amber-50 border-amber-200 text-amber-700 shadow-sm' : 'bg-white border-slate-200 text-slate-400'}`}>
                             <div className={`w-8 h-5 rounded-full p-0.5 transition-colors flex items-center ${autoAccept ? 'bg-amber-500' : 'bg-slate-300'}`}>
                                 <div className={`w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${autoAccept ? 'translate-x-3' : 'translate-x-0'}`} />
@@ -235,6 +255,7 @@ export default function KitchenPage() {
                         </button>
                     </div>
 
+                    {/* ช่องกล่อง Input ค้นหาเบอร์โต๊ะฝั่งขวาคงเดิมไว้หมดเลยครับ */}
                     <div className="relative w-full md:w-auto md:min-w-[300px]">
                         <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
                             <IconSearch size={20} />

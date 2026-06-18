@@ -1,4 +1,5 @@
 import { IconCheck } from './ThemeIcons';
+import { useState, useEffect } from 'react';
 
 interface MarketplaceCardProps {
     theme: any;
@@ -9,6 +10,23 @@ interface MarketplaceCardProps {
 
 export default function MarketplaceCard({ theme, isOwned, getImageUrl, onClick }: MarketplaceCardProps) {
     
+    // --- Price Animation Logic ---
+    const [priceIndex, setPriceIndex] = useState(0);
+
+    const availablePrices: { label: string; price: number }[] = [];
+    if (Number(theme.price_weekly) > 0) availablePrices.push({ label: '/สัปดาห์', price: Number(theme.price_weekly) });
+    if (Number(theme.price_monthly) > 0) availablePrices.push({ label: '/เดือน', price: Number(theme.price_monthly) });
+    if (Number(theme.price_yearly) > 0) availablePrices.push({ label: '/ปี', price: Number(theme.price_yearly) });
+
+    useEffect(() => {
+        if (availablePrices.length > 1) {
+            const interval = setInterval(() => {
+                setPriceIndex((prev) => (prev + 1) % availablePrices.length);
+            }, 3000); // เปลี่ยนราคาทุกๆ 3 วินาที
+            return () => clearInterval(interval);
+        }
+    }, [availablePrices.length]);
+
     // 🎨 ฟังก์ชันเลือกสีป้ายตาม Plan (ปรับขนาด Text และ Padding ให้จิ๋วลงในมือถือ)
     const renderTierBadge = () => {
         if (isOwned) {
@@ -49,21 +67,26 @@ export default function MarketplaceCard({ theme, isOwned, getImageUrl, onClick }
         }
     };
 
-    // แสดงราคาเสริม
+    // แสดงราคาเสริมพร้อมแอนิเมชัน
     const renderPriceInfo = () => {
-        if (isOwned) return null;
+        if (isOwned || availablePrices.length === 0) return null;
 
-        const monthly = Number(theme.price_monthly || 0);
-        const lifetime = Number(theme.price_lifetime || 0);
+        const currentDisplay = availablePrices[priceIndex];
 
-        if (monthly > 0 || lifetime > 0) {
-            return (
-                <div className="text-[7px] md:text-[9px] text-slate-400 font-bold mt-0.5 md:mt-1">
-                    OR BUY: {monthly > 0 && `$${monthly}/mo`} {lifetime > 0 && ` • $${lifetime} Life`}
+        return (
+            <div className="flex items-center justify-center gap-1 md:gap-1.5 mt-0.5 md:mt-1 opacity-70 group-hover:opacity-100 transition-opacity h-5 md:h-7 overflow-hidden">
+                <span className="text-[7px] md:text-[9px] text-slate-400 font-bold uppercase tracking-wider">OR BUY:</span>
+                <div 
+                    key={priceIndex} // Key เปลี่ยน ทำให้เกิด animation ใหม่
+                    className="flex items-center gap-0.5 bg-gradient-to-r from-amber-50 to-amber-100/50 px-1.5 py-0.5 md:px-2.5 md:py-1 rounded-full border border-amber-200/60 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-500"
+                >
+                    <img src="/cion.png" alt="Coin" className="w-2.5 h-2.5 md:w-3.5 md:h-3.5 object-contain drop-shadow-sm" />
+                    <span className="text-[7px] md:text-[10px] font-black text-amber-700 tracking-tight">
+                        {currentDisplay.price.toLocaleString()} <span className="text-amber-600/70 font-bold">{currentDisplay.label}</span>
+                    </span>
                 </div>
-            );
-        }
-        return null;
+            </div>
+        );
     };
 
     return (

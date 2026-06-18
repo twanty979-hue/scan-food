@@ -3,16 +3,14 @@ import { useState, useEffect, useRef } from 'react';
 import { 
     getBrandSettingsAction, 
     updateBrandSettingsAction, 
-    upgradeBrandPlanAction, 
-    createPromptPayChargeAction, 
-    checkPaymentStatusAction 
+    createBeamCheckoutAction, // 🌟 นำเข้าฟังก์ชันของ Beam ที่เราเพิ่งสร้าง
+    checkPaymentStatusAction,
+    getAvailablePlansAction 
 } from '@/app/actions/settingsActions';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation'; // 🌟 เพิ่ม useSearchParams
 import { useGlobalAlert } from '@/components/providers/GlobalAlertProvider';
 
 const CDN_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://img.pos-foodscan.com";
-
-declare global { interface Window { Omise: any; OmiseCard: any; } }
 
 const createImage = (url: string): Promise<HTMLImageElement> =>
   new Promise((resolve, reject) => {
@@ -24,6 +22,7 @@ const createImage = (url: string): Promise<HTMLImageElement> =>
 
 export function useSettings() {
     const router = useRouter();
+    const searchParams = useSearchParams(); // 🌟 สำหรับดักจับสถานะหลังจ่ายเงินเสร็จ
     const { showAlert, showConfirm } = useGlobalAlert();
     const logoInputRef = useRef<HTMLInputElement>(null);
     const qrInputRef = useRef<HTMLInputElement>(null);
@@ -36,31 +35,45 @@ export function useSettings() {
     const [period, setPeriod] = useState<'monthly' | 'yearly'>('monthly');
     const [isAutoRenew, setIsAutoRenew] = useState(true); 
 
-    const [paymentModal, setPaymentModal] = useState<{
-        isOpen: boolean; qrImage: string | null; chargeId: string | null; plan: string | null;
-    }>({ isOpen: false, qrImage: null, chargeId: null, plan: null });
+    const [dbPlans, setDbPlans] = useState<any[]>([]);
+    const [isFirstTimeBuyer, setIsFirstTimeBuyer] = useState(true);
+
+    // เก็บ Dummy State ไว้ก่อน หน้า UI จะได้ไม่ Error (เดี๋ยวเราค่อยไปลบ Modal QR ออกจากหน้าหลัก)
+    const [paymentModal, setPaymentModal] = useState({ isOpen: false, qrImage: null, chargeId: null, plan: null });
 
     const [formData, setFormData] = useState({
         name: '', phone: '', address: '', promptpay_number: '', 
         logo_url: '', qr_image_url: '', plan: 'free', vat: 0, service_charge: 0,
-        expiry: null as string | null
+        expiry: null as string | null,
+        qr_mode: 'rotating' as 'rotating' | 'static'
     });
 
-    // --- ✂️ STATE สำหรับ CROP รูปภาพ ---
     const [imageToCrop, setImageToCrop] = useState<string | null>(null);
     const [croppingField, setCroppingField] = useState<'logo_url' | 'qr_image_url' | null>(null);
     const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
     const [isCropModalOpen, setIsCropModalOpen] = useState(false);
     const [pendingFiles, setPendingFiles] = useState<{ logo_url?: File; qr_image_url?: File }>({});
     
-    // 🌟 พระเอกที่ผมลืมใส่ให้พี่: แยก State สำหรับพรีวิวรูปใหม่ เพื่อไม่ให้ไปทับชื่อรูปเก่าใน DB
     const [previewUrls, setPreviewUrls] = useState<{ logo_url?: string; qr_image_url?: string }>({});
+
+    // 🌟 ดักจับตอนที่ Beam Redirect กลับมาที่หน้าเว็บเรา
+    useEffect(() => {
+        const paymentStatus = searchParams.get('payment');
+        if (paymentStatus === 'success') {
+            showAlert('success', 'ชำระเงินสำเร็จ!', 'อัปเกรดแพ็กเกจเรียบร้อยแล้ว');
+            // ล้าง URL ให้กลับมาสะอาด
+            router.replace('/dashboard/settings'); 
+        } else if (paymentStatus === 'cancel') {
+            showAlert('error', 'ยกเลิกการทำรายการ', 'คุณได้ยกเลิกการชำระเงิน');
+            router.replace('/dashboard/settings');
+        }
+    }, [searchParams, router]);
 
     useEffect(() => {
         const init = async () => {
             const res = await getBrandSettingsAction();
-            if (res.success) {
-                setBrandId(res.brandId || '');
+            if (res.success && res.brandId) {
+                setBrandId(res.brandId);
                 setIsOwner(res.isOwner || false);
                 
                 if (res.brand) {
@@ -80,11 +93,19 @@ export function useSettings() {
                         plan: res.brand.plan || 'free',
                         vat: res.brand.config?.vat || 0, 
                         service_charge: res.brand.config?.service_charge || 0,
-                        expiry: currentExpiry
+                        expiry: currentExpiry,
+                        qr_mode: (res.brand.table_qr_mode || res.brand.config?.qr_mode) === 'static' ? 'static' : 'rotating'
                     });
                     
                     if (res.brand.is_auto_renew !== undefined) setIsAutoRenew(res.brand.is_auto_renew);
                 }
+
+                const plansRes = await getAvailablePlansAction(res.brandId);
+                if (plansRes.success) {
+                    setDbPlans(plansRes.plans || []);
+                    setIsFirstTimeBuyer(plansRes.isFirstTime ?? true);
+                }
+
             } else {
                 if (res.error === "Unauthorized") router.replace('/login');
             }
@@ -93,10 +114,9 @@ export function useSettings() {
         init();
     }, [router]);
 
-    // 🌟 แก้ไข: ให้เช็คจาก Preview ก่อน ถ้าไม่มีค่อยไปดึงจาก DB
     const getImageUrl = (imageName: string | null, fieldType?: 'logo_url' | 'qr_image_url') => {
         if (fieldType && previewUrls[fieldType]) {
-             return previewUrls[fieldType] as string; // โชว์รูป Blob ก่อน
+             return previewUrls[fieldType] as string; 
         }
         if (!imageName) return null;
         if (imageName.startsWith('blob:')) return imageName;
@@ -159,7 +179,6 @@ export function useSettings() {
             
             const previewUrl = URL.createObjectURL(croppedFile);
 
-            // 🌟 แก้ไข: เก็บ File ไว้ Upload และเก็บ Preview ไว้โชว์ โดยไม่ไปยุ่งกับ formData 
             setPendingFiles(prev => ({ ...prev, [croppingField]: croppedFile }));
             setPreviewUrls(prev => ({ ...prev, [croppingField]: previewUrl }));
             
@@ -177,20 +196,18 @@ export function useSettings() {
 
         setSubmitting(true);
         try {
-            // ดึงชื่อไฟล์ดั้งเดิมจาก DB ไว้ก่อน
             let finalLogoUrl = formData.logo_url;
             let finalQrUrl = formData.qr_image_url;
             let oldImagesToDelete: string[] = [];
             const uploadQueue = [];
 
-            // 🌟 ตอนนี้ formData.logo_url จะเป็นชื่อไฟล์เดิมจริงๆ แล้ว ไม่ใช่ Blob
             if (pendingFiles.logo_url) {
                 const fd = new FormData(); fd.append("file", pendingFiles.logo_url); fd.append("folder", brandId);
                 uploadQueue.push(fetch('/api/upload', { method: 'POST', body: fd }).then(r => r.json()).then(d => {
                     if (formData.logo_url && !formData.logo_url.startsWith('http')) {
-                         oldImagesToDelete.push(formData.logo_url); // เก็บชื่อไฟล์เก่าเตรียมลบ
+                         oldImagesToDelete.push(formData.logo_url); 
                     }
-                    finalLogoUrl = d.fileName; // อัปเดตชื่อไฟล์ใหม่
+                    finalLogoUrl = d.fileName; 
                 }));
             }
 
@@ -198,9 +215,9 @@ export function useSettings() {
                 const fd = new FormData(); fd.append("file", pendingFiles.qr_image_url); fd.append("folder", brandId);
                 uploadQueue.push(fetch('/api/upload', { method: 'POST', body: fd }).then(r => r.json()).then(d => {
                     if (formData.qr_image_url && !formData.qr_image_url.startsWith('http')) {
-                        oldImagesToDelete.push(formData.qr_image_url); // เก็บชื่อไฟล์เก่าเตรียมลบ
+                        oldImagesToDelete.push(formData.qr_image_url); 
                     }
-                    finalQrUrl = d.fileName; // อัปเดตชื่อไฟล์ใหม่
+                    finalQrUrl = d.fileName; 
                 }));
             }
 
@@ -208,12 +225,12 @@ export function useSettings() {
 
             const res = await updateBrandSettingsAction(brandId, {
                 name: formData.name, phone: formData.phone, address: formData.address,
-                promptpay_number: formData.promptpay_number, logo_url: finalLogoUrl, qr_image_url: finalQrUrl
+                promptpay_number: formData.promptpay_number, logo_url: finalLogoUrl, qr_image_url: finalQrUrl,
+                qr_mode: formData.qr_mode
             });
 
             if (!res.success) throw new Error((res as any).error || 'Unknown error');
 
-            // 🌟 สั่งลบรูปเก่าทิ้งจริงๆ แล้วครับ
             oldImagesToDelete.forEach(fileName => {
                 fetch('/api/delete-image', { 
                     method: 'POST', 
@@ -222,7 +239,6 @@ export function useSettings() {
                 }).catch(e => console.error(e));
             });
 
-            // ล้าง State และอัปเดต DB ใหม่
             setPendingFiles({});
             setPreviewUrls({});
             setFormData(prev => ({ ...prev, logo_url: finalLogoUrl, qr_image_url: finalQrUrl }));
@@ -234,91 +250,71 @@ export function useSettings() {
         }
     };
 
-    // ... (ส่วนที่เหลือของ Omise / UpgradePlan เหมือนเดิม) ...
-    const createOmiseToken = (amount: number): Promise<string> => {
-        return new Promise((resolve, reject) => {
-            if (!window.OmiseCard) return reject(new Error("Payment System Loading..."));
-            window.OmiseCard.configure({ publicKey: process.env.NEXT_PUBLIC_OMISE_PUBLIC_KEY!, frameLabel: 'Spring POS', submitLabel: 'Pay', currency: 'thb' });
-            window.OmiseCard.open({ amount: amount, onCreateTokenSuccess: (token: string) => resolve(token), onFormClosed: () => reject(new Error("Payment cancelled")) });
-        });
-    };
-
-    const createPromptPaySource = (amount: number): Promise<string> => {
-        return new Promise((resolve, reject) => {
-            if (!window.Omise) return reject(new Error("Payment System Loading..."));
-            window.Omise.setPublicKey(process.env.NEXT_PUBLIC_OMISE_PUBLIC_KEY!);
-            window.Omise.createSource('promptpay', { amount, currency: 'thb' }, (statusCode: number, response: any) => {
-                if (statusCode === 200) resolve(response.id); else reject(new Error(response.message));
-            });
-        });
-    };
-
-    const handleUpgradePlan = async (newPlan: string, method: 'credit_card' | 'promptpay') => {
+    // 🌟 พระเอกของเรา โค้ดใหม่สำหรับการอัปเกรด
+    const handleUpgradePlan = async (newPlan: string) => {
         if (!isOwner || !brandId) return;
-        const basePrices: Record<string, number> = { free: 0, basic: 25000, pro: 48900, ultimate: 199900 };
-        let amount = basePrices[newPlan] || 0;
-        if (period === 'yearly') amount = Math.floor((amount * 12) * 0.8);
+        
+        let amount = 0;
+        if (newPlan !== 'free') {
+            const planDB = dbPlans.find(p => p.plan_key === newPlan);
+            if (planDB) {
+                if (period === 'monthly') {
+                    amount = (isFirstTimeBuyer && planDB.first_time_price_monthly !== null && planDB.first_time_price_monthly !== undefined)
+                        ? planDB.first_time_price_monthly
+                        : planDB.price_monthly;
+                } else {
+                    amount = (isFirstTimeBuyer && planDB.first_time_price_yearly !== null && planDB.first_time_price_yearly !== undefined)
+                        ? planDB.first_time_price_yearly
+                        : planDB.price_yearly;
+                }
+            }
+        }
 
-        if (amount === 0 && newPlan === 'free') {
+        // กรณีเลือกแพ็กเกจฟรี
+        if (amount === 0) {
              setSubmitting(true);
              try {
-                 const res = await createPromptPayChargeAction(brandId, newPlan, 'monthly', 'dummy_source');
+                 // ส่งค่าว่างให้ successUrl, cancelUrl ไปเลย เพราะตัวแปร 0 บาท ข้ามระบบจ่ายเงินอยู่แล้ว
+                 const res = await createBeamCheckoutAction(brandId, newPlan, period, '', '');
                  if (res.success) {
                      setFormData(prev => ({ ...prev, plan: newPlan }));
-                     showAlert('success', 'เปลี่ยนแพ็กเกจสำเร็จ', 'กลับมาใช้ Free Plan แล้ว');
+                     const msg = newPlan === 'free' ? 'กลับมาใช้ Free Plan แล้ว' : 'รับสิทธิ์ใช้ฟรีสำเร็จ!';
+                     showAlert('success', 'สำเร็จ!', msg);
+                 } else {
+                     throw new Error(res.error);
                  }
-             } catch(err: any) { showAlert('error', 'Error', err.message) }
+             } catch(err: any) { 
+                 showAlert('error', 'Error', err.message);
+             }
              setSubmitting(false);
              return;
         }
 
+        // กรณีมีค่าใช้จ่าย (เด้งไป Beam)
         let msg = `ยืนยันสมัคร ${newPlan.toUpperCase()} (${period === 'monthly' ? 'รายเดือน' : 'รายปี'})\nยอดชำระ: ${(amount/100).toLocaleString()} บาท`;
-        if (method === 'credit_card' && isAutoRenew) msg += `\n(ระบบจะตัดบัตรอัตโนมัติเมื่อครบกำหนด)`;
         const isConfirmed = await showConfirm('ยืนยันการชำระเงิน?', msg, 'ชำระเงิน', 'ยกเลิก');
         if (!isConfirmed) return;
 
         setSubmitting(true);
         try {
-            if (method === 'credit_card') {
-                const token = await createOmiseToken(amount);
-                const res = await upgradeBrandPlanAction(brandId, newPlan, period, token, isAutoRenew);
-                if (res.success) {
-                    setFormData(prev => ({ ...prev, plan: newPlan }));
-                    showAlert('success', 'ชำระเงินสำเร็จ!', 'อัปเกรดแพ็กเกจเรียบร้อยแล้ว');
-                } else throw new Error(res.error);
+            // สร้าง URL ตอนจ่ายเสร็จ หรือกดยกเลิก
+            const currentUrl = window.location.origin;
+            const successUrl = `${currentUrl}/dashboard/settings?payment=success`;
+            const cancelUrl = `${currentUrl}/dashboard/settings?payment=cancel`;
+
+            const res = await createBeamCheckoutAction(brandId, newPlan, period, successUrl, cancelUrl);
+            
+            if (res.success && res.checkoutUrl) {
+                // 🚀 ไฮไลท์: สั่งเด้งพาผู้ใช้ไปหน้าเว็บของ Beam ตรงนี้เลย!
+                window.location.href = res.checkoutUrl; 
             } else {
-                const sourceId = await createPromptPaySource(amount);
-                const res = await createPromptPayChargeAction(brandId, newPlan, period, sourceId);
-                if (res.success && res.type === 'promptpay' && res.qrImage) {
-                    setPaymentModal({ isOpen: true, qrImage: res.qrImage, chargeId: res.chargeId, plan: newPlan });
-                } else throw new Error("Failed to generate QR");
+                throw new Error(res.error || "Failed to generate checkout link");
             }
         } catch (err: any) {
-            if (err.message !== "Payment cancelled") showAlert('error', 'เกิดข้อผิดพลาด', err.message);
-        } finally {
-            setSubmitting(false);
+             showAlert('error', 'เกิดข้อผิดพลาด', err.message);
+             setSubmitting(false);
         }
     };
-
-    useEffect(() => {
-        let interval: NodeJS.Timeout;
-        if (paymentModal.isOpen && paymentModal.chargeId && brandId) {
-            interval = setInterval(async () => {
-                const res = await checkPaymentStatusAction(brandId, paymentModal.chargeId!, paymentModal.plan!, period);
-                if (res.status === 'successful') {
-                    clearInterval(interval);
-                    setPaymentModal({ isOpen: false, qrImage: null, chargeId: null, plan: null });
-                    setFormData(prev => ({ ...prev, plan: paymentModal.plan! }));
-                    showAlert('success', 'ชำระเงินสำเร็จ!', 'อัปเกรดแพ็กเกจเรียบร้อยแล้ว');
-                } else if (res.status === 'failed') {
-                    clearInterval(interval);
-                    setPaymentModal({ isOpen: false, qrImage: null, chargeId: null, plan: null });
-                    showAlert('error', 'รายการล้มเหลว', 'หมดเวลาหรือยกเลิก');
-                }
-            }, 3000);
-        }
-        return () => clearInterval(interval);
-    }, [paymentModal.isOpen, paymentModal.chargeId, brandId, period]); 
 
     const closePaymentModal = () => setPaymentModal({ isOpen: false, qrImage: null, chargeId: null, plan: null });
 
@@ -328,6 +324,7 @@ export function useSettings() {
         handleUpgradePlan, paymentModal, closePaymentModal,
         isAutoRenew, setIsAutoRenew, period, setPeriod,
         imageToCrop, isCropModalOpen, setIsCropModalOpen,
-        setCroppedAreaPixels, handleCropComplete, croppingField
+        setCroppedAreaPixels, handleCropComplete, croppingField,
+        dbPlans, isFirstTimeBuyer 
     };
 }

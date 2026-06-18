@@ -32,7 +32,7 @@ const IconGrid = ({ size = 20 }: any) => <svg width={size} height={size} viewBox
 const IconVolume2 = ({ size = 24 }: any) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>;
 const IconAlertCircle = ({ size = 24 }: any) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>;
 
-export default function PaiOrderMasterPage() {
+export default function PaiOrderMasterPage({ setSidebarOpen }: any) {
     const [showCamera, setShowCamera] = useState(false);
     const {
         activeTab, setActiveTab, loading, autoKitchen, setAutoKitchen,
@@ -248,25 +248,51 @@ export default function PaiOrderMasterPage() {
 
             <div className="max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-3 md:gap-6 h-[calc(100vh-1rem)] md:h-[calc(100vh-3rem)]">
                 
-                {/* ================= LEFT SIDE: MENU & TABLES ================= */}
+               {/* ================= LEFT SIDE: MENU & TABLES ================= */}
                 <div className="col-span-12 lg:col-span-7 flex flex-col gap-3 md:gap-5 h-full overflow-hidden pb-16 lg:pb-0">
                     
-                    {/* ✅ Top Bar (ย่อในมือถือ) */}
+                    {/* ✅ Top Bar (แก้ไขระบบสั่งงานไร้สาย เพื่อปลดล็อกปุ่มแฮมเบอร์เกอร์ให้ทำงานได้ 100%) */}
                     <div className="flex gap-2 md:gap-4 shrink-0 h-14 md:h-[4.5rem]">
+                        
+                        {/* 🍔 ปุ่มแฮมเบอร์เกอร์เปิดสไลด์บาร์ (ซ้ายสุด) */}
+                        <button 
+                            type="button"
+                            onClick={() => {
+                                // ⚡ คลีนมาก: ถ้า Layout หลักส่ง Props มาก็ใช้ หรือถ้าไม่มี ให้ยิงสัญญาณไร้สายไปสั่งเปิดโดยตรง
+                                if (typeof setSidebarOpen === 'function') {
+                                    setSidebarOpen(true);
+                                } else {
+                                    // ค้นหาปุ่มเมนูหลักของ Layout บนหน้าจอแล้วสั่งกดให้อัตโนมัติเลยครับนาย!
+                                    const layoutMenuBtn = document.querySelector('header button');
+                                    if (layoutMenuBtn instanceof HTMLElement) {
+                                        layoutMenuBtn.click();
+                                    }
+                                }
+                            }} 
+                            className="h-full aspect-square bg-white border border-slate-200 text-slate-600 hover:text-slate-800 hover:border-slate-300 active:scale-95 rounded-xl md:rounded-[20px] shadow-sm flex items-center justify-center transition-all duration-200"
+                            title="เปิดเมนูสไลด์บาร์"
+                        >
+                            <span className="w-5 md:w-6">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-full h-full">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+                                </svg>
+                            </span>
+                        </button>
+
+                        {/* 📑 แท็บสลับหน้าจอ (โต๊ะ & รายการ / POS) */}
                         <div className="bg-white p-1 md:p-1.5 rounded-xl md:rounded-[20px] shadow-sm border border-slate-100 flex flex-1 items-center">
-                            <button onClick={() => { setActiveTab('tables'); setSelectedOrder(null); }} className={`flex-1 h-full rounded-lg md:rounded-2xl font-bold flex items-center justify-center gap-1 md:gap-2 transition-all duration-300 text-xs md:text-base ${activeTab === 'tables' ? 'bg-slate-800 text-white shadow-lg shadow-slate-200 scale-[1.02]' : 'text-slate-400 hover:bg-slate-50'}`}>
+                            <button type="button" onClick={() => { setActiveTab('tables'); setSelectedOrder(null); }} className={`flex-1 h-full rounded-lg md:rounded-2xl font-bold flex items-center justify-center gap-1 md:gap-2 transition-all duration-300 text-xs md:text-base ${activeTab === 'tables' ? 'bg-slate-800 text-white shadow-lg shadow-slate-200 scale-[1.02]' : 'text-slate-400 hover:bg-slate-50'}`}>
                                 <span className="w-4 md:w-5"><IconReceipt size="100%" /></span> <span className="hidden sm:inline">โต๊ะ & รายการ</span> 
                                 {unpaidOrders.length > 0 && <span className="bg-orange-500 text-white text-[9px] md:text-[10px] px-1.5 md:px-2 py-0.5 rounded-full">{unpaidOrders.length}</span>}
                             </button>
-                            <button onClick={() => { setActiveTab('pos'); setSelectedOrder(null); paimaster.barcodeInputRef.current?.focus(); }} className={`flex-1 h-full rounded-lg md:rounded-2xl font-bold flex items-center justify-center gap-1 md:gap-2 transition-all duration-300 text-xs md:text-base ${activeTab === 'pos' ? 'bg-orange-500 text-white shadow-lg shadow-orange-200 scale-[1.02]' : 'text-slate-400 hover:bg-slate-50'}`}>
+                            <button type="button" onClick={() => { setActiveTab('pos'); setSelectedOrder(null); paimaster.barcodeInputRef.current?.focus(); }} className={`flex-1 h-full rounded-lg md:rounded-2xl font-bold flex items-center justify-center gap-1 md:gap-2 transition-all duration-300 text-xs md:text-base ${activeTab === 'pos' ? 'bg-orange-500 text-white shadow-lg shadow-orange-200 scale-[1.02]' : 'text-slate-400 hover:bg-slate-50'}`}>
                                 <span className="w-4 md:w-5"><IconGrid size="100%" /></span> POS
                             </button>
                         </div>
+
+                        {/* 🔏 ปุ่มสแกน QR / ตัวเช็คลิมิตออเดอร์แพ็กเกจ */}
                         <div className="flex gap-2 md:gap-3 h-full">
-                            <button onClick={toggleAutoKitchen} className={`h-full aspect-square rounded-xl md:rounded-[20px] shadow-sm flex items-center justify-center transition-all border ${autoKitchen ? 'bg-emerald-50 border-emerald-200 text-emerald-600 shadow-emerald-100' : 'bg-white border-slate-100 text-slate-300 hover:border-slate-300 hover:text-slate-400'}`} title="Auto Kitchen Print">
-                                <span className="w-5 md:w-[22px]"><IconZap size="100%" className={autoKitchen ? 'fill-current' : ''} /></span>
-                            </button>
-                            <button onClick={() => {
+                            <button type="button" onClick={() => {
                                 if (isLimitReached) {
                                     setStatusModal({ show: true, type: 'alert', title: 'อัปเกรดเพื่อใช้งานต่อ', message: `แพ็กเกจฟรีจำกัด ${usageText} ออเดอร์ \nกรุณาอัปเกรดแพ็กเกจเพื่อรับออเดอร์เพิ่มครับ` });
                                     return;
@@ -279,6 +305,8 @@ export default function PaiOrderMasterPage() {
                             </button>
                         </div>
                     </div>
+
+                    {/* Main Content Area */}
 
                     {/* Main Content Area */}
                     <div className="bg-white rounded-2xl md:rounded-[32px] shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] border border-slate-100 flex-1 flex flex-col overflow-hidden relative">
@@ -612,7 +640,7 @@ export default function PaiOrderMasterPage() {
                 </div>
             )}
 
-            {qrTableData && <TableQrModal table={qrTableData} brandId={currentBrand?.id} brandSlug={currentBrand?.slug} qrLogoUrl={getCorrectQrLogo()} onClose={() => setQrTableData(null)} limitStatus={limitStatus} />}
+            {qrTableData && <TableQrModal table={qrTableData} brandId={currentBrand?.id} brandSlug={currentBrand?.slug} qrLogoUrl={getCorrectQrLogo()} qrMode={(currentBrand?.table_qr_mode || currentBrand?.config?.qr_mode || 'rotating') as any} onClose={() => setQrTableData(null)} limitStatus={limitStatus} />}
             
             {statusModal.show && (
                 <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">

@@ -1,17 +1,20 @@
+// app/dashboard/settings/components/UpgradePlanModal.tsx
 import { useRef, useState, useEffect } from 'react';
 import { PLANS } from '../constants';
-import { IconCrown, IconClose, IconQr, IconCreditCard, IconCheck } from './Icons';
+import { IconCrown, IconClose, IconCheck } from './Icons';
+// 🚨 ลบ IconQr, IconCreditCard ออกไปแล้ว
 
 interface Props {
   show: boolean;
   onClose: () => void;
   period: string;
   setPeriod: (p: string) => void;
-  paymentMethod: 'credit_card' | 'promptpay';
-  setPaymentMethod: (m: 'credit_card' | 'promptpay') => void;
+  // 🚨 ลบ paymentMethod และ setPaymentMethod ออก
   currentPlanKey: string;
   submitting: boolean;
-  handleUpgradePlan: (planKey: string, method: string) => void;
+  handleUpgradePlan: (planKey: string) => void; // 🚨 ลบ parameter 'method' ออก
+  dbPlans?: any[];
+  isFirstTimeBuyer?: boolean;
 }
 
 const PLAN_RANKS: Record<string, number> = {
@@ -22,8 +25,9 @@ const PLAN_RANKS: Record<string, number> = {
 };
 
 export default function UpgradePlanModal({ 
-  show, onClose, period, setPeriod, paymentMethod, setPaymentMethod, 
-  currentPlanKey, submitting, handleUpgradePlan 
+  show, onClose, period, setPeriod, 
+  currentPlanKey, submitting, handleUpgradePlan,
+  dbPlans = [], isFirstTimeBuyer = false
 }: Props) {
   
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -69,6 +73,7 @@ export default function UpgradePlanModal({
         
         <div className="bg-[#F8FAFC] w-full md:max-w-6xl h-auto md:max-h-[90vh] rounded-t-[32px] md:rounded-[40px] shadow-2xl relative z-10 flex flex-col overflow-hidden animate-in slide-in-from-bottom-8 duration-500 ease-out">
             
+            {/* --- Header --- */}
             <div className="px-5 md:px-6 py-4 md:py-5 bg-white border-b border-slate-100 flex justify-between items-center shrink-0 z-30">
                <div className="flex items-center gap-3">
                    <div className="p-1.5 md:p-2 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg md:rounded-xl text-indigo-600 shadow-sm border border-indigo-100/50">
@@ -81,27 +86,24 @@ export default function UpgradePlanModal({
                </button>
             </div>
             
+            {/* --- Switcher รายเดือน / รายปี --- */}
             <div className="relative z-20 px-4 py-2.5 md:py-3 bg-white/80 backdrop-blur-lg shadow-sm border-b border-slate-100">
-                <div className="flex flex-col sm:flex-row gap-2 md:gap-3 justify-between items-center max-w-4xl mx-auto">
-                    <div className="flex bg-slate-100 p-1 md:p-1.5 rounded-xl md:rounded-2xl w-full sm:w-auto h-10 md:h-12 shadow-inner">
-                        <button onClick={() => setPeriod('monthly')} className={`flex-1 sm:flex-none px-4 md:px-6 rounded-lg md:rounded-xl text-[11px] md:text-xs font-bold transition-all duration-300 ${period === 'monthly' ? 'bg-white text-slate-900 shadow-[0_2px_10px_rgba(0,0,0,0.06)] scale-100' : 'text-slate-500 hover:text-slate-700 scale-95'}`}>รายเดือน</button>
-                        <button onClick={() => setPeriod('yearly')} className={`flex-1 sm:flex-none px-4 md:px-6 rounded-lg md:rounded-xl text-[11px] md:text-xs font-bold transition-all duration-300 flex items-center justify-center gap-1.5 ${period === 'yearly' ? 'bg-white text-slate-900 shadow-[0_2px_10px_rgba(0,0,0,0.06)] scale-100' : 'text-slate-500 hover:text-slate-700 scale-95'}`}>
+                <div className="flex justify-center items-center max-w-4xl mx-auto">
+                    {/* ปรับให้เหลือแค่ปุ่มสลับเดือน/ปี ให้มันอยู่ตรงกลางสวยๆ */}
+                    <div className="flex bg-slate-100 p-1 md:p-1.5 rounded-xl md:rounded-2xl w-full sm:w-auto md:min-w-[300px] h-10 md:h-12 shadow-inner">
+                        <button onClick={() => setPeriod('monthly')} className={`flex-1 px-4 md:px-6 rounded-lg md:rounded-xl text-[11px] md:text-xs font-bold transition-all duration-300 ${period === 'monthly' ? 'bg-white text-slate-900 shadow-[0_2px_10px_rgba(0,0,0,0.06)] scale-100' : 'text-slate-500 hover:text-slate-700 scale-95'}`}>รายเดือน</button>
+                        <button onClick={() => setPeriod('yearly')} className={`flex-1 px-4 md:px-6 rounded-lg md:rounded-xl text-[11px] md:text-xs font-bold transition-all duration-300 flex items-center justify-center gap-1.5 ${period === 'yearly' ? 'bg-white text-slate-900 shadow-[0_2px_10px_rgba(0,0,0,0.06)] scale-100' : 'text-slate-500 hover:text-slate-700 scale-95'}`}>
                             รายปี <span className="text-[8px] md:text-[9px] bg-gradient-to-r from-emerald-400 to-emerald-500 text-white px-1.5 py-0.5 md:px-2 md:py-0.5 rounded-md shadow-sm animate-pulse">-20%</span>
                         </button>
-                    </div>
-                    <div className="flex gap-2 w-full sm:w-auto h-10 md:h-12">
-                        {['promptpay', 'credit_card'].map((method) => (
-                            <button key={method} onClick={() => setPaymentMethod(method as any)} className={`flex-1 sm:flex-none px-3 md:px-4 rounded-xl md:rounded-2xl border-2 font-bold text-[9px] md:text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 md:gap-2 transition-all duration-300 ${paymentMethod === method ? 'border-indigo-600 bg-indigo-50/50 text-indigo-700 shadow-md shadow-indigo-100/50' : 'border-transparent bg-slate-100 text-slate-400 hover:bg-slate-200'}`}>
-                               {method === 'promptpay' ? <IconQr size={14}/> : <IconCreditCard size={14}/>} {method.replace('_', ' ')}
-                            </button>
-                        ))}
                     </div>
                 </div>
             </div>
 
+            {/* --- การ์ดแพ็กเกจ --- */}
             <div className="relative flex-1 bg-slate-50/80 overflow-hidden flex flex-col">
                <style dangerouslySetInnerHTML={{__html: `div::-webkit-scrollbar { display: none; }`}} />
 
+               {/* ปุ่มเลื่อนซ้ายขวาบนมือถือ */}
                {plansList.length > 1 && (
                  <div className="absolute top-1/2 -translate-y-1/2 left-2 right-2 flex justify-between z-40 pointer-events-none md:hidden">
                      <button onClick={() => scroll('left')} className={`pointer-events-auto w-8 h-8 flex items-center justify-center bg-white/90 backdrop-blur-md shadow-[0_8px_20px_rgb(0,0,0,0.15)] border border-slate-100 rounded-full text-indigo-600 hover:scale-110 active:scale-95 transition-all duration-300 ${activeIndex === 0 ? 'opacity-0 scale-75' : 'opacity-100'}`}>
@@ -120,14 +122,47 @@ export default function UpgradePlanModal({
                     style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                >
                    {plansList.map((planKey, index) => {
-                      const plan = PLANS[planKey];
+                      const uiPlan = PLANS[planKey as keyof typeof PLANS]; 
                       const isCurrent = currentPlanKey === planKey;
                       const isFree = planKey === 'free';
-                      const basePrice = isFree ? 0 : parseInt(plan.price.replace(/,/g, ''));
-                      const fullPricePerYear = basePrice * 12;
-                      const discountedPricePerYear = fullPricePerYear * 0.8;
-                      const monthlyAverage = Math.floor(discountedPricePerYear / 12);
                       
+                      const dbPlan = dbPlans.find(p => p.plan_key === planKey);
+                      
+                      let displayPriceMonthly = dbPlan ? dbPlan.price_monthly / 100 : 0;
+                      let displayPriceYearly = dbPlan ? dbPlan.price_yearly / 100 : 0;
+                      let isPromoPrice = false;
+                      let isMonthlyFreeFirstTime = false;
+                      let isYearlyFreeFirstTime = false;
+
+                      if (dbPlan && isFirstTimeBuyer) {
+                          if (period === 'monthly') {
+                              if (dbPlan.first_time_price_monthly === 0) {
+                                  displayPriceMonthly = 0;
+                                  isMonthlyFreeFirstTime = true;
+                                  isPromoPrice = true;
+                              } else if (dbPlan.first_time_price_monthly !== null && dbPlan.first_time_price_monthly !== undefined) {
+                                  displayPriceMonthly = dbPlan.first_time_price_monthly / 100;
+                                  isPromoPrice = true;
+                              }
+                          } else {
+                              if (dbPlan.first_time_price_yearly === 0) {
+                                  displayPriceYearly = 0;
+                                  isYearlyFreeFirstTime = true;
+                                  isPromoPrice = true;
+                              } else if (dbPlan.first_time_price_yearly !== null && dbPlan.first_time_price_yearly !== undefined) {
+                                  displayPriceYearly = dbPlan.first_time_price_yearly / 100;
+                                  isPromoPrice = true;
+                              }
+                          }
+                      }
+
+                      const monthlyAverage = Math.floor(displayPriceYearly / 12);
+                      const fullPricePerYear = (dbPlan ? dbPlan.price_monthly / 100 : 0) * 12;
+                      
+                      const currentPlanCoins = dbPlan 
+                        ? (period === 'yearly' ? dbPlan.coins_yearly : dbPlan.coins_monthly) 
+                        : 0;
+
                       const isCenter = activeIndex === index;
                       const isLeft = index < activeIndex;
                       const isRight = index > activeIndex;
@@ -140,27 +175,58 @@ export default function UpgradePlanModal({
                                 ${isLeft ? '[transform:rotateY(25deg)_scale(0.85)_translateX(15%)] opacity-60 shadow-sm z-10' : ''}
                                 ${isRight ? '[transform:rotateY(-25deg)_scale(0.85)_translateX(-15%)] opacity-60 shadow-sm z-10' : ''}
                                 md:[transform:none] md:scale-100 md:opacity-100 md:hover:-translate-y-2 md:hover:shadow-xl md:z-auto
-                                ${(plan as any).isPopular ? 'border-2 border-indigo-500 ring-4 ring-indigo-50/50' : 'border border-slate-100'}
+                                ${(uiPlan as any).isPopular ? 'border-2 border-indigo-500 ring-4 ring-indigo-50/50' : 'border border-slate-100'}
                            `}>
-                               {(plan as any).isPopular && <div className="absolute -top-3 md:-top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-[9px] md:text-[10px] font-black px-3 md:px-4 py-1 md:py-1.5 rounded-full uppercase tracking-widest shadow-lg shadow-indigo-500/30 whitespace-nowrap z-40">🌟 ขายดีที่สุด</div>}
+                               {(uiPlan as any).isPopular && <div className="absolute -top-3 md:-top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-[9px] md:text-[10px] font-black px-3 md:px-4 py-1 md:py-1.5 rounded-full uppercase tracking-widest shadow-lg shadow-indigo-500/30 whitespace-nowrap z-40">🌟 ขายดีที่สุด</div>}
                                
                                <div className="text-center mb-3 md:mb-5 pt-1 md:pt-2">
-                                   <h3 className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1 md:mb-2">{plan.name}</h3>
+                                   <h3 className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1 md:mb-2">{dbPlan ? dbPlan.name : uiPlan.name}</h3>
                                    
-                                   {period === 'yearly' && planKey !== 'free' ? (
+                                   {period === 'yearly' && !isFree ? (
                                        <div className="flex flex-col items-center">
-                                            <div className="flex items-baseline gap-1 text-slate-900">
-                                                <span className="text-3xl md:text-4xl font-black tracking-tight">{monthlyAverage.toLocaleString()}</span>
-                                                <span className="text-[10px] md:text-xs font-bold text-slate-400">บ./เดือน</span>
-                                            </div>
+                                            {isYearlyFreeFirstTime ? (
+                                                <span className="text-2xl md:text-3xl font-black text-emerald-600 tracking-tight my-1">ฟรีปีแรก!</span>
+                                            ) : (
+                                                <div className="flex items-baseline gap-1 text-slate-900">
+                                                    <span className="text-3xl md:text-4xl font-black tracking-tight">{monthlyAverage.toLocaleString()}</span>
+                                                    <span className="text-[10px] md:text-xs font-bold text-slate-400">บ./เดือน</span>
+                                                </div>
+                                            )}
+                                            
                                             <div className="mt-1 md:mt-2 text-[9px] md:text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 md:px-3 md:py-1 rounded-full border border-emerald-100/50">
-                                                ประหยัด {(fullPricePerYear - discountedPricePerYear).toLocaleString()} บ./ปี
+                                                {isPromoPrice ? '✨ ยอดชำระปีแรก: ' : 'ประหยัด '} {displayPriceYearly.toLocaleString()} บ.
                                             </div>
                                        </div>
                                    ) : (
-                                       <div className="flex items-baseline justify-center gap-1 text-slate-900 h-[40px] md:h-[60px]">
-                                            <span className="text-3xl md:text-4xl font-black tracking-tight">{plan.price}</span>
-                                            {planKey !== 'free' && <span className="text-[10px] md:text-xs font-bold text-slate-400">บ./เดือน</span>}
+                                       <div className="flex flex-col items-center justify-center h-[40px] md:h-[60px]">
+                                            {isMonthlyFreeFirstTime ? (
+                                                <span className="text-2xl md:text-3xl font-black text-emerald-600 tracking-tight">ฟรีเดือนแรก!</span>
+                                            ) : (
+                                                <div className="flex items-baseline justify-center gap-1 text-slate-900">
+                                                    <span className="text-3xl md:text-4xl font-black tracking-tight">
+                                                        {isFree ? 'ฟรี' : displayPriceMonthly.toLocaleString()}
+                                                    </span>
+                                                    {!isFree && <span className="text-[10px] md:text-xs font-bold text-slate-400">บ./เดือน</span>}
+                                                </div>
+                                            )}
+                                       </div>
+                                   )}
+
+                                   {isPromoPrice && !isFree && (
+                                       <div className="mt-2 text-[9px] md:text-[10px] text-amber-600 font-bold bg-amber-50 border border-amber-100 px-2.5 py-0.5 rounded-md inline-block animate-pulse">
+                                            ⚠️ เฉพาะการสมัครครั้งแรกเท่านั้น
+                                       </div>
+                                   )}
+
+                                   {!isFree && currentPlanCoins > 0 && (
+                                       <div className="flex items-center justify-center mt-3 animate-in zoom-in duration-500">
+                                            <span className="text-[9px] md:text-[11px] font-black bg-gradient-to-r from-amber-100 to-amber-50 text-amber-700 px-3 py-1 rounded-full border border-amber-200/60 shadow-sm flex items-center gap-1.5 ring-1 ring-amber-100/50">
+                                                🎁 รับโบนัสฟรี 
+                                                <span className="text-amber-600 underline decoration-amber-300 decoration-2 underline-offset-2">
+                                                    {currentPlanCoins.toLocaleString()}
+                                                </span>
+                                                <img src="/cion.png" alt="Coin" className="w-3.5 h-3.5 md:w-4 md:h-4 object-contain" />
+                                            </span>
                                        </div>
                                    )}
                                </div>
@@ -168,7 +234,7 @@ export default function UpgradePlanModal({
                                <div className="w-full h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent mb-3 md:mb-5" />
 
                                <div className="flex-1 space-y-1.5 md:space-y-3 mb-4 md:mb-8">
-                                   {plan.features.map((feat, i) => (
+                                   {uiPlan.features.map((feat, i) => (
                                        <div key={i} className="flex items-start gap-2 md:gap-3 group">
                                             <div className="mt-0.5 w-4 h-4 md:w-5 md:h-5 rounded-full bg-slate-50 text-indigo-500 flex items-center justify-center shrink-0 border border-slate-100 group-hover:bg-indigo-50 group-hover:border-indigo-100 transition-colors">
                                                 <IconCheck size={10} strokeWidth={4} className="md:w-3 md:h-3" />
@@ -180,11 +246,12 @@ export default function UpgradePlanModal({
 
                                <button 
                                  disabled={(isCurrent && isFree) || submitting} 
-                                 onClick={() => { onClose(); handleUpgradePlan(planKey, paymentMethod); }} 
+                                 // 🚨 แก้ตรงนี้! ส่งแค่ planKey อย่างเดียว
+                                 onClick={() => { onClose(); handleUpgradePlan(planKey); }} 
                                  className={`w-full py-2.5 md:py-4 rounded-xl md:rounded-2xl font-black text-xs md:text-sm transition-all duration-300 shadow-sm relative overflow-hidden
                                     ${(isCurrent && isFree) 
                                         ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                                        : plan.btnColor + ' text-white hover:shadow-lg hover:shadow-indigo-500/25 active:scale-95 hover:-translate-y-0.5'
+                                        : uiPlan.btnColor + ' text-white hover:shadow-lg hover:shadow-indigo-500/25 active:scale-95 hover:-translate-y-0.5'
                                     }
                                  `}
                                >
@@ -199,6 +266,7 @@ export default function UpgradePlanModal({
                    })}
                </div>
 
+               {/* ไข่ปลาเลื่อนซ้ายขวา */}
                {plansList.length > 1 && (
                  <div className="flex justify-center gap-2 mt-auto pb-4 md:pb-6 md:hidden shrink-0 pt-2">
                      {plansList.map((_, i) => (

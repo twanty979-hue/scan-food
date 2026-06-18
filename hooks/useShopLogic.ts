@@ -39,6 +39,7 @@ export const useShopLogic = (params: any) => {
   // --- Computed ---
   const realTableId = useMemo(() => combinedId?.substring(0, 36), [combinedId]);
   const providedCode = useMemo(() => combinedId?.substring(36), [combinedId]);
+  const requiresTableToken = useMemo(() => !!brand && (brand.table_qr_mode || brand.config?.qr_mode) !== 'static', [brand]);
 
   const kickOut = useCallback((reason: string) => {
     console.warn(`🚫 Kickout triggered: ${reason}`);
@@ -187,16 +188,18 @@ export const useShopLogic = (params: any) => {
 
   // --- Realtime 1: Table Security Watcher ---
   useEffect(() => {
-    if (!realTableId) return;
+    if (!realTableId || !requiresTableToken) return;
     const channel = supabase.channel(`table_guard_${realTableId}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tables', filter: `id=eq.${realTableId}` }, (payload) => {
-        if (payload.new.access_token !== providedCode) {
+        const tokens = Array.isArray(payload.new.access_tokens) ? payload.new.access_tokens.map(String) : [];
+        const tokenStillValid = tokens.length > 0 ? tokens.includes(String(providedCode)) : payload.new.access_token === providedCode;
+        if (!tokenStillValid) {
             window.location.href = "https://google.com";
         }
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [realTableId, providedCode]);
+  }, [realTableId, providedCode, requiresTableToken]);
 
   // --- Realtime 2: Order Status Watcher ---
   useEffect(() => {
@@ -291,7 +294,10 @@ export const useShopLogic = (params: any) => {
       });
 
       if (!result.success) {
-          throw new Error(result.error);
+          const message = (result as any).code === 'ORDER_LIMIT_REACHED'
+              ? (result.error || 'ร้านนี้ถึงขีดจำกัดแพ็กเกจแล้ว กรุณาแจ้งร้านให้อัปเกรด/สมัครสมาชิกเพื่อรับออเดอร์ต่อครับ')
+              : (result.error || 'Order failed');
+          throw new Error(message);
       }
 
       setCart([]);
@@ -339,7 +345,12 @@ export const useShopLogic = (params: any) => {
       // ====================================================
 
     } catch (err: any) { 
-        alert(`Failed to order: ${err.message}`); 
+        const message = err?.message || 'Order failed';
+        if (message.includes('ขีดจำกัด') || message.includes('แพ็กเกจ') || message.includes('สมัครสมาชิก') || message.includes('อัปเกรด')) {
+            alert(message);
+        } else {
+            alert(`Failed to order: ${message}`);
+        } 
     } finally { 
         setLoading(false); 
     }

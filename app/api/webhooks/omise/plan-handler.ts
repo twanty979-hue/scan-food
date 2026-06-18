@@ -49,33 +49,32 @@ function calculateEffectivePlan(brand: any) {
 export async function handleUpgradePlan(supabaseAdmin: any, omise: any, charge: any, metadata: any) {
     const { brand_id } = metadata; // brand_id ยังอิงจาก metadata ได้
     
-    // 🛡️ SECURITY CHECK: ดึงข้อมูลจริงจาก Payment Logs เท่านั้น!
-    // เราจะไม่เชื่อ new_plan หรือ period ที่ส่งมาใน metadata เพราะอาจจะเพี้ยนได้
-    const { data: trustedLog, error: logError } = await supabaseAdmin
-        .from('payment_logs')
-        .select('plan_detail, period')
-        .eq('charge_id', charge.id)
-        .single();
+    // 🛡️ ด่านที่ 1: เช็คจาก Omise Metadata (ถ้า Webhook หรือระบบอื่นทำจบไปแล้ว)
+    if (charge.metadata && charge.metadata.is_processed === 'true') {
+        console.log("✅ [PlanHandler] Already processed (Metadata check)");
+        return; 
+    }
 
-    if (logError || !trustedLog) {
-        console.error(`❌ [PlanHandler] Critical: Payment Log not found for ${charge.id}`);
+    // 🛡️ ด่านที่ 2: Atomic Lock เพื่อป้องกัน Race Condition (ต้องดึงจากสถานะ pending เท่านั้น)
+    // สำหรับ Credit Card, เราเพิ่มเข้าไปตรงๆ เป็น successful หรือรันจบแล้ว ถ้ารันจบแล้วจะไม่มี pending
+    // แต่เพื่อรองรับทั้งสองแบบ เราจะ Update จาก pending ไปเป็น processing
+    const { data: lockAttempt, error: lockError } = await supabaseAdmin
+        .from('payment_logs')
+        .update({ status: 'processing' })
+        .eq('charge_id', charge.id)
+        .eq('status', 'pending') // ล็อกเฉพาะ pending เท่านั้น เพื่อไม่ให้ทับซ้อนกับ Credit Card ที่เป็น successful ไปแล้ว
+        .select();
+
+    if (lockError || !lockAttempt || lockAttempt.length === 0) {
+        console.log(`🚫 [PlanHandler] Blocked! Already handling or completed for ${charge.id}`);
         return;
     }
 
-    // ✅ ใช้ค่าที่ตรวจสอบแล้วจาก Log เป็นหลัก
-    const new_plan = trustedLog.plan_detail; // เช่น 'basic', 'pro'
-    const period = trustedLog.period;        // เช่น 'monthly', 'yearly'
+    const trustedLog = lockAttempt[0];
+    const new_plan = trustedLog.plan_detail; 
+    const period = trustedLog.period;        
 
     console.log(`✅ [PlanHandler] Verified from Log: Plan=${new_plan}, Period=${period}`);
-
-    // อัปเดตสถานะใน Log เป็นสถานะปัจจุบันจาก Omise
-    await supabaseAdmin.from('payment_logs').update({
-        status: charge.status,
-        payment_method: charge.source?.type || 'credit_card',
-        type: 'upgrade_plan',
-        plan_detail: new_plan,
-        period: period,
-    }).eq('charge_id', charge.id);
 
     // 🚀 เริ่มกระบวนการอัปเดต (เมื่อจ่ายสำเร็จ)
     if (charge.status === 'successful') {
@@ -112,14 +111,38 @@ export async function handleUpgradePlan(supabaseAdmin: any, omise: any, charge: 
         // 2. คำนวณและอัปเดตยศปัจจุบัน (Effective Plan)
         const { data: updatedBrand } = await supabaseAdmin.from('brands').select('*').eq('id', brand_id).single();
         const effectivePlan = calculateEffectivePlan(updatedBrand);
-        await supabaseAdmin.from('brands').update({ plan: effectivePlan }).eq('id', brand_id);
+        
+        // 🎁 โบนัสเหรียญ (แถมฟรีเมื่ออัปเกรด)
+        let bonusCoins = 0;
+        if (new_plan === 'basic') bonusCoins = 100;
+        else if (new_plan === 'pro') bonusCoins = 150;
+        else if (new_plan === 'ultimate') bonusCoins = 200;
+
+        if (period === 'yearly') {
+            bonusCoins = Math.floor(bonusCoins * 12 * 1.2);
+        }
+
+        await supabaseAdmin.from('brands').update({ 
+            plan: effectivePlan,
+            coins: (updatedBrand.coins || 0) + bonusCoins
+        }).eq('id', brand_id);
+
+        if (bonusCoins > 0) {
+            await supabaseAdmin.from('coin_logs').insert({
+                brand_id: brand_id,
+                amount: bonusCoins,
+                action: 'plan_bonus',
+                details: `Bonus for upgrading to ${new_plan.toUpperCase()}`
+            });
+        }
 
         // --- ✅ บันทึกความสำเร็จลง Log และปลดล็อก ---
         await supabaseAdmin.from('payment_logs').update({
-            status: 'successful'
+            status: 'successful',
+            payment_method: charge.source?.type || 'credit_card'
         }).eq('charge_id', charge.id);
 
-        console.log(`✅ [Plan] Success: Upgraded ${brand_id} to ${new_plan} (${period})`);
+        console.log(`✅ [Plan] Success: Upgraded ${brand_id} to ${new_plan} (${period}) with ${bonusCoins} coins bonus`);
         
         // บอก Omise ว่าจบงาน
         await markAsProcessed(omise, charge.id, metadata);

@@ -96,7 +96,11 @@ export default function ThemeCard({
         <h3 className="text-[9px] md:text-sm font-black text-slate-800 leading-tight uppercase truncate">{mkt.name}</h3>
         
         <div className="mt-1 md:mt-2 mb-1.5 md:mb-4 h-4 md:h-6 flex items-center justify-center">
-            {daysLeft === 'Lifetime' ? (
+            {theme.purchase_type === 'free' ? (
+                <span className="inline-flex items-center gap-0.5 md:gap-1.5 text-[7px] md:text-[11px] font-black text-sky-600 bg-sky-50 px-1.5 py-0.5 md:px-3 md:py-1 rounded-full border border-sky-100 shadow-sm whitespace-nowrap">
+                    <IconCheck size={8} className="md:w-3.5 md:h-3.5 stroke-sky-600" /> Free
+                </span>
+            ) : daysLeft === 'Lifetime' ? (
                 <span className="inline-flex items-center gap-0.5 md:gap-1.5 text-[7px] md:text-[11px] font-black text-amber-600 bg-amber-50 px-1.5 py-0.5 md:px-3 md:py-1 rounded-full border border-amber-100 shadow-sm whitespace-nowrap">
                     <IconCrown size={8} className="md:w-3.5 md:h-3.5 stroke-amber-600" /> Lifetime
                 </span>

@@ -17,7 +17,7 @@ const IconCheck = ({ size = 16 }: any) => <svg width={size} height={size} viewBo
 
 export default function TablesPage() {
     const { 
-        filteredTables, loading, brandId, qrLogoUrl, brandSlug, 
+        filteredTables, loading, brandId, qrLogoUrl, brandSlug, qrMode,
         searchTerm, setSearchTerm, addTable, deleteTable, refreshToken 
     } = useTables();
 
@@ -231,6 +231,7 @@ export default function TablesPage() {
                         brandId={brandId}
                         brandSlug={brandSlug} 
                         qrLogoUrl={qrLogoUrl}
+                        qrMode={qrMode}
                         onClose={() => setSelectedTable(null)} 
                     />
                 )}

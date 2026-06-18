@@ -4,9 +4,27 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import dayjs from 'dayjs';
-import { syncThemesWithPlan } from './themeActions';
 import { checkOrderLimitOrThrow } from './limitGuard';
 import { autoDeductStockAction } from './stockActions';
+
+const PURCHASED_THEME_TYPES = ['free', 'weekly', 'monthly', 'yearly', 'lifetime'];
+
+const makeTableToken = () => Math.random().toString(36).substring(2, 8).toUpperCase();
+
+const uniqueTokens = (tokens: any[]) => Array.from(new Set((tokens || []).filter(Boolean).map(String)));
+
+const getTableTokensForPayment = (table: any) => {
+    const tokens = Array.isArray(table?.access_tokens) ? table.access_tokens.filter(Boolean).map(String) : [];
+    if (tokens.length > 0) return uniqueTokens(tokens);
+    return table?.access_token ? [String(table.access_token)] : [];
+};
+
+const refreshTokenPool = (currentTokens: any[], usedTokens: any[]) => {
+    const used = new Set(uniqueTokens(usedTokens));
+    const remaining = uniqueTokens(currentTokens).filter(token => !used.has(token));
+    if (remaining.length > 0) return remaining;
+    return [makeTableToken()];
+};
 
 // --- Helpers ---
 async function getSupabase() {
@@ -47,24 +65,35 @@ export async function getPaymentInitialDataAction() {
     const { brandId, user, profile, brand } = await getMyBrandId(supabase);
 
     // Check Plan & Theme
-    const { plan: effectivePlan, expiry: activeExpiry } = calculateEffectivePlan(brand);
+    const { plan: effectivePlan } = calculateEffectivePlan(brand);
     if (brand.plan !== effectivePlan) {
         await supabase.from('brands').update({ plan: effectivePlan }).eq('id', brandId);
         brand.plan = effectivePlan;
     }
-    await syncThemesWithPlan(supabase, brandId, effectivePlan, activeExpiry);
 
     if (brand.theme_mode && brand.theme_mode !== 'standard') {
         const { data: activeTheme } = await supabase.from('themes')
-            .select('id, expires_at, marketplace_themes!inner(theme_mode)')
+            .select('id, expires_at, purchase_type, marketplace_themes!inner(theme_mode)')
             .eq('brand_id', brandId)
             .eq('marketplace_themes.theme_mode', brand.theme_mode)
+            .in('purchase_type', PURCHASED_THEME_TYPES)
             .single();
 
         let isValid = false;
         if (activeTheme) {
-             const isExpired = activeTheme.expires_at && dayjs(activeTheme.expires_at).isBefore(dayjs());
-             if (!isExpired) isValid = true; 
+             const isPermanent = activeTheme.purchase_type === 'free' || activeTheme.purchase_type === 'lifetime';
+             const isUsable = isPermanent || Boolean(activeTheme.expires_at && dayjs(activeTheme.expires_at).isAfter(dayjs()));
+             if (isUsable) isValid = true; 
+        } else {
+             const { data: freeTheme } = await supabase
+                .from('marketplace_themes')
+                .select('id')
+                .eq('theme_mode', brand.theme_mode)
+                .eq('is_active', true)
+                .eq('min_plan', 'free')
+                .maybeSingle();
+
+             if (freeTheme) isValid = true;
         }
         if (!isValid) {
             await supabase.from('brands').update({ theme_mode: 'standard' }).eq('id', brandId);
@@ -137,6 +166,7 @@ export async function getUnpaidOrdersAction(brandId: string) {
                 total_price: 0, 
                 order_items: [], 
                 original_ids: [],
+                table_access_tokens: [],
                 status: order.status 
             };
         }
@@ -152,6 +182,7 @@ export async function getUnpaidOrdersAction(brandId: string) {
         }
 
         grouped[table].original_ids.push(order.id);
+        if (order.table_access_token) grouped[table].table_access_tokens.push(order.table_access_token);
     });
 
     return Object.values(grouped).filter((g: any) => g.order_items.length > 0);
@@ -212,7 +243,7 @@ export async function processPaymentAction(payload: any) {
 
             const { error: orderUpdateErr } = await supabase.from('orders')
                 .update({ status: 'paid', updated_at: saleTime })
-                .eq('id', finalOrderId);
+                .in('id', selectedOrder.original_ids?.length ? selectedOrder.original_ids : [finalOrderId]);
             if(orderUpdateErr) throw orderUpdateErr;
 
         } else {
@@ -262,8 +293,21 @@ export async function processPaymentAction(payload: any) {
 
         // 🔄 คืนโต๊ะ
         if (type === 'tables') {
-            const validToken = payload.newAccessToken || Math.random().toString(36).substring(2, 6).toUpperCase();
-            await supabase.from('tables').update({ access_token: validToken }).eq('brand_id', brandId).eq('label', selectedOrder.table_label);
+            const { data: tableData } = await supabase
+                .from('tables')
+                .select('access_token, access_tokens')
+                .eq('brand_id', brandId)
+                .eq('label', selectedOrder.table_label)
+                .single();
+
+            const tokensToRemove = uniqueTokens(selectedOrder.table_access_tokens || []);
+            const currentTokens = getTableTokensForPayment(tableData);
+            const nextTokens = refreshTokenPool(currentTokens, tokensToRemove.length > 0 ? tokensToRemove : [tableData?.access_token]);
+            await supabase
+                .from('tables')
+                .update({ access_token: nextTokens[0], access_tokens: nextTokens })
+                .eq('brand_id', brandId)
+                .eq('label', selectedOrder.table_label);
         }
 
         // 🔄 ตัดสต็อก (ซิงค์หลังบ้าน ไม่พัง)

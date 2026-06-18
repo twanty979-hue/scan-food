@@ -189,6 +189,52 @@ export default function ShopSettingsForm({ formData, setFormData, isOwner, qrInp
             </div>
         </div>
 
+        <div className="bg-white rounded-[24px] p-8 shadow-sm border border-slate-100">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
+                <div>
+                    <h3 className="text-lg font-bold text-slate-900 flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center">
+                            <IconQr size={20} />
+                        </div>
+                        โหมด QR โต๊ะ
+                    </h3>
+                    <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+                        เลือกวิธีใช้งาน QR สำหรับลูกค้าสแกนสั่งอาหารที่โต๊ะ
+                    </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full md:w-auto">
+                    <button
+                        type="button"
+                        disabled={!isOwner}
+                        onClick={() => isOwner && setFormData({ ...formData, qr_mode: 'static' })}
+                        className={`min-w-[170px] rounded-2xl border-2 p-4 text-left transition-all disabled:opacity-60 disabled:cursor-not-allowed ${
+                            formData.qr_mode === 'static'
+                                ? 'border-orange-500 bg-orange-50 text-orange-700 shadow-sm'
+                                : 'border-slate-200 bg-white text-slate-600 hover:border-orange-200'
+                        }`}
+                    >
+                        <span className="block text-sm font-black">QR ติดโต๊ะ</span>
+                        <span className="block text-xs mt-1 leading-relaxed">ลิงก์เดิม ใช้ได้ตลอด ไม่เช็ก passcode</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        disabled={!isOwner}
+                        onClick={() => isOwner && setFormData({ ...formData, qr_mode: 'rotating' })}
+                        className={`min-w-[170px] rounded-2xl border-2 p-4 text-left transition-all disabled:opacity-60 disabled:cursor-not-allowed ${
+                            formData.qr_mode !== 'static'
+                                ? 'border-slate-900 bg-slate-900 text-white shadow-sm'
+                                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                        }`}
+                    >
+                        <span className="block text-sm font-black">QR เปลี่ยนทุกรอบ</span>
+                        <span className="block text-xs mt-1 leading-relaxed opacity-80">ต้องตรง passcode รีเซ็ตแล้วลิงก์เก่าหลุด</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
         {/* --- Password Verification Modal --- */}
         {showPasswordModal && (
             <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">

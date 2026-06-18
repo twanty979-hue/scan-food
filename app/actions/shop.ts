@@ -2,9 +2,11 @@
 'use server'
 
 import { createClient } from '@supabase/supabase-js';
+import { checkOrderLimitOrThrow } from './limitGuard';
 
 // 🌟 ตัวแปรดึง URL ของ Cloudflare จาก .env
 const CDN_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://img.pos-foodscan.com";
+const PURCHASED_THEME_TYPES = ['free', 'weekly', 'monthly', 'yearly', 'lifetime'];
 
 // ✅ 1. Banner มาตรฐาน (จะถูกบังคับใช้เมื่อหมดโปร)
 // (⚠️ ตอนนี้ Banner พื้นฐานก็ควรเปลี่ยนเป็นชื่อไฟล์ที่อยู่ใน R2 ด้วยนะ หรือเป็น URL ตรงๆ เลย)
@@ -31,6 +33,15 @@ type ShopParams = {
   slug: string;
 };
 
+const getQrMode = (brand: any) => brand?.table_qr_mode || brand?.config?.qr_mode || 'rotating';
+const shouldRequireTableToken = (brand: any) => getQrMode(brand) !== 'static';
+const getTableTokens = (table: any) => Array.isArray(table?.access_tokens) ? table.access_tokens.filter(Boolean).map(String) : [];
+const isValidTableToken = (table: any, token: string) => {
+  const tokens = getTableTokens(table);
+  if (tokens.length > 0) return tokens.includes(token);
+  return table?.access_token === token;
+};
+
 // Helper Function: แปลงชื่อรูปเป็น Cloudflare URL เต็มๆ
 const getImageUrl = (imageName: string | null) => {
     if (!imageName) return null;
@@ -49,11 +60,12 @@ export async function fetchShopData(params: ShopParams) {
     // 1. ตรวจสอบ Table & Code
     const { data: tableData, error: tableError } = await supabaseServer
       .from('tables')
-      .select('label, access_token')
+      .select('label, access_token, access_tokens, brand_id')
       .eq('id', realTableId)
+      .eq('brand_id', brandId)
       .single();
 
-    if (tableError || !tableData || tableData.access_token !== providedCode) {
+    if (tableError || !tableData) {
       return { success: false, error: 'Invalid Table or Access Code' };
     }
 
@@ -66,6 +78,10 @@ export async function fetchShopData(params: ShopParams) {
 
     if (brandError || !brandData) {
       return { success: false, error: 'Brand Not Found' };
+    }
+
+    if (shouldRequireTableToken(brandData) && !isValidTableToken(tableData, providedCode)) {
+      return { success: false, error: 'Invalid Table or Access Code' };
     }
 
     // Check Slug mismatch
@@ -89,12 +105,26 @@ export async function fetchShopData(params: ShopParams) {
             .select('expires_at, purchase_type, marketplace_themes!inner(theme_mode)')
             .eq('brand_id', brandId)
             .eq('marketplace_themes.theme_mode', brandData.theme_mode) 
+            .in('purchase_type', PURCHASED_THEME_TYPES)
             .single();
 
         const isLifetime = themeUsage?.purchase_type === 'lifetime';
         const isExpired = themeUsage?.expires_at && new Date(themeUsage.expires_at) < new Date();
+        let hasFreeThemeAccess = false;
 
-        if (!themeUsage || (!isLifetime && isExpired)) {
+        if (!themeUsage) {
+            const { data: freeTheme } = await supabaseServer
+                .from('marketplace_themes')
+                .select('id')
+                .eq('theme_mode', brandData.theme_mode)
+                .eq('is_active', true)
+                .eq('min_plan', 'free')
+                .maybeSingle();
+
+            hasFreeThemeAccess = !!freeTheme;
+        }
+
+        if ((!themeUsage && !hasFreeThemeAccess) || (!isLifetime && isExpired)) {
             console.log(`⚠️ Theme "${brandData.theme_mode}" Expired for Brand ${brandId}. Reverting to Standard.`);
             
             brandData.theme_mode = 'standard'; 
@@ -113,7 +143,7 @@ export async function fetchShopData(params: ShopParams) {
       supabaseServer.from('categories').select('*').eq('brand_id', brandId).eq('is_active', true).order('sort_order'),
       supabaseServer.from('products').select('*').eq('brand_id', brandId).eq('is_available', true).order('is_recommended', { ascending: false }),
       supabaseServer.from('discounts').select(`*, discount_products(product_id)`).eq('brand_id', brandId).eq('is_active', true),
-      supabaseServer.from('orders').select(`*, order_items(*)`).eq('table_id', realTableId).neq('status', 'paid').order('created_at', { ascending: false })
+      supabaseServer.from('orders').select(`*, order_items(*)`).eq('brand_id', brandId).eq('table_id', realTableId).neq('status', 'paid').order('created_at', { ascending: false })
     ]);
 
     // ---------------------------------------------------------
@@ -172,12 +202,24 @@ export async function submitOrder(payload: {
   try {
     const { data: checkTable } = await supabaseServer
       .from('tables')
-      .select('access_token')
+      .select('access_token, access_tokens, brand_id, brands!inner(config, table_qr_mode)')
       .eq('id', realTableId)
+      .eq('brand_id', brandId)
       .single();
 
-    if (!checkTable || checkTable.access_token !== providedCode) {
+    const requiresToken = shouldRequireTableToken((checkTable as any)?.brands);
+    if (!checkTable || (requiresToken && !isValidTableToken(checkTable, providedCode))) {
       return { success: false, error: 'Security Check Failed: Invalid Table Access' };
+    }
+
+    try {
+      await checkOrderLimitOrThrow(brandId);
+    } catch (limitErr: any) {
+      return {
+        success: false,
+        code: 'ORDER_LIMIT_REACHED',
+        error: limitErr?.message || 'ร้านนี้ถึงขีดจำกัดแพ็กเกจ กรุณาให้ร้านสมัครสมาชิกเพื่อใช้งานต่อ'
+      };
     }
 
     const { data: order, error: orderErr } = await supabaseServer
@@ -187,7 +229,8 @@ export async function submitOrder(payload: {
         table_id: realTableId,
         table_label: tableLabel,
         total_price: totalPrice,
-        status: 'pending'
+        status: 'pending',
+        table_access_token: requiresToken ? providedCode : null
       }])
       .select()
       .single();
@@ -221,6 +264,7 @@ export async function submitOrder(payload: {
     const { data: updatedOrders } = await supabaseServer
       .from('orders')
       .select(`*, order_items(*)`)
+      .eq('brand_id', brandId)
       .eq('table_id', realTableId)
       .neq('status', 'paid')
       .order('created_at', { ascending: false });

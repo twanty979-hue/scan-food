@@ -5,7 +5,8 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import Omise from 'omise';
 import dayjs from 'dayjs';
-import { canAccessTheme } from '@/lib/planConfig'; // ตรวจสอบ path นี้ว่าถูกต้องนะครับ
+
+const PURCHASED_THEME_TYPES = ['free', 'weekly', 'monthly', 'yearly', 'lifetime'];
 
 const omise = Omise({
     publicKey: process.env.NEXT_PUBLIC_OMISE_PUBLIC_KEY!,
@@ -56,6 +57,7 @@ export async function getThemeDetailAction(themeId: string) {
 
         const brandData = profile.brands as any;
         const currentPlan = calculateEffectivePlan(brandData);
+        const coins = brandData.coins || 0; // รับจำนวน coins
 
         const { data: themeData } = await supabase
             .from('marketplace_themes')
@@ -64,9 +66,15 @@ export async function getThemeDetailAction(themeId: string) {
             .single();
 
         if (!themeData) throw new Error('Theme not found');
-        const { data: owned } = await supabase.from('themes').select('*').eq('brand_id', profile.brand_id).eq('marketplace_theme_id', themeId).single();
+        const { data: owned } = await supabase
+            .from('themes')
+            .select('*')
+            .eq('brand_id', profile.brand_id)
+            .eq('marketplace_theme_id', themeId)
+            .in('purchase_type', PURCHASED_THEME_TYPES)
+            .single();
 
-        return { success: true, theme: themeData, isOwned: !!owned, ownedData: owned, isOwner: profile.role === 'owner', currentPlan };
+        return { success: true, theme: themeData, isOwned: !!owned, ownedData: owned, isOwner: profile.role === 'owner', currentPlan, coins };
     } catch (error: any) {
         return { success: false, error: error.message };
     }
@@ -85,14 +93,10 @@ export async function installThemeAction(marketplaceThemeId: string, chargeId: s
         const brandId = profile.brand_id;
 
         const { data: themeData } = await supabase.from('marketplace_themes').select('*').eq('id', marketplaceThemeId).single();
-        const { data: brand } = await supabase.from('brands').select('*').eq('id', brandId).single();
-        if (!themeData || !brand) throw new Error("Data not found");
-
-        const currentBrandPlan = calculateEffectivePlan(brand);
-        const hasRightAccess = canAccessTheme(currentBrandPlan, themeData.min_plan);
+        if (!themeData) throw new Error("Data not found");
 
         let finalPurchaseType = '';
-        let finalExpiresAt = '';
+        let finalExpiresAt: string | null = '';
 
         // 🔥 กรณีที่ 1: "จ่ายเงินซื้อเพิ่ม" (มี chargeId)
         if (chargeId) {
@@ -130,7 +134,10 @@ export async function installThemeAction(marketplaceThemeId: string, chargeId: s
             const now = dayjs();
             let baseDate = now;
             const { data: existingTheme } = await supabase.from('themes').select('expires_at')
-                .eq('brand_id', brandId).eq('marketplace_theme_id', marketplaceThemeId).single();
+                .eq('brand_id', brandId)
+                .eq('marketplace_theme_id', marketplaceThemeId)
+                .in('purchase_type', PURCHASED_THEME_TYPES)
+                .single();
             
             if (existingTheme?.expires_at && dayjs(existingTheme.expires_at).isAfter(now)) {
                 baseDate = dayjs(existingTheme.expires_at);
@@ -152,19 +159,15 @@ export async function installThemeAction(marketplaceThemeId: string, chargeId: s
             markOmiseAsProcessed(chargeId, charge.metadata);
         } 
         
-        // ... (Logic ของฟรี/สมาชิก เหมือนเดิม) ...
-        else if (hasRightAccess) {
-            finalPurchaseType = 'subscription';
-            if (currentBrandPlan === 'ultimate') finalExpiresAt = brand.expiry_ultimate;
-            else if (currentBrandPlan === 'pro') finalExpiresAt = brand.expiry_pro;
-            else if (currentBrandPlan === 'basic') finalExpiresAt = brand.expiry_basic;
-            else finalExpiresAt = dayjs().add(30, 'day').toISOString();
-        } 
+        else if (Number(themeData[`price_${plan}`] ?? 0) === 0) {
+            finalPurchaseType = 'free';
+            finalExpiresAt = null;
+        }
         else {
             throw new Error("Payment required");
         }
 
-        if (!finalExpiresAt) throw new Error("Failed to calculate expiration date");
+        if (finalPurchaseType !== 'free' && !finalExpiresAt) throw new Error("Failed to calculate expiration date");
 
         // 5. บันทึก (สังเกต purchase_type จะใช้ finalPlan ที่ดึงจาก Log แล้ว)
         const { error } = await supabase.from('themes').upsert({
@@ -180,6 +183,101 @@ export async function installThemeAction(marketplaceThemeId: string, chargeId: s
 
     } catch (error: any) {
         console.error("Install Error:", error.message);
+        return { success: false, error: error.message };
+    }
+}
+
+export async function buyThemeWithCoinsAction(marketplaceThemeId: string, plan: 'weekly' | 'monthly' | 'yearly') {
+    const supabase = await getSupabase();
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("Unauthorized");
+        
+        const { data: profile } = await supabase.from('profiles').select('role, brand_id').eq('id', user.id).single();
+        if (!profile?.brand_id || profile.role !== 'owner') throw new Error("Permission denied");
+        const brandId = profile.brand_id;
+
+        const { data: themeData } = await supabase.from('marketplace_themes').select('*').eq('id', marketplaceThemeId).single();
+        const { data: brand } = await supabase.from('brands').select('*').eq('id', brandId).single();
+        if (!themeData || !brand) throw new Error("Data not found");
+
+        let requiredCoins = 0;
+        let daysToAdd = 0;
+        switch (plan) {
+            case 'weekly':
+                requiredCoins = themeData.price_weekly || 0;
+                daysToAdd = 7;
+                break;
+            case 'monthly':
+                requiredCoins = themeData.price_monthly || 0;
+                daysToAdd = 30;
+                break;
+            case 'yearly':
+                requiredCoins = themeData.price_yearly || 0;
+                daysToAdd = 365;
+                break;
+            default:
+                throw new Error("Invalid plan selected");
+        }
+
+        const currentCoins = brand.coins || 0;
+        if (currentCoins < requiredCoins) {
+            return { success: false, error: "เหรียญไม่เพียงพอ" };
+        }
+
+        // หักเหรียญ
+        const { error: updateBrandError } = await supabase
+            .from('brands')
+            .update({ coins: currentCoins - requiredCoins })
+            .eq('id', brandId);
+
+        if (updateBrandError) throw new Error("Failed to deduct coins");
+
+        // เพิ่มหรืออัปเดตวันหมดอายุธีม
+        const now = dayjs();
+        let baseDate = now;
+        const { data: existingTheme } = await supabase.from('themes').select('expires_at')
+            .eq('brand_id', brandId)
+            .eq('marketplace_theme_id', marketplaceThemeId)
+            .in('purchase_type', PURCHASED_THEME_TYPES)
+            .single();
+        
+        if (existingTheme?.expires_at && dayjs(existingTheme.expires_at).isAfter(now)) {
+            baseDate = dayjs(existingTheme.expires_at);
+        }
+
+        const finalExpiresAt = baseDate.add(daysToAdd, 'day').toISOString();
+
+        const { error: upsertThemeError } = await supabase.from('themes').upsert({
+            brand_id: brandId,
+            marketplace_theme_id: marketplaceThemeId,
+            purchase_type: plan, 
+            expires_at: finalExpiresAt,
+            updated_at: new Date().toISOString()
+        }, { onConflict: 'brand_id, marketplace_theme_id' });
+
+        if (upsertThemeError) {
+             // Rollback coins if theme grant fails
+             await supabase.from('brands').update({ coins: currentCoins }).eq('id', brandId);
+             throw new Error("Failed to grant theme");
+        }
+
+        // เก็บ Log การใช้เหรียญ
+        await supabase.from('coin_logs').insert({
+            brand_id: brandId,
+            amount: -requiredCoins,
+            action: 'buy_theme',
+            details: `Purchased theme: ${themeData.name} (${plan})`
+        });
+
+        return { 
+            success: true, 
+            newCoinBalance: currentCoins - requiredCoins,
+            expiresAt: finalExpiresAt
+        };
+
+    } catch (error: any) {
+        console.error("Coin Purchase Error:", error.message);
         return { success: false, error: error.message };
     }
 }

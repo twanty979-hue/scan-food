@@ -4,6 +4,15 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { checkOrderLimitOrThrow } from './limitGuard';
+
+const makeTableToken = () => Math.random().toString(36).substring(2, 8).toUpperCase();
+
+const makeTokenBatch = (count: number) => {
+    const safeCount = Math.max(1, Math.min(50, Math.floor(Number(count) || 1)));
+    const tokens = new Set<string>();
+    while (tokens.size < safeCount) tokens.add(makeTableToken());
+    return Array.from(tokens);
+};
 // Helper: สร้าง Client (ใช้ Key ฝั่ง Server)
 async function getSupabase() {
     const cookieStore = await cookies();
@@ -33,7 +42,7 @@ export async function getBrandConfigAction() {
 
         const { data: brand } = await supabase
             .from('brands')
-            .select('id, qr_image_url, slug')
+            .select('id, qr_image_url, slug, config, table_qr_mode')
             .eq('id', brandId)
             .single();
 
@@ -48,7 +57,8 @@ export async function getBrandConfigAction() {
             success: true, 
             brandId: brandId, 
             qrLogoUrl: finalLogoUrl, 
-            brandSlug: brand?.slug || 'shop' 
+            brandSlug: brand?.slug || 'shop',
+            qrMode: brand?.table_qr_mode || brand?.config?.qr_mode || 'rotating'
         };
     } catch (err: any) { 
         return { success: false, error: err.message }; 
@@ -80,11 +90,13 @@ export async function addTableAction(label: string) {
     try {
         const brandId = await getMyBrandId(supabase); // ✅ หาเองจาก Session ปลอดภัยกว่า
 
+        const token = makeTableToken();
         const { data, error } = await supabase.from('tables').insert({
             label, 
             brand_id: brandId, 
             status: 'available',
-            access_token: Math.floor(1000 + Math.random() * 9000).toString()
+            access_token: token,
+            access_tokens: [token]
         }).select().single();
 
         if (error) throw error;
@@ -118,11 +130,11 @@ export async function refreshTokenAction(id: string) {
     const supabase = await getSupabase();
     try {
         const brandId = await getMyBrandId(supabase);
-        const newToken = Math.floor(1000 + Math.random() * 9000).toString();
+        const newToken = makeTableToken();
 
         const { error } = await supabase
             .from('tables')
-            .update({ access_token: newToken, status: 'available' })
+            .update({ access_token: newToken, access_tokens: [newToken], status: 'available' })
             .eq('id', id)
             .eq('brand_id', brandId); // ✅ ต้องตรงกับร้านเราเท่านั้น
 
@@ -146,6 +158,30 @@ export async function getLatestTableDataAction(tableId: string) {
 
         if (error) throw error;
         return { success: true, data };
+    } catch (err: any) {
+        return { success: false, error: err.message };
+    }
+}
+
+export async function generateTableQrTokensAction(id: string, count: number) {
+    const supabase = await getSupabase();
+    try {
+        const brandId = await getMyBrandId(supabase);
+        const tokens = makeTokenBatch(count);
+        const { data, error } = await supabase
+            .from('tables')
+            .update({
+                access_token: tokens[0],
+                access_tokens: tokens,
+                status: 'available'
+            })
+            .eq('id', id)
+            .eq('brand_id', brandId)
+            .select('*')
+            .single();
+
+        if (error) throw error;
+        return { success: true, tokens, data };
     } catch (err: any) {
         return { success: false, error: err.message };
     }

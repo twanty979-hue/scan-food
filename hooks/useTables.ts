@@ -16,6 +16,7 @@ export function useTables() {
     const [brandId, setBrandId] = useState<string | null>(null);
     const [qrLogoUrl, setQrLogoUrl] = useState<string | null>(null);
     const [brandSlug, setBrandSlug] = useState<string>('shop');
+    const [qrMode, setQrMode] = useState<'rotating' | 'static'>('rotating');
     const [searchTerm, setSearchTerm] = useState('');
     const [limitStatus, setLimitStatus] = useState<any>(null);
 
@@ -29,6 +30,7 @@ export function useTables() {
             const currentBrandId = res.brandId!;
             setBrandId(currentBrandId);
             setBrandSlug(res.brandSlug!);
+            setQrMode((res.qrMode as 'rotating' | 'static') || 'rotating');
             
             // ✅ 3. ประกอบร่าง URL แบบ Dynamic (รองรับหลายสาขา ไม่มี Hardcode)
             let finalLogo = res.qrLogoUrl;
@@ -114,7 +116,7 @@ export function useTables() {
 
         const res = await actions.refreshTokenAction(table.id);
         if (res.success) {
-            setTables(prev => prev.map(t => t.id === table.id ? { ...t, access_token: res.newToken, status: 'available' } : t));
+            setTables(prev => prev.map(t => t.id === table.id ? { ...t, access_token: res.newToken, access_tokens: [res.newToken], status: 'available' } : t));
             showAlert('success', 'รีเซ็ตสำเร็จ', 'สร้าง Token ใหม่และล้างสถานะโต๊ะเรียบร้อย');
         } else {
             showAlert('error', 'รีเซ็ตไม่สำเร็จ', res.error);
@@ -124,7 +126,7 @@ export function useTables() {
     const filteredTables = tables.filter(t => t.label.toLowerCase().includes(searchTerm.toLowerCase()));
 
     return {
-        tables, filteredTables, loading, brandId, qrLogoUrl, brandSlug,
+        tables, filteredTables, loading, brandId, qrLogoUrl, brandSlug, qrMode,
         searchTerm, setSearchTerm, addTable, deleteTable, refreshToken,
         limitStatus 
     };

@@ -16,6 +16,7 @@ export function useMarketplace() {
     const [allThemes, setAllThemes] = useState<any[]>([]);
     const [ownedThemeIds, setOwnedThemeIds] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
+    const [coins, setCoins] = useState<number>(0);
 
     // Filter States
     const [selectedCategory, setSelectedCategory] = useState('ALL');
@@ -53,6 +54,7 @@ export function useMarketplace() {
                 setAllThemes(res.themes || []);
                 setOwnedThemeIds(res.ownedThemeIds || []);
                 setCurrentPlan((res as any).currentPlan || 'free');
+                if (res.coins !== undefined) setCoins(res.coins);
             }
             setLoading(false);
         };
@@ -143,6 +145,7 @@ export function useMarketplace() {
         currentThemes,
         ownedThemeIds,
         loading,
+        coins,
         currentPlan, 
         currentPage,
         totalPages,

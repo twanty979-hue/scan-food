@@ -30,7 +30,7 @@ const IconCheckSmall = ({ size = 12, className = "" }: any) => (
 
 export default function MarketplacePage() {
     const {
-        categories, currentThemes, ownedThemeIds, loading,
+        categories, currentThemes, ownedThemeIds, loading, coins,
         currentPage, totalPages, changePage,
         selectedCategory, setSelectedCategory,
         getImageUrl, goToDetails,
@@ -53,13 +53,10 @@ export default function MarketplacePage() {
     const planLabels: any = { ALL: 'All Plans', free: 'Free', basic: 'Basic', pro: 'Pro', ultimate: 'Ultimate' };
     const hasActiveFilter = tierFilter !== 'ALL' || selectedCategory !== 'ALL';
 
-    // 🌟 ฟังก์ชันคำนวณหน้าที่จะแสดง (ตัดหน้าตรงกลางออกและใส่ ...)
     const getVisiblePages = (current: number, total: number) => {
         if (total <= 5) return Array.from({ length: total }, (_, i) => i + 1);
-        
         if (current <= 3) return [1, 2, 3, 4, '...', total];
         if (current >= total - 2) return [1, '...', total - 3, total - 2, total - 1, total];
-        
         return [1, '...', current - 1, current, current + 1, '...', total];
     };
 
@@ -69,105 +66,122 @@ export default function MarketplacePage() {
         <div className="min-h-screen bg-[#f8fafc] font-sans pb-24">
             
             {/* Header + Filter Button */}
-            <div className="w-full bg-white border-b border-slate-100 shadow-sm ">
+            <div className="w-full bg-white border-b border-slate-100 shadow-sm">
                 <div className="max-w-[1920px] mx-auto px-4 md:px-10 py-3 md:py-4"> 
                     <div className="flex items-center justify-between gap-4"> 
                         
-                        {/* ฝั่งซ้าย: โลโก้ และ ชื่อ */}
-                        <div className="flex items-center gap-3 md:gap-4">
-                            <div className="w-10 h-10 md:w-12 md:h-12 bg-slate-900 rounded-xl flex items-center justify-center text-white shadow-lg shadow-slate-200 shrink-0">
-                                 <IconShoppingBag size={20} className="md:w-6 md:h-6" />
-                            </div>
-                            <div>
-                                <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tighter italic uppercase leading-none">
-                                    MARKETPLACE
-                                </h1>
-                                <div className="flex items-center gap-2 mt-1">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                    <p className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">
-                                        Official Store
-                                    </p>
+                        {/* 🌟 ฝั่งซ้าย: โลโก้ และ ชื่อ (ปรับปรุงใหม่: เปลี่ยนทั้งกลุ่มเป็นปุ่มจิ้มเปิดสไลด์บาร์ไร้สาย) */}
+                        <button
+                            type="button"
+                            onClick={() => {
+                                // ระบบไร้สายสะกิดเปิด: สั่งคลิกปุ่มหลักบนแผง Layout ให้อัตโนมัติเลยครับ
+                                const layoutMenuBtn = document.querySelector('header button');
+                                if (layoutMenuBtn instanceof HTMLElement) {
+                                    layoutMenuBtn.click();
+                                }
+                            }}
+                            className="flex items-center text-left group active:scale-95 transition-transform duration-200 focus:outline-none"
+                            title="เปิดเมนูสไลด์บาร์"
+                        >
+                            <div className="flex items-center gap-3 md:gap-4">
+                                {/* กล่องไอคอนถุงช้อปปิ้ง จิ้มโดนแล้วเปลี่ยนเป็นสีฟ้า และขยายเด้งดึ๋ง */}
+                                <div className="w-10 h-10 md:w-12 md:h-12 bg-slate-900 text-white rounded-xl flex items-center justify-center shadow-lg shadow-slate-200 shrink-0 transition-all duration-200 group-hover:scale-110 group-hover:-rotate-12 group-hover:bg-blue-600">
+                                     <IconShoppingBag size={20} className="md:w-6 md:h-6" />
                                 </div>
-                            </div>
-                        </div>
-
-                        {/* ฝั่งขวา: ปุ่ม Filter รวม */}
-                        <div className="relative" ref={filterRef}>
-                            <button 
-                                onClick={() => setIsFilterOpen(!isFilterOpen)}
-                                className={`relative flex items-center justify-center gap-2 w-10 h-10 md:w-auto md:px-5 md:py-2.5 md:h-auto rounded-xl md:rounded-xl text-[11px] font-black uppercase tracking-widest transition-all shadow-sm border ${
-                                    isFilterOpen || hasActiveFilter ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
-                                }`}
-                            >
-                                <IconFilter size={14} className="shrink-0" />
-                                <span className="hidden md:inline">Filters</span>
-                                {hasActiveFilter && (
-                                    <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-rose-500 border-2 border-white shadow-sm"></span>
-                                )}
-                            </button>
-
-                            {/* 📱 Dropdown Modal (รวม Plan + Category) */}
-                            {isFilterOpen && (
-                                <div className="absolute top-full right-0 mt-2 w-64 md:w-72 bg-white rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)] border border-slate-100 p-2 z-[100] animate-in zoom-in-95 duration-200 origin-top-right flex flex-col max-h-[70vh]">
-                                    
-                                    <div className="overflow-y-auto no-scrollbar">
-                                        {/* --- Section 1: PLANS --- */}
-                                        <div className="px-3 pt-2 pb-1">
-                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Filter by Plan</span>
-                                        </div>
-                                        {['ALL', 'free', 'basic', 'pro', 'ultimate'].map(tier => (
-                                            <button 
-                                                key={tier}
-                                                onClick={() => { setTierFilter(tier); setIsFilterOpen(false); }}
-                                                className={`w-full flex justify-between items-center px-3 py-2.5 rounded-xl text-[10px] md:text-[11px] font-bold uppercase tracking-wider transition-colors ${tierFilter === tier ? 'text-blue-600 bg-blue-50/50' : 'text-slate-600 hover:bg-slate-50'}`}
-                                            >
-                                                <div className="flex items-center gap-2">
-                                                    {tierFilter === tier ? <IconCheckSmall className="text-blue-600" /> : <div className="w-3" />}
-                                                    {planLabels[tier]}
-                                                </div>
-                                                <span className={`px-1.5 py-0.5 rounded-md text-[8px] ${tierFilter === tier ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-400'}`}>
-                                                    {tierCounts[tier.toUpperCase() as keyof typeof tierCounts] || 0}
-                                                </span>
-                                            </button>
-                                        ))}
-
-                                        <div className="h-[1px] bg-slate-100 mx-2 my-2"></div>
-
-                                        {/* --- Section 2: CATEGORIES --- */}
-                                        <div className="px-3 pt-2 pb-1">
-                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Categories</span>
-                                        </div>
-                                        <button 
-                                            onClick={() => { setSelectedCategory('ALL'); setIsFilterOpen(false); }}
-                                            className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-[10px] md:text-[11px] font-bold uppercase tracking-wider transition-colors ${selectedCategory === 'ALL' ? 'text-blue-600 bg-blue-50/50' : 'text-slate-600 hover:bg-slate-50'}`}
-                                        >
-                                            {selectedCategory === 'ALL' ? <IconCheckSmall className="text-blue-600" /> : <div className="w-3" />}
-                                            All Items
-                                        </button>
-                                        {categories.map((cat: any) => (
-                                            <button 
-                                                key={cat.id}
-                                                onClick={() => { setSelectedCategory(cat.id); setIsFilterOpen(false); }}
-                                                className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-[10px] md:text-[11px] font-bold uppercase tracking-wider transition-colors truncate ${selectedCategory === cat.id ? 'text-blue-600 bg-blue-50/50' : 'text-slate-600 hover:bg-slate-50'}`}
-                                            >
-                                                {selectedCategory === cat.id ? <IconCheckSmall className="text-blue-600" /> : <div className="w-3" />}
-                                                {cat.name}
-                                            </button>
-                                        ))}
+                                <div className="flex flex-col">
+                                    <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tighter italic uppercase leading-none group-hover:text-blue-600 transition-colors">
+                                        MARKETPLACE
+                                    </h1>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                        <p className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] group-hover:text-blue-400 transition-colors">
+                                            Official Store
+                                        </p>
                                     </div>
-
                                 </div>
-                            )}
-                        </div>
+                            </div>
+                        </button>
 
+                        {/* ฝั่งขวา: Coin Balance และ ปุ่ม Filter (คลีนสุดๆ ไม่ทับซ้อนกับปุ่มด้านซ้าย) */}
+                        <div className="flex items-center gap-3">
+                            {/* Coin Balance Display */}
+                            <div className="hidden sm:flex items-center gap-1.5 bg-amber-50 px-3 py-1.5 rounded-full border border-amber-200 shadow-sm cursor-help" title="ยอดเหรียญคงเหลือของคุณ">
+                                <img src="/cion.png" alt="Coin" className="w-5 h-5 object-contain drop-shadow-sm" />
+                                <span className="text-[13px] md:text-sm font-black text-amber-700 tracking-tight">{coins?.toLocaleString() || 0}</span>
+                            </div>
+
+                            <div className="relative" ref={filterRef}>
+                                <button 
+                                    onClick={() => setIsFilterOpen(!isFilterOpen)}
+                                    className={`relative flex items-center justify-center gap-2 w-10 h-10 md:w-auto md:px-5 md:py-2.5 md:h-auto rounded-xl md:rounded-xl text-[11px] font-black uppercase tracking-widest transition-all shadow-sm border ${
+                                        isFilterOpen || hasActiveFilter ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                                    }`}
+                                >
+                                    <IconFilter size={14} className="shrink-0" />
+                                    <span className="hidden md:inline">Filters</span>
+                                    {hasActiveFilter && (
+                                        <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-rose-500 border-2 border-white shadow-sm"></span>
+                                    )}
+                                </button>
+
+                                {/* 📱 Dropdown Modal Filter */}
+                                {isFilterOpen && (
+                                    <div className="absolute top-full right-0 mt-2 w-64 md:w-72 bg-white rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)] border border-slate-100 p-2 z-[100] animate-in zoom-in-95 duration-200 origin-top-right flex flex-col max-h-[70vh]">
+                                        <div className="overflow-y-auto no-scrollbar">
+                                            {/* --- Section 1: PLANS --- */}
+                                            <div className="px-3 pt-2 pb-1">
+                                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Filter by Plan</span>
+                                            </div>
+                                            {['ALL', 'free', 'basic', 'pro', 'ultimate'].map(tier => (
+                                                <button 
+                                                    key={tier}
+                                                    onClick={() => { setTierFilter(tier); setIsFilterOpen(false); }}
+                                                    className={`w-full flex justify-between items-center px-3 py-2.5 rounded-xl text-[10px] md:text-[11px] font-bold uppercase tracking-wider transition-colors ${tierFilter === tier ? 'text-blue-600 bg-blue-50/50' : 'text-slate-600 hover:bg-slate-50'}`}
+                                                >
+                                                    <div className="flex items-center gap-2">
+                                                        {tierFilter === tier ? <IconCheckSmall className="text-blue-600" /> : <div className="w-3" />}
+                                                        {planLabels[tier]}
+                                                    </div>
+                                                    <span className={`px-1.5 py-0.5 rounded-md text-[8px] ${tierFilter === tier ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-400'}`}>
+                                                        {tierCounts[tier.toUpperCase() as keyof typeof tierCounts] || 0}
+                                                    </span>
+                                                </button>
+                                            ))}
+
+                                            <div className="h-[1px] bg-slate-100 mx-2 my-2"></div>
+
+                                            {/* --- Section 2: CATEGORIES --- */}
+                                            <div className="px-3 pt-2 pb-1">
+                                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Categories</span>
+                                            </div>
+                                            <button 
+                                                onClick={() => { setSelectedCategory('ALL'); setIsFilterOpen(false); }}
+                                                className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-[10px] md:text-[11px] font-bold uppercase tracking-wider transition-colors ${selectedCategory === 'ALL' ? 'text-blue-600 bg-blue-50/50' : 'text-slate-600 hover:bg-slate-50'}`}
+                                            >
+                                                {selectedCategory === 'ALL' ? <IconCheckSmall className="text-blue-600" /> : <div className="w-3" />}
+                                                All Items
+                                            </button>
+                                            {categories.map((cat: any) => (
+                                                <button 
+                                                    key={cat.id}
+                                                    onClick={() => { setSelectedCategory(cat.id); setIsFilterOpen(false); }}
+                                                    className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-[10px] md:text-[11px] font-bold uppercase tracking-wider transition-colors truncate ${selectedCategory === cat.id ? 'text-blue-600 bg-blue-50/50' : 'text-slate-600 hover:bg-slate-50'}`}
+                                                >
+                                                    {selectedCategory === cat.id ? <IconCheckSmall className="text-blue-600" /> : <div className="w-3" />}
+                                                    {cat.name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
 
             {/* Main Content */}
             <div className="max-w-[1920px] mx-auto px-2 md:px-10 mt-4 md:mt-6 min-h-[60vh] animate-in fade-in slide-in-from-bottom-4 duration-500">
-
-                {/* แสดงสรุปจำนวนหน้าที่กำลังดู */}
                 <div className="mb-4 flex justify-between md:justify-end items-center px-1">
                     <p className="text-[9px] md:text-[10px] font-bold text-slate-400 bg-slate-100 px-3 py-1 rounded-full">
                         SHOWING {currentThemes.length} RESULTS (PAGE {currentPage}/{totalPages || 1})
@@ -201,21 +215,19 @@ export default function MarketplacePage() {
                     </div>
                 )}
 
-                {/* 🌟 Pagination (แบบมีจุดไข่ปลา) */}
+                {/* 🌟 Pagination */}
                 {totalPages > 1 && (
                     <div className="fixed bottom-6 md:bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 md:gap-4 bg-white/95 backdrop-blur-md p-2 pl-4 md:pl-6 pr-2 rounded-full shadow-2xl border border-slate-200 z-50 animate-in slide-in-from-bottom-10 fade-in duration-700 w-auto max-w-[95vw]">
-                         <span className="text-[9px] md:text-[10px] font-black text-slate-400 mr-1 md:mr-2 whitespace-nowrap hidden sm:inline">PAGE NAVIGATION</span>
-                        
+                        <span className="text-[9px] md:text-[10px] font-black text-slate-400 mr-1 md:mr-2 whitespace-nowrap hidden sm:inline">PAGE NAVIGATION</span>
                         <div className="flex items-center gap-1 md:gap-2">
-                             <button 
+                            <button 
                                 onClick={() => changePage(Math.max(1, currentPage - 1))} 
                                 disabled={currentPage === 1} 
                                 className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                             >
+                            >
                                 <IconArrowLeft />
-                             </button>
-                             
-                             <div className="flex gap-1 md:gap-2 px-1">
+                            </button>
+                            <div className="flex gap-1 md:gap-2 px-1">
                                 {visiblePages.map((page, index) => (
                                     page === '...' ? (
                                         <span key={`dots-${index}`} className="w-6 h-8 flex items-center justify-center text-slate-400 font-bold tracking-widest shrink-0">
@@ -229,15 +241,13 @@ export default function MarketplacePage() {
                                                 ${currentPage === page 
                                                     ? 'bg-slate-900 text-white scale-110 shadow-lg' 
                                                     : 'text-slate-400 hover:bg-slate-50'
-                                                }`
-                                            }
+                                                }`}
                                         >
                                             {page}
                                         </button>
                                     )
                                 ))}
                             </div>
-                            
                             <button 
                                 onClick={() => changePage(Math.min(totalPages, currentPage + 1))} 
                                 disabled={currentPage === totalPages} 

@@ -120,14 +120,32 @@ export default function ReceiptsPage() {
         <div className="min-h-screen bg-[#F8FAFC] pb-24 md:pb-6 font-sans text-slate-800">
             <div className="max-w-5xl mx-auto md:p-6 p-4 space-y-4 md:space-y-6">
                 
-                {/* --- Header (Mobile Optimized) --- */}
+                {/* --- Header (Mobile Optimized - ปรับปรุง: จิ้มไอคอนเพื่อเปิดเมนูสไลด์บาร์) --- */}
                 <div className="flex justify-between items-center sticky top-0 z-20 bg-[#F8FAFC]/90 backdrop-blur-md py-2 md:static md:bg-transparent">
-                    <h1 className="text-xl md:text-3xl font-black text-slate-800 flex items-center gap-2 md:gap-3">
-                        <span className="p-1.5 md:p-2 bg-slate-900 text-white rounded-lg md:rounded-xl shadow-lg shadow-slate-900/20">
-                           <IconHistory />
-                        </span>
-                        ประวัติการขาย
-                    </h1>
+                    
+                    {/* 🕒 เอาปุ่มมาครอบตัวไอคอนและหัวข้อ จิ้มปุ๊บเปิดแผง Sidebar ทันที */}
+                    <button
+                        type="button"
+                        onClick={() => {
+                            // สัญญาณไร้สาย: วิ่งไปสะกิดสั่งคลิกปุ่มเปิดเมนูหลักของแผง Layout ให้ทำงานอัตโนมัติ
+                            const layoutMenuBtn = document.querySelector('header button');
+                            if (layoutMenuBtn instanceof HTMLElement) {
+                                layoutMenuBtn.click();
+                            }
+                        }}
+                        className="flex items-center text-left group active:scale-95 transition-transform duration-200"
+                        title="เปิดเมนูสไลด์บาร์"
+                    >
+                        <h1 className="text-xl md:text-3xl font-black text-slate-800 flex items-center gap-2 md:gap-3 group-hover:text-blue-600 transition-colors">
+                            {/* ตัวกล่องไอคอนประวัติจะขยายและเอียงดึ๋งๆ เล็กน้อยเมื่อมีเมาส์มาชี้หรือนิ้วมาแตะ */}
+                            <span className="p-1.5 md:p-2 bg-slate-900 text-white rounded-lg md:rounded-xl shadow-lg shadow-slate-900/20 transition-transform duration-200 group-hover:scale-110 group-hover:-rotate-12">
+                               <IconHistory />
+                            </span>
+                            ประวัติการขาย
+                        </h1>
+                    </button>
+
+                    {/* ปุ่มกดรีเฟรชตัวเดิมของนายคงไว้ครบถ้วนครับ */}
                     <button 
                         onClick={() => {
                             const { start, end } = getDateRange(currentDate, viewMode);

@@ -49,6 +49,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing RevenueCat event type' }, { status: 400 });
     }
 
+    // RevenueCat uses synthetic events without a customer ID to validate the endpoint.
+    if (eventType === 'TEST' || eventType === 'PING') {
+      return NextResponse.json({ received: true, test: true });
+    }
+
     if (!brandId) {
       return NextResponse.json({ error: 'Missing RevenueCat app_user_id' }, { status: 400 });
     }

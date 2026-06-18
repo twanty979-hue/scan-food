@@ -128,33 +128,33 @@ function validateWebhookAuth(req: NextRequest) {
 }
 
 function inferPlan(event: any, productId: string): PlanKey | null {
+  // 1. เช็กจาก Entitlement (ตัวนี้แม่นสุด)
   const entitlementIds = [
     ...(Array.isArray(event.entitlement_ids) ? event.entitlement_ids : []),
     ...(Array.isArray(event.entitlementIds) ? event.entitlementIds : []),
   ].map((id) => String(id).toLowerCase());
 
-  // 🌟 อัปเกรดให้ค้นหาคำว่า pro หรือ basic ที่ซ่อนอยู่ในชื่อยาวๆ ได้ฉลาดขึ้น
+  if (entitlementIds.some(id => id.includes('ultimate'))) return 'ultimate';
   if (entitlementIds.some(id => id.includes('pro'))) return 'pro';
   if (entitlementIds.some(id => id.includes('basic'))) return 'basic';
-  if (entitlementIds.some(id => id.includes('ultimate'))) return 'ultimate';
 
+  // 2. เช็กจากชื่อ Product หรือ Offering (ถ้าซื้อผ่าน Test Store)
   const source = [
     productId,
     event.product_identifier,
     event.presented_offering_id,
     event.presentedOfferingIdentifier,
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
+  ].filter(Boolean).join(' ').toLowerCase();
 
-  // 🌟 เช็กจากชื่อ Product หรือ Offering
+  if (source.includes('ultimate')) return 'ultimate';
   if (source.includes('pro')) return 'pro';
   if (source.includes('basic')) return 'basic';
-  if (source.includes('ultimate')) return 'ultimate';
-  
-  // 🌟 ดักไว้ให้เลย: ถ้าจิ้มซื้อจาก Test Store กล่องดำ ให้ตีเป็นแพ็กเกจที่ตั้งใจเทสไปเลย
-  if (source === 'monthly' || source === 'yearly') return 'pro';
+
+  // 3. ถ้าอยากเทสแยกแพ็กเกจใน Test Store (กล่องดำ) ให้ลองเปลี่ยนชื่อ ID ในแอป 
+  // หรือใช้เงื่อนไขนี้ดักตาม productId ครับ:
+  if (productId.includes('basic')) return 'basic';
+  if (productId.includes('pro')) return 'pro';
+  if (productId.includes('ultimate')) return 'ultimate';
 
   return null;
 }

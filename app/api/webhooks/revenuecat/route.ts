@@ -55,7 +55,11 @@ export async function POST(req: NextRequest) {
     }
 
     if (!brandId) {
-      return NextResponse.json({ error: 'Missing RevenueCat app_user_id' }, { status: 400 });
+      console.warn(`[RevenueCat] Ignoring ${eventType} event without app_user_id`);
+      return NextResponse.json({
+        received: true,
+        ignored: 'missing_app_user_id',
+      });
     }
 
     if (NON_BLOCKING_EVENTS.has(eventType)) {
@@ -78,14 +82,12 @@ export async function POST(req: NextRequest) {
     const period = inferPeriod(event, productId);
 
     if (!plan || !period) {
-      return NextResponse.json(
-        {
-          error: 'Cannot infer plan or period from RevenueCat event',
-          productId,
-          entitlementIds: event.entitlement_ids ?? event.entitlementIds ?? [],
-        },
-        { status: 400 }
-      );
+      console.warn(`[RevenueCat] Ignoring unsupported product: ${productId || 'unknown'}`);
+      return NextResponse.json({
+        received: true,
+        ignored: 'unsupported_product',
+        productId,
+      });
     }
 
     const expiryDate = inferExpiryDate(event, period);

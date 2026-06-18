@@ -133,9 +133,10 @@ function inferPlan(event: any, productId: string): PlanKey | null {
     ...(Array.isArray(event.entitlementIds) ? event.entitlementIds : []),
   ].map((id) => String(id).toLowerCase());
 
-  for (const plan of PLAN_KEYS) {
-    if (entitlementIds.includes(plan)) return plan;
-  }
+  // 🌟 อัปเกรดให้ค้นหาคำว่า pro หรือ basic ที่ซ่อนอยู่ในชื่อยาวๆ ได้ฉลาดขึ้น
+  if (entitlementIds.some(id => id.includes('pro'))) return 'pro';
+  if (entitlementIds.some(id => id.includes('basic'))) return 'basic';
+  if (entitlementIds.some(id => id.includes('ultimate'))) return 'ultimate';
 
   const source = [
     productId,
@@ -147,7 +148,15 @@ function inferPlan(event: any, productId: string): PlanKey | null {
     .join(' ')
     .toLowerCase();
 
-  return PLAN_KEYS.find((plan) => source.includes(plan)) ?? null;
+  // 🌟 เช็กจากชื่อ Product หรือ Offering
+  if (source.includes('pro')) return 'pro';
+  if (source.includes('basic')) return 'basic';
+  if (source.includes('ultimate')) return 'ultimate';
+  
+  // 🌟 ดักไว้ให้เลย: ถ้าจิ้มซื้อจาก Test Store กล่องดำ ให้ตีเป็นแพ็กเกจที่ตั้งใจเทสไปเลย
+  if (source === 'monthly' || source === 'yearly') return 'pro';
+
+  return null;
 }
 
 function inferPeriod(event: any, productId: string): BillingPeriod | null {

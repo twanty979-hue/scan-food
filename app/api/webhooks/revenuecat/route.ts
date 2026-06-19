@@ -129,7 +129,10 @@ function validateWebhookAuth(req: NextRequest) {
 
 // 🌟 1. ฟังก์ชันเช็กสิทธิ์แบบเข้มงวดขั้นสุด (Strict Exact Match)
 function inferPlan(event: any, productId: string): PlanKey | null {
-  // 🔒 1. ดักจับสิทธิ์ที่ยืนยันการจ่ายเงินจริง (Exact Match) - ปลอดภัยที่สุดสำหรับ Production
+  // 🪵 0. พิมพ์ก้อน JSON Event ทั้งหมดลง Vercel Logs เพื่อตรวจสอบฟิลด์จริงของระบบจำลอง
+  console.log('[RevenueCat Debug Payload]:', JSON.stringify(event));
+
+  // 🔒 1. ดักจับจากสิทธิ์การเงินจริง (Exact Match) - ปลอดภัยที่สุดสำหรับระบบขายจริง
   const rawEntitlements = [
     ...(Array.isArray(event.entitlement_ids) ? event.entitlement_ids : []),
     ...(Array.isArray(event.entitlementIds) ? event.entitlementIds : []),
@@ -140,28 +143,36 @@ function inferPlan(event: any, productId: string): PlanKey | null {
   if (entitlements.includes('com.pos.foodscan pro')) return 'pro';
   if (entitlements.includes('basic')) return 'basic';
 
-  // 🧪 2. สำหรับโหมด Sandbox / Test Store (กล่องดำ) 
-  // ถ้าเซิร์ฟเวอร์ส่งมาแค่ชื่อ ID ของสิทธิ์จำลอง ให้เราเจาะจง Map ให้ตรงกล่อง
+  // 🧪 2. สำหรับโหมด Sandbox / Test Store (แกะหาคีย์เวิร์ดจากตัวแปรแวดล้อมเพื่อความยืดหยุ่นในการทดสอบ)
   const idSource = String(productId).trim().toLowerCase();
-
-  // ดูว่า Product ID มีระบุเจาะจงไหม
   if (idSource.includes('ultimate')) return 'ultimate';
   if (idSource.includes('pro')) return 'pro';
   if (idSource.includes('basic')) return 'basic';
 
-  // ⚠️ เคสพิเศษตาม Log: ถ้า Test Store ส่งมาแค่คำว่า 'monthly' หรือ 'yearly' โดนๆ
-  // ให้เช็กจากข้อมูล Presented Offering ID (ชื่อกล่องที่เราตั้งไว้ในรูปก่อนหน้า)
-  const offeringSource = String(event.presented_offering_id ?? event.presentedOfferingIdentifier ?? '').toLowerCase();
+  // 🧪 3. แกะรอยจากกล่องสินค้า (Presented Offering ID) ที่นายตั้งชื่อ Custom ไว้ในเว็บ
+  const offeringSource = String(
+    event.presented_offering_id ?? 
+    event.presentedOfferingIdentifier ?? 
+    event.offering_id ?? 
+    event.offeringId ?? 
+    ''
+  ).toLowerCase();
   
   if (offeringSource.includes('ultimate')) return 'ultimate';
   if (offeringSource.includes('pro')) return 'pro';
   if (offeringSource.includes('basic')) return 'basic';
 
-  // ถ้าไม่เข้าเงื่อนไขความปลอดภัยใดๆ เลย ให้ปฏิเสธสิทธิ์
-  console.warn(`[RevenueCat] Unsupported product mapping. ProductID: ${productId}, OfferingID: ${event.presented_offering_id}`);
+  // 🧪 4. ในโหมดจำลอง บางครั้งข้อมูลถูกห่อไว้ในอ็อบเจกต์ย่อย (เช่น event.customer_info หรือ event.entitlements)
+  // ลองสแกนหาคำระบุสิทธิ์ลึกเข้าไปอีกชั้น
+  const nestedSource = JSON.stringify(event).toLowerCase();
+  if (nestedSource.includes('ultimate')) return 'ultimate';
+  if (nestedSource.includes('pro') || nestedSource.includes('com.pos.foodscan pro')) return 'pro';
+  if (nestedSource.includes('basic')) return 'basic';
+
+  // ถ้าตรวจสอบอย่างละเอียดทุกช่องทางแล้วไม่ตรงเงื่อนไขใดๆ เลย ให้ส่ง null ป้องกันการแฮก
+  console.warn(`[RevenueCat Check Failed] ProductID: ${productId}, OfferingID: ${event.presented_offering_id}`);
   return null;
 }
-
 
 // 🌟 2. ฟังก์ชันเช็กรอบบิลแบบรัดกุมขึ้น
 function inferPeriod(event: any, productId: string): BillingPeriod | null {

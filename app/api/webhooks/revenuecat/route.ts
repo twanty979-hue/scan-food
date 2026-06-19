@@ -127,53 +127,62 @@ function validateWebhookAuth(req: NextRequest) {
   return null;
 }
 
+// 🌟 1. ฟังก์ชันเช็กสิทธิ์แบบเข้มงวดขั้นสุด (Strict Exact Match)
 function inferPlan(event: any, productId: string): PlanKey | null {
-  // 1. เช็กจาก Entitlement (ตัวนี้แม่นสุด)
-  const entitlementIds = [
+  // ดึงรายการสิทธิ์ (Entitlements) ที่ RevenueCat และ Google Play "ยืนยันแล้วว่าจ่ายเงินจริง"
+  const rawEntitlements = [
     ...(Array.isArray(event.entitlement_ids) ? event.entitlement_ids : []),
     ...(Array.isArray(event.entitlementIds) ? event.entitlementIds : []),
-  ].map((id) => String(id).toLowerCase());
+  ];
 
-  if (entitlementIds.some(id => id.includes('ultimate'))) return 'ultimate';
-  if (entitlementIds.some(id => id.includes('pro'))) return 'pro';
-  if (entitlementIds.some(id => id.includes('basic'))) return 'basic';
+  // แปลงเป็นตัวพิมพ์เล็กเพื่อลดความผิดพลาดเรื่อง Case Sensitive
+  const entitlements = rawEntitlements.map((id) => String(id).trim().toLowerCase());
 
-  // 2. เช็กจากชื่อ Product หรือ Offering (ถ้าซื้อผ่าน Test Store)
-  const source = [
-    productId,
-    event.product_identifier,
-    event.presented_offering_id,
-    event.presentedOfferingIdentifier,
-  ].filter(Boolean).join(' ').toLowerCase();
+  // 🔒 เช็กแบบ Exact Match (ต้องเป๊ะ 100% ห้ามใช้ .includes เด็ดขาด)
+  // ชื่อเหล่านี้ต้องตรงกับ Identifier ของ Entitlement ในหน้าเว็บ RevenueCat ของนาย
+  if (entitlements.includes('ultimate')) {
+    return 'ultimate';
+  }
+  
+  if (entitlements.includes('com.pos.foodscan pro')) {
+    return 'pro';
+  }
+  
+  if (entitlements.includes('basic')) {
+    return 'basic';
+  }
 
-  if (source.includes('ultimate')) return 'ultimate';
-  if (source.includes('pro')) return 'pro';
-  if (source.includes('basic')) return 'basic';
-
-  // 3. ถ้าอยากเทสแยกแพ็กเกจใน Test Store (กล่องดำ) ให้ลองเปลี่ยนชื่อ ID ในแอป 
-  // หรือใช้เงื่อนไขนี้ดักตาม productId ครับ:
-  if (productId.includes('basic')) return 'basic';
-  if (productId.includes('pro')) return 'pro';
-  if (productId.includes('ultimate')) return 'ultimate';
-
+  // 🚨 สำคัญมาก: เราจะตัดการ "เดาแพ็กเกจ" จากชื่อ Product ID ทิ้งทั้งหมด!
+  // เพราะ Product ID โดนปลอมแปลงจากแอปมือถือได้ง่าย 
+  // ถ้าไม่มี Entitlement ยืนยันจากเซิร์ฟเวอร์ ให้ตอบ null ทันที (ไม่แจกสิทธิ์ใดๆ)
+  console.warn(`[Security Alert] ไม่พบสิทธิ์ที่ถูกต้องในใบเสร็จนี้. Entitlements ที่ได้รับ: ${entitlements}`);
   return null;
 }
 
-function inferPeriod(event: any, productId: string): BillingPeriod | null {
-  const source = [
-    productId,
-    event.product_identifier,
-    event.period_type,
-    event.periodType,
-    event.presented_offering_id,
-    event.presentedOfferingIdentifier,
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
 
-  if (/(yearly|annual|year|p1y|12m)/.test(source)) return 'yearly';
-  if (/(monthly|month|p1m|1m)/.test(source)) return 'monthly';
+// 🌟 2. ฟังก์ชันเช็กรอบบิลแบบรัดกุมขึ้น
+function inferPeriod(event: any, productId: string): BillingPeriod | null {
+  // ดึงข้อมูลจากเซิร์ฟเวอร์ก่อนเป็นอันดับแรก
+  const periodType = String(event.period_type ?? event.periodType ?? '').toLowerCase();
+  
+  // เช็กจากระบบหลังบ้าน RevenueCat โดยตรง (ปลอดภัยกว่า)
+  if (periodType === 'normal' || periodType === 'intro') {
+     // ถ้า RevenueCat ไม่ได้บอกตรงๆ ต้องมางัดจากชื่อ Product ID (ซึ่งเราตั้งไว้แบบมีมาตรฐานแล้ว)
+     const id = String(productId).toLowerCase();
+     // ใช้ Regex ที่รัดกุมขึ้น ล็อกคำแบบเป๊ะๆ
+     if (/\b(yearly|annual|p1y)\b/.test(id)) return 'yearly';
+     if (/\b(monthly|p1m)\b/.test(id)) return 'monthly';
+  }
+
+  // Fallback ปกติ
+  if (periodType.includes('year') || periodType.includes('annual')) return 'yearly';
+  if (periodType.includes('month')) return 'monthly';
+
+  // ค้นหาในชื่อ Product ID กรณีที่ไม่มีข้อมูลจากเซิร์ฟเวอร์จริงๆ
+  const fallbackId = String(productId).toLowerCase();
+  if (/\b(yearly|annual|p1y)\b/.test(fallbackId)) return 'yearly';
+  if (/\b(monthly|p1m)\b/.test(fallbackId)) return 'monthly';
+
   return null;
 }
 

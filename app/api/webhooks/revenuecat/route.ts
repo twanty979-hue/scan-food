@@ -131,16 +131,26 @@ function validateWebhookAuth(req: NextRequest) {
 function inferPlan(event: any, productId: string): PlanKey | null {
   console.log('[RevenueCat Debug Payload]:', JSON.stringify(event));
 
+  const productPlan = planFromIdentifier(productId);
+  if (productPlan) return productPlan;
+
+  const packagePlan = planFromIdentifier(
+    event.package_id ?? event.packageId ?? event.package_identifier ?? ''
+  );
+  if (packagePlan) return packagePlan;
+
   // 1. ดักสิทธิ์การเงินจริง (ปลอดภัยสุด)
   const rawEntitlements = [
     ...(Array.isArray(event.entitlement_ids) ? event.entitlement_ids : []),
     ...(Array.isArray(event.entitlementIds) ? event.entitlementIds : []),
   ];
-  const entitlements = rawEntitlements.map((id) => String(id).trim().toLowerCase());
+  const entitlementPlans = rawEntitlements
+    .map((id) => planFromIdentifier(String(id)))
+    .filter((plan): plan is PlanKey => plan !== null);
 
-  if (entitlements.includes('ultimate')) return 'ultimate';
-  if (entitlements.includes('com.pos.foodscan pro') || entitlements.includes('pro')) return 'pro';
-  if (entitlements.includes('basic')) return 'basic';
+  if (entitlementPlans.includes('ultimate')) return 'ultimate';
+  if (entitlementPlans.includes('pro')) return 'pro';
+  if (entitlementPlans.includes('basic')) return 'basic';
 
   // 2. ดักจาก Offering (ชื่อกล่องที่เราตั้ง)
   const offering = String(event.presented_offering_id ?? event.presentedOfferingIdentifier ?? '').toLowerCase();
@@ -155,16 +165,39 @@ function inferPlan(event: any, productId: string): PlanKey | null {
   if (/\bpro\b/.test(idSource)) return 'pro';
 
   // 4. ท่าไม้ตายสำหรับ Test Store ที่ชอบส่งมาแค่คำว่า monthly/yearly
-  if (idSource === 'monthly' || idSource === 'yearly' || idSource.includes('rc_')) {
-    return 'basic'; // ให้ Basic ไว้ก่อน กันแฮกเกอร์เนียนรับ Pro ฟรี
-  }
+  // Never guess a plan from a period-only ID. Guessing used to grant Basic
+  // for every monthly/yearly package and was the main source of wrong plans.
 
   console.warn(`[RevenueCat Check Failed] ProductID: ${productId}, OfferingID: ${event.presented_offering_id}`);
   return null;
 }
 
+function normalizeIdentifier(value: unknown) {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function planFromIdentifier(value: unknown): PlanKey | null {
+  const tokens = normalizeIdentifier(value).split('_');
+  if (tokens.includes('ultimate')) return 'ultimate';
+  if (tokens.includes('pro')) return 'pro';
+  if (tokens.includes('basic')) return 'basic';
+  return null;
+}
+
 // 🌟 2. ฟังก์ชันเช็กรอบบิลแบบรัดกุม
 function inferPeriod(event: any, productId: string): BillingPeriod | null {
+  const productPeriod = periodFromIdentifier(productId);
+  if (productPeriod) return productPeriod;
+
+  const packagePeriod = periodFromIdentifier(
+    event.package_id ?? event.packageId ?? event.package_identifier ?? ''
+  );
+  if (packagePeriod) return packagePeriod;
+
   const periodType = String(event.period_type ?? event.periodType ?? '').toLowerCase();
   
   if (periodType === 'normal' || periodType === 'intro') {
@@ -183,6 +216,17 @@ function inferPeriod(event: any, productId: string): BillingPeriod | null {
   return null;
 }
 
+function periodFromIdentifier(value: unknown): BillingPeriod | null {
+  const tokens = normalizeIdentifier(value).split('_');
+  if (tokens.some((token) => ['yearly', 'annual', 'year', 'p1y'].includes(token))) {
+    return 'yearly';
+  }
+  if (tokens.some((token) => ['monthly', 'month', 'p1m'].includes(token))) {
+    return 'monthly';
+  }
+  return null;
+}
+
 function inferExpiryDate(event: any, period: BillingPeriod): string {
   const expirationMs = Number(event.expiration_at_ms ?? event.expirationAtMs ?? 0);
   if (Number.isFinite(expirationMs) && expirationMs > 0) {
@@ -193,7 +237,7 @@ function inferExpiryDate(event: any, period: BillingPeriod): string {
   const base = Number.isFinite(purchasedMs) && purchasedMs > 0 ? dayjs(purchasedMs) : dayjs();
   return period === 'yearly'
     ? base.add(1, 'year').toISOString()
-    : base.add(30, 'day').toISOString();
+    : base.add(1, 'month').toISOString();
 }
 
 async function applyPlanPurchase(params: {
@@ -238,13 +282,15 @@ async function applyPlanPurchase(params: {
     ? currentExpiry.toISOString()
     : expiryDate;
 
-  await supabaseAdmin
+  const { error: expiryUpdateError } = await supabaseAdmin
     .from('brands')
     .update({
       [expiryColumn]: nextExpiry,
       updated_at: new Date().toISOString(),
     })
     .eq('id', brandId);
+
+  if (expiryUpdateError) throw expiryUpdateError;
 
   const { data: updatedBrand } = await supabaseAdmin
     .from('brands')

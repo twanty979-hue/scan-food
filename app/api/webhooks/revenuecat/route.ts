@@ -127,12 +127,11 @@ function validateWebhookAuth(req: NextRequest) {
   return null;
 }
 
-// 🌟 1. ฟังก์ชันเช็กสิทธิ์แบบเข้มงวดขั้นสุด (Strict Exact Match)
+// 🌟 1. ฟังก์ชันเช็กสิทธิ์แบบอุดรอยรั่ว (ดักคำว่า "product" ได้แล้ว 555)
 function inferPlan(event: any, productId: string): PlanKey | null {
-  // 🪵 0. พิมพ์ก้อน JSON Event ทั้งหมดลง Vercel Logs เพื่อตรวจสอบฟิลด์จริงของระบบจำลอง
   console.log('[RevenueCat Debug Payload]:', JSON.stringify(event));
 
-  // 🔒 1. ดักจับจากสิทธิ์การเงินจริง (Exact Match) - ปลอดภัยที่สุดสำหรับระบบขายจริง
+  // 1. ดักสิทธิ์การเงินจริง (ปลอดภัยสุด)
   const rawEntitlements = [
     ...(Array.isArray(event.entitlement_ids) ? event.entitlement_ids : []),
     ...(Array.isArray(event.entitlementIds) ? event.entitlementIds : []),
@@ -140,59 +139,43 @@ function inferPlan(event: any, productId: string): PlanKey | null {
   const entitlements = rawEntitlements.map((id) => String(id).trim().toLowerCase());
 
   if (entitlements.includes('ultimate')) return 'ultimate';
-  if (entitlements.includes('com.pos.foodscan pro')) return 'pro';
+  if (entitlements.includes('com.pos.foodscan pro') || entitlements.includes('pro')) return 'pro';
   if (entitlements.includes('basic')) return 'basic';
 
-  // 🧪 2. สำหรับโหมด Sandbox / Test Store (แกะหาคีย์เวิร์ดจากตัวแปรแวดล้อมเพื่อความยืดหยุ่นในการทดสอบ)
+  // 2. ดักจาก Offering (ชื่อกล่องที่เราตั้ง)
+  const offering = String(event.presented_offering_id ?? event.presentedOfferingIdentifier ?? '').toLowerCase();
+  if (offering.includes('ultimate')) return 'ultimate';
+  if (offering.includes('basic')) return 'basic';
+  if (/\bpro\b/.test(offering)) return 'pro'; // \b คือบังคับว่าต้องเป็นคำว่า pro โดดๆ
+
+  // 3. ดักจาก Product ID
   const idSource = String(productId).trim().toLowerCase();
   if (idSource.includes('ultimate')) return 'ultimate';
-  if (idSource.includes('pro')) return 'pro';
   if (idSource.includes('basic')) return 'basic';
+  if (/\bpro\b/.test(idSource)) return 'pro';
 
-  // 🧪 3. แกะรอยจากกล่องสินค้า (Presented Offering ID) ที่นายตั้งชื่อ Custom ไว้ในเว็บ
-  const offeringSource = String(
-    event.presented_offering_id ?? 
-    event.presentedOfferingIdentifier ?? 
-    event.offering_id ?? 
-    event.offeringId ?? 
-    ''
-  ).toLowerCase();
-  
-  if (offeringSource.includes('ultimate')) return 'ultimate';
-  if (offeringSource.includes('pro')) return 'pro';
-  if (offeringSource.includes('basic')) return 'basic';
+  // 4. ท่าไม้ตายสำหรับ Test Store ที่ชอบส่งมาแค่คำว่า monthly/yearly
+  if (idSource === 'monthly' || idSource === 'yearly' || idSource.includes('rc_')) {
+    return 'basic'; // ให้ Basic ไว้ก่อน กันแฮกเกอร์เนียนรับ Pro ฟรี
+  }
 
-  // 🧪 4. ในโหมดจำลอง บางครั้งข้อมูลถูกห่อไว้ในอ็อบเจกต์ย่อย (เช่น event.customer_info หรือ event.entitlements)
-  // ลองสแกนหาคำระบุสิทธิ์ลึกเข้าไปอีกชั้น
-  const nestedSource = JSON.stringify(event).toLowerCase();
-  if (nestedSource.includes('ultimate')) return 'ultimate';
-  if (nestedSource.includes('pro') || nestedSource.includes('com.pos.foodscan pro')) return 'pro';
-  if (nestedSource.includes('basic')) return 'basic';
-
-  // ถ้าตรวจสอบอย่างละเอียดทุกช่องทางแล้วไม่ตรงเงื่อนไขใดๆ เลย ให้ส่ง null ป้องกันการแฮก
   console.warn(`[RevenueCat Check Failed] ProductID: ${productId}, OfferingID: ${event.presented_offering_id}`);
   return null;
 }
 
-// 🌟 2. ฟังก์ชันเช็กรอบบิลแบบรัดกุมขึ้น
+// 🌟 2. ฟังก์ชันเช็กรอบบิลแบบรัดกุม
 function inferPeriod(event: any, productId: string): BillingPeriod | null {
-  // ดึงข้อมูลจากเซิร์ฟเวอร์ก่อนเป็นอันดับแรก
   const periodType = String(event.period_type ?? event.periodType ?? '').toLowerCase();
   
-  // เช็กจากระบบหลังบ้าน RevenueCat โดยตรง (ปลอดภัยกว่า)
   if (periodType === 'normal' || periodType === 'intro') {
-     // ถ้า RevenueCat ไม่ได้บอกตรงๆ ต้องมางัดจากชื่อ Product ID (ซึ่งเราตั้งไว้แบบมีมาตรฐานแล้ว)
      const id = String(productId).toLowerCase();
-     // ใช้ Regex ที่รัดกุมขึ้น ล็อกคำแบบเป๊ะๆ
      if (/\b(yearly|annual|p1y)\b/.test(id)) return 'yearly';
      if (/\b(monthly|p1m)\b/.test(id)) return 'monthly';
   }
 
-  // Fallback ปกติ
   if (periodType.includes('year') || periodType.includes('annual')) return 'yearly';
   if (periodType.includes('month')) return 'monthly';
 
-  // ค้นหาในชื่อ Product ID กรณีที่ไม่มีข้อมูลจากเซิร์ฟเวอร์จริงๆ
   const fallbackId = String(productId).toLowerCase();
   if (/\b(yearly|annual|p1y)\b/.test(fallbackId)) return 'yearly';
   if (/\b(monthly|p1m)\b/.test(fallbackId)) return 'monthly';

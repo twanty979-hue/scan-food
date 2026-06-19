@@ -78,6 +78,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ received: true, ignored: eventType });
     }
 
+    // RevenueCat Test Store accelerates subscription renewals (a monthly
+    // product renews every few minutes). The first purchase grants the real
+    // business duration below; accelerated sandbox renewals must not stack it.
+    if (eventType === 'RENEWAL' && isSandboxEvent(event)) {
+      await logRevenueCatEvent(event, brandId, productId, transactionId, eventType);
+      return NextResponse.json({ received: true, ignored: 'sandbox_renewal' });
+    }
+
     const plan = inferPlan(event, productId);
     const period = inferPeriod(event, productId);
 
@@ -229,7 +237,7 @@ function periodFromIdentifier(value: unknown): BillingPeriod | null {
 
 function inferExpiryDate(event: any, period: BillingPeriod): string {
   const expirationMs = Number(event.expiration_at_ms ?? event.expirationAtMs ?? 0);
-  if (Number.isFinite(expirationMs) && expirationMs > 0) {
+  if (!isSandboxEvent(event) && Number.isFinite(expirationMs) && expirationMs > 0) {
     return new Date(expirationMs).toISOString();
   }
 
@@ -238,6 +246,12 @@ function inferExpiryDate(event: any, period: BillingPeriod): string {
   return period === 'yearly'
     ? base.add(1, 'year').toISOString()
     : base.add(1, 'month').toISOString();
+}
+
+function isSandboxEvent(event: any) {
+  const environment = String(event.environment ?? '').toUpperCase();
+  const store = String(event.store ?? '').toUpperCase();
+  return environment === 'SANDBOX' || store === 'TEST_STORE';
 }
 
 async function applyPlanPurchase(params: {
@@ -278,9 +292,17 @@ async function applyPlanPurchase(params: {
 
   const expiryColumn = expiryColumnFor(plan);
   const currentExpiry = brand[expiryColumn] ? dayjs(brand[expiryColumn]) : null;
-  const nextExpiry = currentExpiry && currentExpiry.isAfter(dayjs(expiryDate))
-    ? currentExpiry.toISOString()
-    : expiryDate;
+  const incomingExpiry = dayjs(expiryDate);
+  const shouldStackSandboxPurchase =
+    eventType === 'INITIAL_PURCHASE' &&
+    isSandboxEvent(event) &&
+    currentExpiry &&
+    currentExpiry.isAfter(incomingExpiry.subtract(1, period === 'yearly' ? 'year' : 'month'));
+  const nextExpiry = shouldStackSandboxPurchase
+    ? currentExpiry.add(1, period === 'yearly' ? 'year' : 'month').toISOString()
+    : currentExpiry && currentExpiry.isAfter(incomingExpiry)
+      ? currentExpiry.toISOString()
+      : incomingExpiry.toISOString();
 
   const { error: expiryUpdateError } = await supabaseAdmin
     .from('brands')

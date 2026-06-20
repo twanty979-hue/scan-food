@@ -22,70 +22,89 @@ export default function OwnerTabs() {
 
   return (
     <div className="w-full bg-white border-b border-slate-100 sticky top-0 z-40">
-      <div className="max-w-7xl mx-auto px-3 md:px-6">
+      <div className="max-w-7xl mx-auto px-4 md:px-6">
         
-        {/* ปรับ Grid เพื่อแบ่งพื้นที่ให้ปุ่ม 3 ขีดบนมือถือ */}
-        <div className="flex items-center gap-1.5 md:gap-2 py-2 relative">
+        {/* ใช้ grid grid-cols-3 เพื่อแบ่งสัดส่วนหน้าจอคอมให้สมมาตร (ซ้าย ปุ่มเมนู / กลาง แผงแท็บ / ขวา กล่องเปล่าบาลานซ์) */}
+        <div className="flex flex-col md:grid md:grid-cols-3 items-center py-2 relative gap-3 md:gap-0">
           
-          {/* 🍔 ปุ่มแฮมเบอร์เกอร์ 3 ขีด (แสดงเฉพาะบนมือถือ/แท็บเล็ต md:hidden) */}
-          <button 
-            type="button"
-            onClick={() => {
-              // สายสัญญาณไร้สายสะกิดเปิดเมนูหลักหลังบ้านอัตโนมัติ
-              const layoutMenuBtn = document.querySelector('header button');
-              if (layoutMenuBtn instanceof HTMLElement) {
-                layoutMenuBtn.click();
-              }
-            }} 
-            className="md:hidden h-11 aspect-square bg-white border border-slate-100 text-slate-500 hover:text-slate-800 hover:border-slate-200 active:scale-95 rounded-xl shadow-sm flex items-center justify-center transition-all duration-200 shrink-0"
-            title="เปิดเมนูสไลด์บาร์"
-          >
-            <span className="w-5 h-5">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-full h-full">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-              </svg>
-            </span>
-          </button>
-
-          {/* แผงปุ่มสไลด์แท็บรายการ */}
-          <div className="grid grid-cols-4 md:flex flex-1 md:justify-center gap-1 md:gap-2 h-11 items-center">
-            {tabs.map((tab) => {
-              const isActive = pathname === tab.href;
-              
-              return (
-                <Link 
-                  key={tab.href} 
-                  href={tab.href}
-                  className={`
-                    relative flex items-center justify-center gap-2 h-full px-2 py-3 md:px-6 rounded-xl transition-colors duration-300 flex-1 md:flex-none
-                    ${isActive ? 'text-white font-black' : 'text-slate-500 hover:text-blue-600 font-bold'}
-                  `}
-                >
-                  {/* ✅ ตัวสไลด์ (Active Indicator) */}
-                  {isActive && (
-                    <motion.div
-                      layoutId="active-pill"
-                      className="absolute inset-0 bg-blue-600 shadow-md shadow-blue-600/10"
-                      style={{ borderRadius: '12px' }}
-                      transition={{ 
-                        type: 'spring', 
-                        stiffness: 400, 
-                        damping: 30 
-                      }}
-                    />
-                  )}
-
-                  {/* เนื้อหาด้านในต้องใส่ relative z-10 เพื่อให้อยู่เหนือตัวสไลด์ */}
-                  <span className="relative z-10 flex items-center justify-center gap-2 text-xs md:text-sm">
-                    <tab.icon size={20} />
-                    <span className="hidden md:block">
-                      {tab.name}
-                    </span>
-                  </span>
-                </Link>
-              );
-            })}
+          {/* 🍔 1. ฝั่งซ้าย: ปุ่มแฮมเบอร์เกอร์ 3 ขีด */}
+          <div className="flex items-center w-full md:w-auto justify-start shrink-0">
+            <button 
+              type="button"
+              onClick={() => {
+                const layoutMenuBtn = document.querySelector('header button');
+                if (layoutMenuBtn instanceof HTMLElement) {
+                  layoutMenuBtn.click();
+                }
+              }} 
+              className="h-11 aspect-square bg-white border border-slate-200 text-slate-600 hover:text-slate-800 hover:border-slate-300 active:scale-95 rounded-xl shadow-sm flex items-center justify-center transition-all duration-200"
+              title="เปิดเมนูสไลด์บาร์"
+            >
+              <span className="w-5 h-5">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-full h-full">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+                </svg>
+              </span>
+            </button>
           </div>
+
+          {/* 📑 2. ฝั่งตรงกลาง: แผงปุ่มสไลด์แท็บรายการ (จัดเซ็นเตอร์สวยงาม ไม่ติดซ้ายแล้วครับนาย) */}
+          <div className="w-full md:w-auto flex justify-center items-center">
+            <div className="grid grid-cols-4 md:flex gap-1 md:gap-2 h-11 items-center w-full md:w-max">
+              {tabs.map((tab) => {
+                const isActive = pathname === tab.href;
+                
+                return (
+                  <Link 
+                    key={tab.href} 
+                    href={tab.href}
+                    onClick={() => {
+                      // ⚡ สะกิดเรียกใช้สัญญาณเปิดหน้า Loading ในหน้า Layout หลักครับนาย
+                      if (pathname !== tab.href) {
+                        // ค้นหาฟังก์ชันหรือสร้าง Event สั่งงานล่องหน
+                        window.dispatchEvent(new CustomEvent('nav-start'));
+                        // หากมีปุ่มเมนูหลักใน layout คอยรับ State สามารถใช้คลาสหลอกเพื่อความชัวร์ได้ครับ
+                        const layoutMenu = document.querySelector('nav');
+                        if (layoutMenu) {
+                           // สั่งจำลองการเริ่มดาวน์โหลดหน้าเว็บ
+                           document.documentElement.dispatchEvent(new Event('change-page-loading'));
+                        }
+                      }
+                    }}
+                    className={`
+                      relative flex items-center justify-center gap-2 h-full px-2 py-3 md:px-6 rounded-xl transition-colors duration-300 flex-1 md:flex-none whitespace-nowrap
+                      ${isActive ? 'text-white font-black' : 'text-slate-500 hover:text-blue-600 font-bold'}
+                    `}
+                  >
+                    {/* ✅ ตัวสไลด์ (Active Indicator) */}
+                    {isActive && (
+                      <motion.div
+                        layoutId="active-pill"
+                        className="absolute inset-0 bg-blue-600 shadow-md shadow-blue-600/10"
+                        style={{ borderRadius: '12px' }}
+                        transition={{ 
+                          type: 'spring', 
+                          stiffness: 400, 
+                          damping: 30 
+                        }}
+                      />
+                    )}
+
+                    {/* เนื้อหาด้านในใส่ relative z-10 เพื่อให้อยู่เหนือตัวสไลด์สีน้ำเงิน */}
+                    <span className="relative z-10 flex items-center justify-center gap-1.5 md:gap-2 text-xs md:text-sm">
+                      <tab.icon size={18} />
+                      <span className="hidden md:block">
+                        {tab.name}
+                      </span>
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 📦 3. ฝั่งขวา: กล่องเปล่าสำหรับบาลานซ์ Grid (ทำให้แผงแท็บอยู่ตรงกลางเป๊ะ) */}
+          <div className="hidden md:block"></div>
 
         </div>
 

@@ -49,6 +49,7 @@ export function usePayment() {
     // --- State ---
     const [activeTab, setActiveTab] = useState<'tables' | 'pos'>('tables');
     const [loading, setLoading] = useState(true);
+    const [productsLoading, setProductsLoading] = useState(true);
     const [autoKitchen, setAutoKitchen] = useState(false);
     const [limitStatus, setLimitStatus] = useState<any>(null);
 
@@ -169,6 +170,25 @@ export function usePayment() {
         
         const init = async () => {
             try {
+                // Local-first: show cached menu immediately while fresh data syncs in the background.
+                const [localCats, localProds, localDiscs, localDiscProds] = await Promise.all([
+                    db.categories.toArray(),
+                    db.products.toArray(),
+                    db.discounts.toArray(),
+                    db.discount_products.toArray()
+                ]);
+                const localMappedDiscounts = localDiscs.map(d => ({
+                    ...d,
+                    discount_products: localDiscProds.filter(dp => dp.discount_id === d.id)
+                }));
+
+                if (localCats.length > 0) setCategories(localCats);
+                if (localProds.length > 0) {
+                    setProducts(localProds);
+                    setProductsLoading(false);
+                }
+                if (localMappedDiscounts.length > 0) setDiscounts(localMappedDiscounts);
+
                 const res = await getPaymentInitialDataAction();
                 if (res.success) {
                     setBrandId(res.brandId!);
@@ -177,6 +197,7 @@ export function usePayment() {
                     setCurrentBrand(res.brand);
                     setCategories(res.categories || []);
                     setProducts(res.products || []);
+                    setProductsLoading(false);
                     setDiscounts(res.discounts || []);
                     setAllTables(res.tables || []);
                     
@@ -225,6 +246,7 @@ export function usePayment() {
                 if (localProds.length > 0) setProducts(localProds);
                 if (mappedDiscounts.length > 0) setDiscounts(mappedDiscounts); // 🌟 ใช้ตัวที่ประกอบร่างแล้ว
             }
+            setProductsLoading(false);
             setLoading(false);
         };
         init();
@@ -680,7 +702,7 @@ if (typeof window !== 'undefined' && (window as any).AndroidBridge) {
 
     return {
         activeTab, setActiveTab,
-        loading, autoKitchen, setAutoKitchen, // ✅ คืนค่าตัวแปรปุ่มกลับมาให้หน้าจอใช้งานได้
+        loading, productsLoading, autoKitchen, setAutoKitchen, // ✅ คืนค่าตัวแปรปุ่มกลับมาให้หน้าจอใช้งานได้
         categories, 
         // 🌟 ซ่อนสินค้าที่เป็นของชำ (retail) ไม่ให้แสดงเป็นปุ่มกด แต่ยังสแกนได้ปกติ
         products: selectedCategory === 'ALL' 

@@ -32,10 +32,20 @@ const IconGrid = ({ size = 20 }: any) => <svg width={size} height={size} viewBox
 const IconVolume2 = ({ size = 24 }: any) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>;
 const IconAlertCircle = ({ size = 24 }: any) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>;
 
+const LoadingState = ({ label }: { label: string }) => (
+    <div className="col-span-full flex h-full min-h-[220px] w-full flex-col items-center justify-center gap-4 text-slate-400">
+        <div className="relative h-12 w-12">
+            <div className="absolute inset-0 rounded-full border-4 border-slate-100" />
+            <div className="absolute inset-0 animate-spin rounded-full border-4 border-orange-500 border-t-transparent" />
+        </div>
+        <p className="text-sm font-bold tracking-wide">{label}</p>
+    </div>
+);
+
 export default function PaiOrderMasterPage({ setSidebarOpen }: any) {
     const [showCamera, setShowCamera] = useState(false);
     const {
-        activeTab, setActiveTab, loading, autoKitchen, setAutoKitchen,
+        activeTab, setActiveTab, loading, productsLoading, autoKitchen, setAutoKitchen,
         categories, products, unpaidOrders, allTables, selectedCategory, setSelectedCategory,
         calculatePrice, cart, selectedOrder, setSelectedOrder, receivedAmount, setReceivedAmount,
         paymentMethod, setPaymentMethod, payableAmount, rawTotal, variantModalProduct, setVariantModalProduct,
@@ -65,12 +75,28 @@ export default function PaiOrderMasterPage({ setSidebarOpen }: any) {
 
     const [showMobileCart, setShowMobileCart] = useState(false);
     const [showCashModal, setShowCashModal] = useState(false);
+    const [showProductsLoading, setShowProductsLoading] = useState(false);
     const itemsRef = useRef<{[key: number]: HTMLDivElement | null}>({});
     const prevItemsRef = useRef<any[]>([]);
 
     const isLimitReached = limitStatus?.isLocked;
     const usageText = limitStatus ? `${limitStatus.usage}/${limitStatus.limit}` : '';
     const showSoundGuard = autoKitchen && !isAudioUnlocked;
+
+    // 🌟 โค้ดพระเอก: สั่งให้สลับไปหน้า POS และโฟกัสช่องบาร์โค้ดให้อัตโนมัติเมื่อเข้ามาหน้านี้ครั้งแรก
+    useEffect(() => {
+        setActiveTab('pos');
+        setSelectedOrder(null);
+    }, []);
+
+    useEffect(() => {
+        if (!productsLoading) {
+            setShowProductsLoading(false);
+            return;
+        }
+        const timer = window.setTimeout(() => setShowProductsLoading(true), 180);
+        return () => window.clearTimeout(timer);
+    }, [productsLoading]);
 
     useFcmToken(currentUser?.id, (payload: any) => { 
         console.log("📢 สัญญาณ FCM เข้า! โหลดข้อมูลและเช็กออเดอร์...", payload);
@@ -312,13 +338,14 @@ export default function PaiOrderMasterPage({ setSidebarOpen }: any) {
                     <div className="bg-white rounded-2xl md:rounded-[32px] shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] border border-slate-100 flex-1 flex flex-col overflow-hidden relative">
                         {activeTab === 'tables' ? (
                             <div className="flex-1 overflow-y-auto p-3 md:p-5 space-y-2 md:space-y-3 bg-[#FCFCFD]">
-                                {unpaidOrders.length === 0 && (
+                                {loading ? (
+                                    <LoadingState label="กำลังโหลดข้อมูลโต๊ะ..." />
+                                ) : unpaidOrders.length === 0 ? (
                                     <div className="flex flex-col items-center justify-center h-full text-slate-300 gap-3 md:gap-4 opacity-50">
                                         <div className="w-16 h-16 md:w-24 md:h-24 bg-slate-50 rounded-full flex items-center justify-center border border-slate-100"><span className="w-8 md:w-10"><IconReceipt size="100%" /></span></div>
                                         <p className="font-semibold text-xs md:text-sm uppercase tracking-wider">ไม่มีรายการค้างชำระ</p>
                                     </div>
-                                )}
-                                {unpaidOrders.map((o, i) => (
+                                ) : unpaidOrders.map((o, i) => (
                                     <button key={i} onClick={() => { setSelectedOrder(o); setReceivedAmount(0); }} className={`w-full p-3 md:p-5 rounded-xl md:rounded-[24px] border flex justify-between items-center transition-all duration-200 group relative overflow-hidden ${selectedOrder?.table_label === o.table_label ? 'border-orange-500 bg-orange-50/50 shadow-lg shadow-orange-100 ring-1 ring-orange-500' : 'border-slate-100 bg-white hover:border-slate-300 hover:shadow-md'}`}>
                                         <div className="flex items-center gap-3 md:gap-4 z-10">
                                             <div className={`w-10 h-10 md:w-14 md:h-14 rounded-lg md:rounded-2xl flex items-center justify-center font-black text-base md:text-xl shadow-sm transition-colors ${selectedOrder?.table_label === o.table_label ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600'}`}>{o.table_label.replace('โต๊ะ ', '')}</div>
@@ -399,7 +426,13 @@ export default function PaiOrderMasterPage({ setSidebarOpen }: any) {
                                 
                                 {/* 🚫 ตารางสินค้า (บีบในมือถือแล้ว) 🚫 */}
                                 <div className="flex-1 overflow-y-auto p-2 sm:p-4 grid grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-1.5 sm:gap-3 content-start">
-                                    {products.map((p: any) => {
+                                    {productsLoading ? (
+                                        showProductsLoading ? <LoadingState label="กำลังโหลดรายการอาหาร..." /> : null
+                                    ) : products.length === 0 ? (
+                                        <div className="col-span-full flex min-h-[220px] items-center justify-center text-sm font-bold text-slate-300">
+                                            ไม่พบรายการอาหาร
+                                        </div>
+                                    ) : products.map((p: any) => {
                                         const pricing = calculatePrice(p, 'normal');
                                         const hasDiscount = pricing.discount > 0;
                                         return (

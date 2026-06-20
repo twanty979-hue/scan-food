@@ -1,7 +1,7 @@
 // app/dashboard/inventory/page.tsx
 'use client';
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import React from 'react';
+import Link from 'next/link';
 
 // --- Icons ---
 const IconArrowLeft = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>;
@@ -13,13 +13,9 @@ const IconChart = () => <svg width="100%" height="100%" viewBox="0 0 24 24" fill
 const IconArrowRight = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>;
 
 export default function InventoryMenuPage() {
-    const router = useRouter();
-    const [hasMounted, setHasMounted] = useState(false);
-
-    useEffect(() => {
-        setHasMounted(true);
-    }, []);
-
+  /* Removed the old imperative navigation handler.
+    window.dispatchEvent(new CustomEvent('nav-start')); // สั่งให้ Layout เปิดตัวหมุนกลางจอทันทีก่อนจะเปลี่ยนหน้า
+  */
     const menuItems = [
         {
             title: "สรุปภาพรวมคลัง",
@@ -55,27 +51,24 @@ export default function InventoryMenuPage() {
         }
     ];
 
-    if (!hasMounted) return null;
-
     return (
-        // 🌟 ใช้ fixed inset-0 z-[9999] เพื่อให้ทับ Layout เดิมทั้งหมด
-        <div className="fixed inset-0 z-[9999] bg-[#F8FAFC] font-sans overflow-y-auto pb-10">
+        // 🌟 แก้ไขตรงนี้: เอา fixed inset-0 z-[9999] ออก แล้วใช้ คลาสความสูงปกติ เพื่อให้ระบบ Layout และ loading.tsx สลับฉากได้จริง
+        <div className="min-h-screen bg-[#F8FAFC] font-sans pb-16 animate-in fade-in duration-300 -mx-3 lg:-mx-10 -mt-3 lg:-mt-10">
             
             {/* Header Hero Section */}
             <div className="bg-gradient-to-br from-blue-700 to-indigo-900 px-6 py-10 md:py-14 md:px-12 rounded-b-[40px] shadow-lg relative overflow-hidden">
-                {/* Decorative background shapes */}
                 <div className="absolute top-0 right-0 -translate-y-1/4 translate-x-1/4 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
                 <div className="absolute bottom-0 left-0 translate-y-1/4 -translate-x-1/4 w-48 h-48 bg-blue-400/20 rounded-full blur-2xl"></div>
                 
-                <div className="max-w-4xl mx-auto relative z-10 animate-in fade-in slide-in-from-top-4 duration-700">
+                <div className="max-w-4xl mx-auto relative z-10">
                     <div className="flex items-center gap-4 mb-4">
-                        {/* 🌟 ปุ่ม Back สำหรับกลับหน้า Dashboard หลัก */}
-                        <button 
-                            onClick={() => router.push('/dashboard')} 
+                        <Link
+                            href="/dashboard"
+                            prefetch
                             className="w-10 h-10 flex items-center justify-center bg-white/10 hover:bg-white/20 text-white rounded-full backdrop-blur-md transition-all active:scale-90 border border-white/20"
                         >
                             <IconArrowLeft />
-                        </button>
+                        </Link>
                         <h1 className="text-2xl md:text-4xl font-black text-white tracking-tight">
                             จัดการคลังสินค้า
                         </h1>
@@ -89,10 +82,11 @@ export default function InventoryMenuPage() {
             {/* Main Content Area */}
             <div className="max-w-4xl mx-auto p-4 md:p-8 -mt-6 md:-mt-8 relative z-20 space-y-4 md:space-y-6">
                 
-                {/* 🌟 ปุ่มยักษ์ รับสินค้าเข้า (Stock In) */}
-                <button
-                    onClick={() => router.push('/dashboard/inventory/stock-in')}
-                    className="w-full bg-white p-6 md:p-8 rounded-[32px] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] border-2 border-transparent hover:border-blue-500 transition-all duration-300 group active:scale-[0.98] text-left flex items-center justify-between overflow-hidden relative animate-in fade-in zoom-in-95 duration-500"
+                {/* ปุ่มยักษ์ รับสินค้าเข้า (Stock In) */}
+                <Link
+                    href="/dashboard/inventory/stock-in"
+                    prefetch
+                    className="w-full bg-white p-6 md:p-8 rounded-[32px] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] border-2 border-transparent hover:border-blue-500 transition-all duration-300 group active:scale-[0.98] text-left flex items-center justify-between overflow-hidden relative"
                 >
                     <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-blue-50 to-transparent rounded-bl-full opacity-50"></div>
                     
@@ -106,18 +100,16 @@ export default function InventoryMenuPage() {
                             <p className="text-slate-500 text-xs md:text-base font-medium mt-0.5">ใช้ปืนสแกนเพิ่มสินค้าใหม่เข้าคลัง</p>
                         </div>
                     </div>
-                    
-                    
-                </button>
+                </Link>
 
-                {/* 🌟 เมนูอื่นๆ Grid 2 คอลัมน์ */}
+                {/* เมนูอื่นๆ Grid 2 คอลัมน์ */}
                 <div className="grid grid-cols-2 gap-4 md:gap-6">
                     {menuItems.map((item, index) => (
-                        <button
+                        <Link
                             key={index}
-                            onClick={() => router.push(item.path)}
-                            className="bg-white p-5 md:p-6 rounded-[24px] border border-slate-100 shadow-sm hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-all duration-300 text-left active:scale-[0.96] group flex flex-col h-full animate-in fade-in zoom-in-95"
-                            style={{ animationDelay: `${0.1 * (index + 1)}s` }}
+                            href={item.path}
+                            prefetch
+                            className="bg-white p-5 md:p-6 rounded-[24px] border border-slate-100 shadow-sm hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-all duration-300 text-left active:scale-[0.96] group flex flex-col h-full"
                         >
                             <div className="flex justify-between items-start mb-4">
                                 <div className={`w-11 h-11 md:w-14 md:h-14 ${item.bgColor} ${item.iconColor} rounded-[16px] flex items-center justify-center p-2.5 md:p-3.5 group-hover:scale-110 transition-transform duration-300`}>
@@ -136,7 +128,7 @@ export default function InventoryMenuPage() {
                                     {item.desc}
                                 </p>
                             </div>
-                        </button>
+                        </Link>
                     ))}
                 </div>
             </div>

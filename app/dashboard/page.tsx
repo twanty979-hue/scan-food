@@ -16,6 +16,7 @@ import DashboardChart from './components/DashboardChart';
 dayjs.extend(localizedFormat);
 
 // Icons
+const IconDashboard = ({ size = 28 }: any) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 17v-5"/><path d="M12 17v-8"/><path d="M16 17v-3"/></svg>;
 const IconTrending = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>;
 const IconBill = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>;
 const IconAvg = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>;
@@ -23,7 +24,7 @@ const IconCrown = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="no
 const IconCalendar = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>;
 const IconChevronDown = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>;
 const IconChartLine = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"/></svg>;
-const IconCloudOff = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-600"><path d="M22.61 16.95A5 5 0 0 0 18 10h-1.26a8 8 0 0 0-7.05-6M5 5a8 8 0 0 0 4 15h9a5 5 0 0 0 1.7-.3"/><line x1="1" y1="1" x2="23" y2="23"/></svg>;
+const IconCloudOff = ({ size = 20, className = "text-amber-600" }: any) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M22.61 16.95A5 5 0 0 0 18 10h-1.26a8 8 0 0 0-7.05-6M5 5a8 8 0 0 0 4 15h9a5 5 0 0 0 1.7-.3"/><line x1="1" y1="1" x2="23" y2="23"/></svg>;
 const IconInfo = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>;
 
 export default function DashboardPage() {
@@ -76,7 +77,7 @@ export default function DashboardPage() {
         }
     };
 
- // ==========================================
+    // ==========================================
     // 🚀 ระบบยิงข้อมูลขึ้น Cloud (ก้อนใหญ่ Bundle) + ล้างขยะ
     // ==========================================
     const handleSyncNow = async () => {
@@ -129,6 +130,7 @@ export default function DashboardPage() {
             setIsSyncing(false);
         }
     };
+
     const fetchData = async () => {
         setLoading(true);
         const res = await getDashboardDataAction(viewMode, selectedDate.from, selectedDate.to);
@@ -170,53 +172,60 @@ export default function DashboardPage() {
 
     return (
         <div className="min-h-screen bg-[#F8FAFC] p-3 lg:p-10 font-sans pb-20 lg:pb-10">
-            <div className="max-w-7xl mx-auto space-y-4 lg:space-y-8">
-                
-                {/* ========================================== */}
-                {/* 🛡️ แถบแจ้งเตือนบิลออฟไลน์ค้าง (The Sync Banner) */}
-                {/* ========================================== */}
-                {showSyncBanner && (
-                    <div className="bg-amber-50 border-2 border-amber-200/60 rounded-2xl p-4 lg:p-5 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 animate-in slide-in-from-top-4 duration-300">
-                        <div className="flex items-center gap-3 w-full">
-                            <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center shrink-0">
+            
+            {/* ========================================== */}
+            {/* 🛡️ ป๊อปอัปแจ้งเตือนบิลออฟไลน์ค้าง (The Sync Modal) */}
+            {/* ========================================== */}
+            {showSyncBanner && (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300 p-4">
+                    <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-300">
+                        <div className="p-8 text-center flex flex-col items-center">
+                            
+                            <div className="w-20 h-20 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mb-6 shadow-inner relative">
                                 {isSyncing ? (
-                                    <div className="w-6 h-6 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+                                    <div className="w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
                                 ) : (
-                                    <IconCloudOff />
+                                    <IconCloudOff size={40} className="text-amber-500" />
+                                )}
+                                {!isSyncing && (
+                                    <div className="absolute -top-1 -right-1 bg-rose-500 text-white w-6 h-6 rounded-full flex items-center justify-center font-black text-xs border-2 border-white shadow-sm">
+                                        !
+                                    </div>
                                 )}
                             </div>
-                            <div className="flex-1">
-                                <h3 className="text-base lg:text-lg font-black text-amber-900">
-                                    มีบิลขายหน้าร้านรอซิงค์ <span className="text-amber-600">({unsyncedQueue.length} รายการ)</span>
-                                </h3>
-                                <p className="text-xs lg:text-sm font-medium text-amber-700 mt-0.5 leading-snug">
-                                    ยอดขายถูกบันทึกในเครื่องปลอดภัยแล้ว <br className="md:hidden" />
-                                    แต่<strong className="underline">จะไม่แสดงในกราฟนี้</strong>จนกว่าคุณจะกดซิงค์ข้อมูลขึ้นระบบ
-                                </p>
+                            
+                            <h3 className="text-2xl font-black text-slate-800 mb-2 tracking-tight">
+                                มีบิลรอซิงค์ข้อมูล
+                            </h3>
+                            <p className="text-slate-500 font-medium mb-8 leading-relaxed text-sm">
+                                มียอดขาย <strong className="text-amber-600">{unsyncedQueue.length} รายการ</strong> ที่บันทึกแบบออฟไลน์ไว้ กรุณากดซิงค์เพื่อให้ข้อมูลรวมในกราฟ
+                            </p>
+                            
+                            <div className="w-full space-y-3">
+                                <button 
+                                    onClick={handleSyncNow} 
+                                    disabled={isSyncing}
+                                    className="w-full py-4 rounded-2xl font-black text-lg text-white bg-amber-500 hover:bg-amber-600 shadow-lg shadow-amber-500/30 transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none flex justify-center items-center gap-2"
+                                >
+                                    {isSyncing ? 'กำลังซิงค์ขึ้นระบบ...' : 'อัปเดตยอดขายเดี๋ยวนี้ 🚀'}
+                                </button>
+                                <button 
+                                    onClick={() => setShowSyncBanner(false)} 
+                                    disabled={isSyncing}
+                                    className="w-full py-3 rounded-2xl font-bold text-slate-400 hover:bg-slate-50 hover:text-slate-600 transition-colors disabled:opacity-50 text-sm"
+                                >
+                                    ข้ามไปก่อน (ไว้ทำทีหลัง)
+                                </button>
                             </div>
-                        </div>
-                        <div className="flex gap-2 w-full md:w-auto shrink-0 mt-2 md:mt-0">
-                            <button 
-                                onClick={() => setShowSyncBanner(false)} 
-                                disabled={isSyncing}
-                                className="flex-1 md:flex-none px-4 py-2.5 rounded-xl text-xs lg:text-sm font-bold text-amber-700 bg-transparent hover:bg-amber-100 transition-colors disabled:opacity-50"
-                            >
-                                ข้ามไปก่อน
-                            </button>
-                            <button 
-                                onClick={handleSyncNow} 
-                                disabled={isSyncing}
-                                className="flex-1 md:flex-none px-6 py-2.5 rounded-xl text-xs lg:text-sm font-black bg-amber-500 text-white shadow-lg shadow-amber-500/30 hover:bg-amber-600 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:transform-none disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                            >
-                                {isSyncing ? 'กำลังซิงค์ขึ้นระบบ...' : '🚀 อัปเดตยอดขายเดี๋ยวนี้'}
-                            </button>
+
                         </div>
                     </div>
-                )}
+                </div>
+            )}
 
-                {/* ========================================== */}
+            <div className="max-w-7xl mx-auto space-y-4 lg:space-y-8">
+                
                 {/* 🛡️ แถบแจ้งเตือนแพ็กเกจ (Limit Warning) */}
-                {/* ========================================== */}
                 {data?.limitWarning && (
                     <div className="bg-indigo-50 border border-indigo-200 text-indigo-700 px-4 py-3 rounded-xl text-xs lg:text-sm font-bold flex items-center gap-3 animate-in fade-in">
                         <span className="flex items-center justify-center shrink-0">
@@ -230,13 +239,34 @@ export default function DashboardPage() {
                 <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 lg:bg-transparent lg:shadow-none lg:border-none lg:p-0">
                     <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3">
                         <div className="flex justify-between w-full items-center">
-                            <div>
-                                <h1 className="text-lg lg:text-3xl font-black text-slate-900 tracking-tight">ภาพรวมร้าน</h1>
-                                <div className="flex items-center gap-2 mt-0.5">
-                                    <span className="text-[10px] lg:text-base text-slate-400 font-medium">ช่วงเวลา:</span>
-                                    <span className="text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded text-[11px] lg:text-base border border-indigo-100 whitespace-nowrap">
-                                        {getDisplayLabel()}
-                                    </span>
+                            
+                            {/* 🌟 ปรับปรุงส่วน Title และ Icon ให้กดเปิด Sidebar ได้ */}
+                            <div className="flex items-center gap-3 md:gap-4">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        // ยิงสายสัญญาณไร้สายไปหา Header หลัก
+                                        const layoutMenuBtn = document.querySelector('header button');
+                                        if (layoutMenuBtn instanceof HTMLElement) {
+                                            layoutMenuBtn.click();
+                                        }
+                                    }}
+                                    className="group active:scale-95 transition-transform duration-200 flex-shrink-0"
+                                    title="คลิกไอคอนเพื่อเปิดเมนูสไลด์บาร์"
+                                >
+                                    <div className="transition-transform duration-200 group-hover:scale-110 group-hover:-rotate-6 text-slate-800 group-hover:text-blue-600 bg-slate-100 group-hover:bg-blue-50 p-2 md:p-2.5 rounded-xl shadow-sm border border-slate-200 group-hover:border-blue-200">
+                                        <IconDashboard size={24} />
+                                    </div>
+                                </button>
+                                
+                                <div className="flex flex-col">
+                                    <h1 className="text-xl lg:text-3xl font-black text-slate-900 tracking-tight leading-none">ภาพรวมร้าน</h1>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <span className="text-[10px] lg:text-base text-slate-400 font-medium">ช่วงเวลา:</span>
+                                        <span className="text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded text-[11px] lg:text-base border border-indigo-100 whitespace-nowrap">
+                                            {getDisplayLabel()}
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                             

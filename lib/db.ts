@@ -11,6 +11,7 @@ export class PosDatabase extends Dexie {
   pai_orders!: Table<any>;
   sync_queue!: Table<any>;
   stock_drafts!: Table<any>; 
+  app_settings!: Table<{ key: string; value: unknown; updated_at: string }>;
 
   constructor() {
     super('FoodScanOfflineDB');
@@ -51,6 +52,19 @@ export class PosDatabase extends Dexie {
       pai_orders: 'id, order_id, brand_id',
       sync_queue: '++id, type, status',
       stock_drafts: 'id, barcode, name' 
+    });
+
+    this.version(6).stores({
+      categories: 'id, brand_id',
+      products: 'id, category_id, brand_id, barcode, sku, name',
+      discounts: 'id, brand_id',
+      discount_products: '[discount_id+product_id]',
+      orders: 'id, status, brand_id, table_label, created_at',
+      order_items: 'id, order_id, product_id',
+      pai_orders: 'id, order_id, brand_id',
+      sync_queue: '++id, type, status',
+      stock_drafts: 'id, barcode, name',
+      app_settings: 'key, updated_at'
     });
   }
 }

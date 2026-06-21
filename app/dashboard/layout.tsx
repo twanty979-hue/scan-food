@@ -6,6 +6,14 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
+const PROFILE_CDN_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || 'https://img.pos-foodscan.com';
+
+const getProfileImageUrl = (avatarUrl?: string | null) => {
+  if (!avatarUrl) return null;
+  if (avatarUrl.startsWith('http') || avatarUrl.startsWith('blob:')) return avatarUrl;
+  return `${PROFILE_CDN_URL}/${avatarUrl}`;
+};
+
 // --- 🎨 Custom Icons ---
 const IconX = ({ size = 28 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
 const IconChef = ({ size = 28 }) => (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12h20" /><path d="M20 12v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8" /><path d="m4 8 16-4" /><path d="m8.86 6.78-.45-1.81a2 2 0 0 1 1.45-2.43l1.94-.55a2 2 0 0 1 2.43 1.46l.45 1.8" /></svg>);
@@ -47,20 +55,37 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, []);
 
   useEffect(() => {
+    const handleProfileUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        full_name?: string;
+        avatar_url?: string;
+      }>).detail;
+
+      if (detail) {
+        setProfile((current: any) => ({ ...current, ...detail }));
+      }
+    };
+
+    window.addEventListener('profile-updated', handleProfileUpdated);
+    return () => window.removeEventListener('profile-updated', handleProfileUpdated);
+  }, []);
+
+  useEffect(() => {
     setMounted(true);
     const fetchProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.replace('/login'); return; }
-      const { data } = await supabase.from('profiles').select('*, brands(*)').eq('id', user.id).single();
-      if (data) { 
-          setProfile(data); 
-          const brandsData = data.brands;
-          if (Array.isArray(brandsData) && brandsData.length > 0) {
-             setBrand(brandsData[0]);
-          } else {
-             setBrand(brandsData);
-          }
-      }
+      if (!user) return;
+      const { data } = await supabase.from('profiles').select('*, brands:brand_id(*)').eq('id', user.id).single();
+       if (data) { 
+    setProfile(data); 
+    // ถ้าข้อมูลถูกดึงผ่านคีย์เจาะจง brands จะออกมาเป็น object หรือ array ที่ถูกต้องตัวเดียว
+    const brandsData = data.brands;
+    if (Array.isArray(brandsData)) {
+        setBrand(brandsData[0] || null);
+    } else {
+        setBrand(brandsData || null);
+    }
+}
     };
     fetchProfile();
   }, [router]);
@@ -70,17 +95,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     router.replace('/login');
   };
 
-  const isOwner = profile?.role === 'owner';
+const isOwner = profile?.role === 'owner';
   const isPremium = ['pro', 'ultimate'].includes(brand?.plan);
-
+  const profileImageUrl = getProfileImageUrl(profile?.avatar_url);
+  const profileDisplayName = profile?.full_name?.trim() || 'SuparPOS';
+  
+  // 🟢 เพิ่มตัวแปรเช็คว่ามีคำเชิญค้างอยู่ไหม
+  const hasPendingInvite = profile?.invited_brand_id && profile?.is_joined === false;
   const navItems = [
     { name: 'คิดเงิน (แคชเชียร์)', href: '/dashboard/pai_order', icon: IconGrid, hidden: !isOwner && !isPremium },
     { name: 'ออเดอร์ (ครัว)', href: '/dashboard/orders', icon: IconChef, hidden: !isOwner && !isPremium },
     { name: 'ระบบคลังสินค้า', href: '/dashboard/inventory', icon: IconBox, hidden: !isOwner && !isPremium },
     { name: '--- จัดการร้าน ---', href: '#', icon: null, separator: true, hidden: !isOwner && !isPremium },
     { name: 'Dashboard', href: '/dashboard', icon: Icondashboard, ownerOnly: true },
-    { name: 'ส่วนลด/โปรฯ', href: '/dashboard/discounts', icon: IconTag, ownerOnly: true },
-    { name: 'เมนูอาหาร', href: '/dashboard/products', icon: IconPlusSquare, ownerOnly: true },
+    // { name: 'ส่วนลด/โปรฯ', href: '/dashboard/discounts', icon: IconTag, ownerOnly: true },
+    { name: 'จัดการสินค้า', href: '/dashboard/products', icon: IconPlusSquare, ownerOnly: true },
     { name: 'ใบเสร็จย้อนหลัง', href: '/dashboard/receipts', icon: IconHistory, ownerOnly: true },
     { name: 'ตั้งค่าร้าน', href: '/dashboard/settings', icon: IconSettings, ownerOnly: true },
     { name: '--- จัดการธีม ---', href: '#', icon: null, separator: true },
@@ -115,7 +144,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <div className="absolute inset-0 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
               </div>
               
-             
+              <div className="text-center space-y-1">
+                <p className="text-base font-black text-slate-800 tracking-tight">กำลังโหลดข้อมูล...</p>
+                <p className="text-xs font-bold text-slate-400">กรุณารอสักครู่ครับนาย</p>
+              </div>
             </div>
           </div>
         </>
@@ -147,12 +179,39 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* 🌟 ส่วนหัว Sidebar */}
         <div className="px-5 py-4 border-b border-slate-100 bg-white shrink-0 relative flex justify-between items-start">
           <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-3">
-              <div className="text-indigo-600 bg-indigo-50 p-2 rounded-xl shadow-sm border border-indigo-100">
-                <IconQRCode size={20} />
+            
+            {/* 🚀 เปลี่ยนโลโก้เป็น Link กดแล้วไปหน้า Profile พร้อมจุดแจ้งเตือน */}
+            <Link 
+              href="/dashboard/profile"
+              onClick={() => {
+                setSidebarOpen(false);
+                if (pathname !== '/dashboard/profile') setIsNavigating(true);
+              }}
+              className="flex items-center gap-3 group"
+            >
+              <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-600 shadow-sm transition-all duration-200 group-hover:scale-105 group-hover:bg-indigo-100">
+                {profileImageUrl ? (
+                  <img
+                    src={profileImageUrl}
+                    alt={profileDisplayName}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <IconQRCode size={20} />
+                )}
+                
+                {/* 🔴 จุดแดงกระพริบเตือนถ้ามีคำเชิญ (Ping Animation) */}
+                {hasPendingInvite && (
+                  <span className="absolute -top-1.5 -right-1.5 flex h-3.5 w-3.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-rose-500 border-[2px] border-white"></span>
+                  </span>
+                )}
               </div>
-              <span className="font-black text-xl tracking-tighter bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">Scan-Food</span>
-            </div>
+              <span className="max-w-36 truncate font-black text-xl tracking-tighter bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent group-hover:opacity-80 transition-opacity">
+                {profileDisplayName}
+              </span>
+            </Link>
             
             <button 
               onClick={handleLogout} 

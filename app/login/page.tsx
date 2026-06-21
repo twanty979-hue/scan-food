@@ -1,10 +1,11 @@
 //app/login/page.tsx
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase'; // ตรวจสอบ path ให้ถูกต้อง
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
+import { clearBrowserData } from '@/lib/clearBrowserData';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,13 +14,31 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [resettingSession, setResettingSession] = useState(false);
+  const resetStarted = useRef(false);
 
   // State สำหรับสลับหน้า (Login vs Forgot Password)
   const [isRecovery, setIsRecovery] = useState(false); 
 
   // เช็ค Session (Logic เดิม)
+  // เช็ค Session ขาเข้า
   useEffect(() => {
     const checkSession = async () => {
+      const resetReason = new URLSearchParams(window.location.search).get('reset');
+      if (resetReason === 'store_changed') {
+        if (resetStarted.current) return;
+        resetStarted.current = true;
+        setResettingSession(true);
+
+        await supabase.auth.signOut({ scope: 'local' });
+        await clearBrowserData();
+
+        window.history.replaceState({}, '', '/login');
+        setSuccessMsg('สิทธิ์การเข้าถึงร้านมีการเปลี่ยนแปลง ระบบล้างข้อมูลร้านเดิมเพื่อความปลอดภัยแล้ว กรุณาเข้าสู่ระบบใหม่');
+        setResettingSession(false);
+        return;
+      }
+
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         const { data: profile } = await supabase
@@ -28,8 +47,12 @@ export default function LoginPage() {
           .eq('id', session.user.id)
           .single();
 
-        if (profile?.brand_id) router.replace('/dashboard');
-        else router.replace('/setup');
+        // 🟢 เปลี่ยนจุดนี้: ถ้ามีร้านค้า ให้ดีดไปหน้าคิดเงินทันที ชัวร์สุดครับนาย
+        if (profile?.brand_id) {
+          router.replace('/dashboard/pai_order');
+        } else {
+          router.replace('/setup');
+        }
       }
     };
     checkSession();
@@ -80,7 +103,7 @@ const handleLogin = async (e: React.FormEvent) => {
       throw new Error(result.error || "เกิดข้อผิดพลาดในการเข้าสู่ระบบ");
     }
 
-    // ✅ สำคัญ: เมื่อ Login ผ่าน API แล้ว ต้องเซต Session ให้ Supabase Client ฝั่ง Browser รู้ด้วย
+// ✅ บันทึก Session ให้ Supabase Client รู้จัก
     const { error: sessionError } = await supabase.auth.setSession({
       access_token: result.session.access_token,
       refresh_token: result.session.refresh_token,
@@ -88,8 +111,8 @@ const handleLogin = async (e: React.FormEvent) => {
 
     if (sessionError) throw sessionError;
 
-    // นำทางไปยังหน้าตามที่ API แนะนำมา
-    router.push(result.redirectTo);
+    // 🟢 เปลี่ยนจุดนี้: สั่งให้พุ่งตรงไปที่หน้าคิดเงินของนายทันที ไม่ต้องสนค่าแนะนำจาก API ครับ!
+    router.push('/dashboard/pai_order');
 
   } catch (error: any) {
     setErrorMsg(error.message);
@@ -120,6 +143,20 @@ const handleLogin = async (e: React.FormEvent) => {
   }
 };
 
+  if (resettingSession) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 p-6 text-white">
+        <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-white/5 p-8 text-center shadow-2xl backdrop-blur">
+          <div className="mx-auto mb-6 h-14 w-14 animate-spin rounded-full border-4 border-white/20 border-t-blue-400" />
+          <h1 className="text-xl font-black">กำลังรักษาความปลอดภัยของข้อมูล</h1>
+          <p className="mt-3 text-sm leading-relaxed text-slate-300">
+            กำลังออกจากระบบและล้างข้อมูลร้านเดิมทั้งหมดจากอุปกรณ์นี้ กรุณาอย่าปิดหน้านี้
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-brand-50/50 relative overflow-hidden p-4">
       {/* Background Decor */}
@@ -132,7 +169,7 @@ const handleLogin = async (e: React.FormEvent) => {
         <div className="text-center mb-8">
           <div className="w-24 h-24 bg-white rounded-2xl flex items-center justify-center shadow-lg shadow-brand-500/20 mx-auto mb-4 p-2 border border-slate-100 relative overflow-hidden">
              <Image 
-               src="/logo.png" 
+               src="/icon.png" 
                alt="Shop Logo" 
                fill 
                className="object-contain p-2"

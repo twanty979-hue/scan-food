@@ -74,7 +74,7 @@ export default function ResetPasswordPage() {
         <div className="text-center mb-8">
            <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20 mx-auto mb-4 p-2 border border-slate-50 relative overflow-hidden">
              <Image 
-               src="/logo.png" 
+               src="/icon.png" 
                alt="FoodScan Logo" 
                fill 
                className="object-contain p-2"

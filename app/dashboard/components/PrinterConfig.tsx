@@ -1,6 +1,6 @@
 // app/dashboard/components/PrinterConfig.tsx
 'use client';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { usePrinter, PrinterSettings } from '@/hooks/usePrinter';
 
 // 🌟 เปลี่ยนเป็นไอคอนเครื่องพิมพ์ใบเสร็จ (สำหรับกดเรียกเปิด Sidebar)
@@ -15,6 +15,18 @@ const IconPrinter = ({ size = 20 }: any) => (
 export default function PrinterConfig() {
   const { printers, addOrUpdatePrinter, deletePrinter } = usePrinter();
   const [isEditing, setIsEditing] = useState(false);
+  const [pairedPrinters, setPairedPrinters] = useState<Array<{ name: string; address: string }>>([]);
+
+  useEffect(() => {
+    try {
+      const bridge = (window as any).AndroidBridge;
+      if (typeof bridge?.getPairedBluetoothPrinters === 'function') {
+        setPairedPrinters(JSON.parse(bridge.getPairedBluetoothPrinters()));
+      }
+    } catch {
+      setPairedPrinters([]);
+    }
+  }, []);
   
   // State สำหรับจำลองการโชว์ QR Code
   const [testQrUrl, setTestQrUrl] = useState<string | null>(null);
@@ -25,7 +37,8 @@ export default function PrinterConfig() {
     name: '',
     ipAddress: '192.168.1.',
     port: '9100',
-    connectionType: 'airprint',
+    connectionType: 'bluetooth',
+    bluetoothAddress: '',
     paperSize: '80mm',
     isDefault: true
   });
@@ -36,7 +49,8 @@ export default function PrinterConfig() {
       name: '',
       ipAddress: '192.168.1.',
       port: '9100',
-      connectionType: 'airprint',
+      connectionType: 'bluetooth',
+      bluetoothAddress: pairedPrinters[0]?.address || '',
       paperSize: '80mm',
       isDefault: printers.length === 0
     });
@@ -51,6 +65,12 @@ export default function PrinterConfig() {
   };
 
 const handleTestPrint = async (printer: PrinterSettings) => {
+    const androidBridge = (window as any).AndroidBridge;
+    if (typeof androidBridge?.configurePrinter === 'function' && typeof androidBridge?.testPrinter === 'function') {
+      androidBridge.configurePrinter(JSON.stringify(printer));
+      androidBridge.testPrinter();
+      return;
+    }
     // 🌟 บรรทัดนี้คงเดิม
     if (printer.connectionType === 'airprint') {
       window.print();
@@ -199,6 +219,19 @@ const handleTestPrint = async (printer: PrinterSettings) => {
 
             {formData.connectionType === 'bluetooth' && (
               <div className="col-span-2">
+                {pairedPrinters.length > 0 && (
+                  <div className="mb-3">
+                    <label className="block text-xs font-medium text-slate-600 mb-1">เลือกเครื่องพิมพ์ Bluetooth ที่จับคู่แล้ว</label>
+                    <select
+                      value={formData.bluetoothAddress || ''}
+                      onChange={e => setFormData({...formData, bluetoothAddress: e.target.value})}
+                      className="w-full px-3 py-2 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    >
+                      <option value="">เลือกเครื่องแรกที่จับคู่ไว้</option>
+                      {pairedPrinters.map(device => <option key={device.address} value={device.address}>{device.name} ({device.address})</option>)}
+                    </select>
+                  </div>
+                )}
                 <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg text-sm text-blue-700 font-medium">
                   👉 สำหรับการพิมพ์ผ่านบลูทูธ ระบบจะทำการเชื่อมต่อกับเครื่องพิมพ์บลูทูธที่จับคู่ไว้ (Paired) ในการตั้งค่า Bluetooth ของอุปกรณ์ของคุณ
                 </div>

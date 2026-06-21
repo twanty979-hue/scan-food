@@ -14,6 +14,7 @@ import {
 import { getLatestTableDataAction } from '@/app/actions/tableActions';
 import { getOrderUsage } from '@/app/actions/limitGuard';
 import { db } from '@/lib/db'; 
+import { getPosSettings } from '@/lib/posSettings';
 
 // ✅ ฟังก์ชันสร้าง UUID แบบปลอดภัย
 const generateUUID = () => {
@@ -169,7 +170,11 @@ export function usePayment() {
         }
         
         const init = async () => {
+            const cachedBrandId = typeof window !== 'undefined'
+                ? window.localStorage.getItem('foodscan_last_brand_id')
+                : null;
             try {
+                if (!db.isOpen()) await db.open();
                 // Local-first: show cached menu immediately while fresh data syncs in the background.
                 const [localCats, localProds, localDiscs, localDiscProds] = await Promise.all([
                     db.categories.toArray(),
@@ -177,20 +182,24 @@ export function usePayment() {
                     db.discounts.toArray(),
                     db.discount_products.toArray()
                 ]);
-                const localMappedDiscounts = localDiscs.map(d => ({
+                const brandCats = cachedBrandId ? localCats.filter(item => String(item.brand_id) === cachedBrandId) : [];
+                const brandProds = cachedBrandId ? localProds.filter(item => String(item.brand_id) === cachedBrandId) : [];
+                const brandDiscs = cachedBrandId ? localDiscs.filter(item => String(item.brand_id) === cachedBrandId) : [];
+                const localMappedDiscounts = brandDiscs.map(d => ({
                     ...d,
                     discount_products: localDiscProds.filter(dp => dp.discount_id === d.id)
                 }));
 
-                if (localCats.length > 0) setCategories(localCats);
-                if (localProds.length > 0) {
-                    setProducts(localProds);
+                if (brandCats.length > 0) setCategories(brandCats);
+                if (brandProds.length > 0) {
+                    setProducts(brandProds);
                     setProductsLoading(false);
                 }
                 if (localMappedDiscounts.length > 0) setDiscounts(localMappedDiscounts);
 
                 const res = await getPaymentInitialDataAction();
                 if (res.success) {
+                    window.localStorage.setItem('foodscan_last_brand_id', String(res.brandId));
                     setBrandId(res.brandId!);
                     setCurrentUser(res.user);
                     setCurrentProfile(res.profile);
@@ -207,9 +216,14 @@ export function usePayment() {
                         }))
                     );
 
+                    await db.transaction('rw', db.categories, db.products, async () => {
+                        await db.categories.where('brand_id').equals(res.brandId!).delete();
+                        await db.products.where('brand_id').equals(res.brandId!).delete();
+                        await db.categories.bulkPut(res.categories || []);
+                        await db.products.bulkPut(res.products || []);
+                    });
+
                     await Promise.all([
-                        db.categories.bulkPut(res.categories || []),
-                        db.products.bulkPut(res.products || []),
                         db.discounts.bulkPut(res.discounts || []),
                         db.discount_products.bulkPut(discountMappings)
                     ]);
@@ -224,6 +238,7 @@ export function usePayment() {
                         .map(q => q.payload.localOrderId);
 
                     const trulyUnpaidOrders = orders.filter((o: any) => !paidLocalOrderIds.includes(o.id));
+                    processedOrdersRef.current = new Set(trulyUnpaidOrders.map((order: any) => String(order.id)));
                     setUnpaidOrders(trulyUnpaidOrders);
                     unpaidOrdersRef.current = trulyUnpaidOrders;
                 } else {
@@ -231,19 +246,23 @@ export function usePayment() {
                 }
            } catch (error) {
                 console.warn("⚠️ Offline Mode: Loading from local Dexie database");
-                const localCats = await db.categories.toArray();
-                const localProds = await db.products.toArray();
-                const localDiscs = await db.discounts.toArray();
-                const localDiscProds = await db.discount_products.toArray(); // 🌟 ดึงตารางความสัมพันธ์มาด้วย
+                if (!db.isOpen()) await db.open().catch(() => undefined);
+                const localCats = await db.categories.toArray().catch(() => []);
+                const localProds = await db.products.toArray().catch(() => []);
+                const localDiscs = await db.discounts.toArray().catch(() => []);
+                const localDiscProds = await db.discount_products.toArray().catch(() => []); // 🌟 ดึงตารางความสัมพันธ์มาด้วย
 
                 // 🌟 ประกอบร่างให้เหมือนดึงมาจาก Cloud
-                const mappedDiscounts = localDiscs.map(d => ({
+                const offlineCats = cachedBrandId ? localCats.filter(item => String(item.brand_id) === cachedBrandId) : [];
+                const offlineProds = cachedBrandId ? localProds.filter(item => String(item.brand_id) === cachedBrandId) : [];
+                const offlineDiscs = cachedBrandId ? localDiscs.filter(item => String(item.brand_id) === cachedBrandId) : [];
+                const mappedDiscounts = offlineDiscs.map(d => ({
                     ...d,
                     discount_products: localDiscProds.filter(dp => dp.discount_id === d.id)
                 }));
                 
-                if (localCats.length > 0) setCategories(localCats);
-                if (localProds.length > 0) setProducts(localProds);
+                if (offlineCats.length > 0) setCategories(offlineCats);
+                if (offlineProds.length > 0) setProducts(offlineProds);
                 if (mappedDiscounts.length > 0) setDiscounts(mappedDiscounts); // 🌟 ใช้ตัวที่ประกอบร่างแล้ว
             }
             setProductsLoading(false);
@@ -296,7 +315,9 @@ export function usePayment() {
         let shouldPlaySound = false; 
 
         for (const order of ordersToCheck) {
-            if (order.status === 'pending') {
+            const orderId = String(order.id);
+            if (order.status === 'pending' && !processedOrdersRef.current.has(orderId)) {
+                processedOrdersRef.current.add(orderId);
                 console.log(`➡️ เจอออเดอร์ใหม่ ${order.id}! กำลังรับออเดอร์อัตโนมัติ... (ปิดระบบปริ้น)`);
 
                 // ⏳ หน่วงเวลา 2 วิ รอข้อมูลอาหารลงฐานข้อมูลให้ครบ
@@ -318,6 +339,8 @@ export function usePayment() {
 
                     hasUpdatedDB = true;
                     shouldPlaySound = true; 
+                } else {
+                    processedOrdersRef.current.delete(orderId);
                 }
             }
         }
@@ -437,7 +460,7 @@ export function usePayment() {
                 original_price: pricing.original, // ใช้ snake_case เพื่อให้ตรงกับ Database
                 discount: pricing.discount,       // ยัดยอดลดลงไปในตะกร้า
                 quantity: 1, 
-                image_url: product.image_url, 
+                image_url: product.image_url || product.image || product.image_name || product.thumbnail_url || null,
                 promotion_snapshot: pricing.promoDetails 
             }];
         });
@@ -616,7 +639,8 @@ export function usePayment() {
             
             // สั่งพิมพ์ออกเครื่อง (ดีเลย์นิดนึงให้ Modal ใบเสร็จเปิดขึ้นมาก่อน)
 // สั่งพิมพ์ออกเครื่อง (ดีเลย์นิดนึงให้ Modal ใบเสร็จเปิดขึ้นมาก่อน)
-if (typeof window !== 'undefined' && (window as any).AndroidBridge) {
+const receiptPrintSettings = typeof window !== 'undefined' ? getPosSettings() : null;
+if (typeof window !== 'undefined' && (window as any).AndroidBridge && receiptPrintSettings?.autoPrintReceipt) {
     setTimeout(() => {
         try {
             // 1. ฟังก์ชันช่วยดึงค่ายอดลด (เหมือนใน ReceiptModal)
@@ -669,7 +693,8 @@ if (typeof window !== 'undefined' && (window as any).AndroidBridge) {
                 receivedAmount: Number(paiOrderData.received_amount), 
                 changeAmount: Number(paiOrderData.change_amount), 
                 paymentMethod: String(paymentMethod).toUpperCase(), 
-                cashier: String(currentProfile?.full_name || 'System')
+                cashier: String(currentProfile?.full_name || 'System'),
+                copies: receiptPrintSettings.receiptCopies
             };
             
             (window as any).AndroidBridge.printReceipt(JSON.stringify(printData));
@@ -703,7 +728,8 @@ if (typeof window !== 'undefined' && (window as any).AndroidBridge) {
     return {
         activeTab, setActiveTab,
         loading, productsLoading, autoKitchen, setAutoKitchen, // ✅ คืนค่าตัวแปรปุ่มกลับมาให้หน้าจอใช้งานได้
-        categories, 
+        categories,
+        allProducts: products,
         // 🌟 ซ่อนสินค้าที่เป็นของชำ (retail) ไม่ให้แสดงเป็นปุ่มกด แต่ยังสแกนได้ปกติ
         products: selectedCategory === 'ALL' 
             ? products.filter((p: any) => p.item_type !== 'retail') 

@@ -21,7 +21,11 @@ export async function OPTIONS() {
 
 export async function POST(request: Request) {
   try {
-    const { email, password } = await request.json();
+    const { email, password, source } = await request.json();
+    const requestOrigin = new URL(request.url).origin;
+    const emailRedirectTo = source === 'app'
+      ? 'com.suparpos.app://login-callback/?next=setup'
+      : `${requestOrigin}/auth/callback?next=/setup`;
 
     // 2. สั่งสมัครสมาชิกผ่าน Supabase
     const { data, error } = await supabaseAdmin.auth.signUp({
@@ -29,7 +33,7 @@ export async function POST(request: Request) {
       password,
       options: {
         // กำหนดให้หลังจากยืนยันอีเมลแล้ว วิ่งกลับมาที่หน้านี้
-        emailRedirectTo: `${new URL(request.url).origin}/auth/callback?next=/setup`,
+        emailRedirectTo,
       },
     });
 

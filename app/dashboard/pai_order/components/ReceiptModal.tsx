@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useRef } from 'react';
+import { getPosSettings } from '@/lib/posSettings';
 
 // --- Icons (เฉพาะปุ่มด้านนอก ไม่ปริ้นลงบิล) ---
 const IconPrinter = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>;
@@ -80,7 +81,8 @@ export default function ReceiptModal({ receipt, items, onClose }: ReceiptModalPr
             receivedAmount: receipt.received_amount || netTotal,
             changeAmount: receipt.change_amount || 0,
             paymentMethod: receipt.payment_method,
-            cashier: receipt.cashier?.full_name || 'System'
+            cashier: receipt.cashier?.full_name || 'System',
+            copies: getPosSettings().receiptCopies
         };
 
         if (typeof window !== 'undefined' && (window as any).AndroidBridge) {

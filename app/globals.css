@@ -39,7 +39,7 @@ body {
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
 .hero-bg {
-  background: radial-gradient(circle at 50% 50%, #ffffff 0%, #f0f9ff 50%, #e0f2fe 100%);
+  background: radial-gradient(circle at 52% 42%, #ffffff 0%, #f2fbf3 48%, #e5f7e8 100%);
   position: relative;
   overflow: hidden;
 }
@@ -52,8 +52,8 @@ body {
   top: -50%;
   left: -50%;
   background-image: 
-      linear-gradient(rgba(14, 165, 233, 0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(14, 165, 233, 0.03) 1px, transparent 1px);
+      linear-gradient(rgba(22, 163, 74, 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(22, 163, 74, 0.035) 1px, transparent 1px);
   background-size: 50px 50px;
   transform: perspective(500px) rotateX(60deg);
   animation: grid-move 20s linear infinite;
@@ -133,4 +133,66 @@ body {
 
 @keyframes shimmer {
   100% { transform: translateX(100%); }
+}
+
+@keyframes phone-single-enter {
+  from { transform: translateX(125%) rotate(5deg); }
+  to { transform: translateX(0) rotate(0); }
+}
+
+@keyframes phone-single-exit {
+  from { transform: translateX(0) rotate(0); }
+  to { transform: translateX(-125%) rotate(-6deg); }
+}
+
+.phone-single-enter {
+  animation: phone-single-enter 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.phone-single-exit {
+  animation: phone-single-exit 360ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes pos-alive {
+  0%, 100% { transform: translateY(0) rotate(-0.5deg); }
+  50% { transform: translateY(-7px) rotate(0.7deg); }
+}
+
+.pos-alive {
+  animation: pos-alive 4.2s ease-in-out infinite;
+  transform-origin: 50% 82%;
+}
+
+@keyframes pos-look-around {
+  0%, 18%, 82%, 100% { transform: translateX(0) scaleY(1); }
+  30%, 42% { transform: translateX(-18px) scaleY(1); }
+  58%, 70% { transform: translateX(18px) scaleY(1); }
+  48%, 78% { transform: translateX(0) scaleY(0.12); }
+}
+
+.pos-eyes {
+  animation: pos-look-around 5.2s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.pos-smile {
+  animation: pos-smile 4.2s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes pos-smile {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(3px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phone-single-enter,
+  .phone-single-exit,
+  .pos-alive,
+  .pos-eyes,
+  .pos-smile {
+    animation: none;
+  }
 }

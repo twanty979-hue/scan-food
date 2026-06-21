@@ -106,8 +106,6 @@ export function useSettings() {
                     setIsFirstTimeBuyer(plansRes.isFirstTime ?? true);
                 }
 
-            } else {
-                if (res.error === "Unauthorized") router.replace('/login');
             }
             setLoading(false);
         };

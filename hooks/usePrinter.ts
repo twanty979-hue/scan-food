@@ -8,6 +8,7 @@ export interface PrinterSettings {
   ipAddress: string;
   port: string;
   connectionType: 'airprint' | 'network_ip' | 'bluetooth';
+  bluetoothAddress?: string;
   paperSize: '58mm' | '80mm';
   isDefault: boolean;
 }
@@ -29,6 +30,10 @@ export function usePrinter() {
   const savePrinters = (newPrinters: PrinterSettings[]) => {
     setPrinters(newPrinters);
     localStorage.setItem('foodscan_printers', JSON.stringify(newPrinters));
+    const defaultPrinter = newPrinters.find(printer => printer.isDefault) || newPrinters[0];
+    if (defaultPrinter && typeof (window as any).AndroidBridge?.configurePrinter === 'function') {
+      (window as any).AndroidBridge.configurePrinter(JSON.stringify(defaultPrinter));
+    }
   };
 
   // เพิ่มหรืออัปเดตเครื่องพิมพ์

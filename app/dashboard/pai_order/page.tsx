@@ -8,6 +8,7 @@ import { useGlobalAlert } from '@/components/providers/GlobalAlertProvider';
 import { useRouter } from 'next/navigation';
 import { useFcmToken } from '@/hooks/useFcmToken';
 import { db } from '@/lib/db';
+import { getPosSettings, loadPosSettings, PosDisplaySettings, DEFAULT_POS_SETTINGS, POS_SETTINGS_KEY } from '@/lib/posSettings';
 
 import ReceiptModal from '@/app/dashboard/pai_order/components/ReceiptModal';
 import TableQrModal from '@/app/dashboard/(owner)/tables/TableQrModal';
@@ -44,9 +45,11 @@ const LoadingState = ({ label }: { label: string }) => (
 
 export default function PaiOrderMasterPage({ setSidebarOpen }: any) {
     const [showCamera, setShowCamera] = useState(false);
+    const [posSettings, setPosSettings] = useState<PosDisplaySettings>(DEFAULT_POS_SETTINGS);
+    const [showAppPrompt, setShowAppPrompt] = useState(false);
     const {
         activeTab, setActiveTab, loading, productsLoading, autoKitchen, setAutoKitchen,
-        categories, products, unpaidOrders, allTables, selectedCategory, setSelectedCategory,
+        categories, products, allProducts, unpaidOrders, allTables, selectedCategory, setSelectedCategory,
         calculatePrice, cart, selectedOrder, setSelectedOrder, receivedAmount, setReceivedAmount,
         paymentMethod, setPaymentMethod, payableAmount, rawTotal, variantModalProduct, setVariantModalProduct,
         statusModal, setStatusModal, completedReceipt, setCompletedReceipt, qrTableData, setQrTableData,
@@ -82,6 +85,31 @@ export default function PaiOrderMasterPage({ setSidebarOpen }: any) {
     const isLimitReached = limitStatus?.isLocked;
     const usageText = limitStatus ? `${limitStatus.usage}/${limitStatus.limit}` : '';
     const showSoundGuard = autoKitchen && !isAudioUnlocked;
+
+    useEffect(() => {
+        let active = true;
+        void loadPosSettings().then(value => {
+            if (active) setPosSettings(value);
+        });
+        const openedInAndroid = typeof (window as any).AndroidBridge !== 'undefined';
+        const dismissed = window.sessionStorage.getItem('foodscan_app_prompt_dismissed') === '1';
+        setShowAppPrompt(!openedInAndroid && !dismissed);
+
+        const handleSettingsChange = (event: Event) => {
+            const customEvent = event as CustomEvent<PosDisplaySettings>;
+            setPosSettings(customEvent.detail || getPosSettings());
+        };
+        const handleStorage = (event: StorageEvent) => {
+            if (event.key === POS_SETTINGS_KEY) setPosSettings(getPosSettings());
+        };
+        window.addEventListener('foodscan:pos-settings', handleSettingsChange);
+        window.addEventListener('storage', handleStorage);
+        return () => {
+            active = false;
+            window.removeEventListener('foodscan:pos-settings', handleSettingsChange);
+            window.removeEventListener('storage', handleStorage);
+        };
+    }, []);
 
     // 🌟 โค้ดพระเอก: สั่งให้สลับไปหน้า POS และโฟกัสช่องบาร์โค้ดให้อัตโนมัติเมื่อเข้ามาหน้านี้ครั้งแรก
     useEffect(() => {
@@ -250,6 +278,17 @@ export default function PaiOrderMasterPage({ setSidebarOpen }: any) {
 
     return (
         <div className="min-h-screen bg-[#F8F9FD] p-2 md:p-6 font-sans pb-24 md:pb-6 text-slate-800 h-screen overflow-hidden">
+            {showAppPrompt && (
+                <div className="fixed left-3 right-3 top-3 z-[1000] mx-auto flex max-w-xl items-center gap-3 rounded-2xl border border-orange-200 bg-white p-3 shadow-2xl shadow-orange-900/15 md:top-5">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-500 text-lg text-white">▣</div>
+                    <div className="min-w-0 flex-1">
+                        <p className="text-sm font-black text-slate-800">ใช้งานลื่นกว่าเมื่อเปิดผ่านแอป FoodScan</p>
+                        <p className="truncate text-[11px] text-slate-400">รองรับเครื่องพิมพ์ Bluetooth/IP และแจ้งเตือนออเดอร์</p>
+                    </div>
+                    <a href="/downloads/foodscan.apk" download className="shrink-0 rounded-xl bg-orange-500 px-3 py-2 text-xs font-black text-white hover:bg-orange-600">โหลดแอป</a>
+                    <button type="button" aria-label="ปิดคำแนะนำ" onClick={() => { window.sessionStorage.setItem('foodscan_app_prompt_dismissed', '1'); setShowAppPrompt(false); }} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100">×</button>
+                </div>
+            )}
             
             <style jsx>{`
                 @keyframes pop-bounce { 0% { transform: scale(0.9); opacity: 0; } 60% { transform: scale(1.05); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
@@ -275,7 +314,7 @@ export default function PaiOrderMasterPage({ setSidebarOpen }: any) {
             <div className="max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-3 md:gap-6 h-[calc(100vh-1rem)] md:h-[calc(100vh-3rem)]">
                 
                {/* ================= LEFT SIDE: MENU & TABLES ================= */}
-                <div className="col-span-12 lg:col-span-7 flex flex-col gap-3 md:gap-5 h-full overflow-hidden pb-16 lg:pb-0">
+                <div className="col-span-12 lg:col-span-8 flex flex-col gap-3 md:gap-5 h-full overflow-hidden pb-16 lg:pb-0">
                     
                     {/* ✅ Top Bar (แก้ไขระบบสั่งงานไร้สาย เพื่อปลดล็อกปุ่มแฮมเบอร์เกอร์ให้ทำงานได้ 100%) */}
                     <div className="flex gap-2 md:gap-4 shrink-0 h-14 md:h-[4.5rem]">
@@ -425,7 +464,7 @@ export default function PaiOrderMasterPage({ setSidebarOpen }: any) {
                                 </div>
                                 
                                 {/* 🚫 ตารางสินค้า (บีบในมือถือแล้ว) 🚫 */}
-                                <div className="flex-1 overflow-y-auto p-2 sm:p-4 grid grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-1.5 sm:gap-3 content-start">
+                                <div className="flex-1 overflow-y-auto p-2 sm:p-4 grid grid-cols-4 sm:grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-1.5 sm:gap-3 content-start items-start">
                                     {productsLoading ? (
                                         showProductsLoading ? <LoadingState label="กำลังโหลดรายการอาหาร..." /> : null
                                     ) : products.length === 0 ? (
@@ -435,13 +474,19 @@ export default function PaiOrderMasterPage({ setSidebarOpen }: any) {
                                     ) : products.map((p: any) => {
                                         const pricing = calculatePrice(p, 'normal');
                                         const hasDiscount = pricing.discount > 0;
+                                        const productImage = p.image_url || p.image || p.image_name || p.thumbnail_url;
                                         return (
                                             <button 
                                                 key={p.id} 
                                                 onClick={() => handleProductClick(p)} 
                                                 className={`
-                                                    relative bg-white rounded-xl sm:rounded-2xl border transition-all flex flex-col justify-between 
-                                                    p-2 sm:p-4 min-h-[4.5rem] sm:min-h-[6.5rem] group overflow-hidden text-left
+                                                    relative w-full bg-white rounded-xl sm:rounded-2xl border transition-all flex flex-col
+                                                    p-2 sm:p-3 group overflow-hidden text-left
+                                                    ${posSettings.showProductImages
+                                                        ? (posSettings.hideProductNames
+                                                            ? 'h-[7.5rem] sm:h-[10.5rem] lg:h-[12.5rem]'
+                                                            : 'h-[8rem] sm:h-[14rem]')
+                                                        : 'h-[5rem] sm:h-[7rem]'}
                                                     ${hasDiscount ? 'border-orange-200 shadow-orange-50' : 'border-slate-200 shadow-sm'}
                                                     hover:border-orange-400 hover:shadow-[0_4px_12px_rgb(251,146,60,0.15)] 
                                                     hover:-translate-y-0.5 active:scale-[0.96] duration-200
@@ -449,14 +494,25 @@ export default function PaiOrderMasterPage({ setSidebarOpen }: any) {
                                             >
                                                 {/* 🌟 ระบบ Promo */}
                                                 {hasDiscount && <span className="absolute top-0 right-0 bg-rose-500 text-white text-[8px] sm:text-[9px] font-black px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-bl-lg sm:rounded-bl-xl rounded-tr-xl sm:rounded-tr-2xl z-10 shadow-sm tracking-wider">SALE</span>}
+                                                {posSettings.showProductImages && (
+                                                    <div className="mb-1.5 flex h-16 w-full shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gradient-to-br from-slate-50 to-slate-100 sm:mb-2 sm:h-28 lg:h-32 sm:rounded-xl">
+                                                        {productImage ? (
+                                                            <img src={getFullImageUrl(productImage) || ''} alt={p.name} className="h-full w-full object-cover object-center transition-transform duration-300 group-hover:scale-105" />
+                                                        ) : (
+                                                            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-300 shadow-sm"><IconGrid size={20} /></span>
+                                                        )}
+                                                    </div>
+                                                )}
                                                 
-                                                <div className="w-full mb-1 sm:mb-2 pr-1 sm:pr-4">
-                                                    <h3 className="font-bold text-slate-700 text-[10px] sm:text-sm leading-tight sm:leading-snug line-clamp-2 group-hover:text-orange-700 transition-colors">{p.name}</h3>
-                                                    {p.barcode && <p className="text-[8px] sm:text-xs font-mono text-slate-400 mt-0.5 sm:mt-1 truncate">{p.barcode}</p>}
-                                                </div>
-                                                <div className="w-full flex items-end justify-between mt-auto">
-                                                    <div className="flex flex-col leading-none">
-                                                        {hasDiscount && <span className="text-[8px] sm:text-[10px] text-slate-400 line-through font-medium opacity-80 mb-0.5">{formatCurrency(pricing.original)}</span>}
+                                                {!(posSettings.showProductImages && posSettings.hideProductNames) && (
+                                                    <div className="w-full mb-1.5 pr-1">
+                                                        <h3 className={`font-bold text-slate-700 text-[11px] sm:text-sm leading-tight group-hover:text-orange-700 transition-colors ${posSettings.showProductImages ? 'truncate min-h-[1rem] sm:min-h-[1.25rem]' : 'line-clamp-2 min-h-[1.7rem] sm:min-h-[2.5rem]'}`}>{p.name}</h3>
+                                                        {p.barcode && <p className="text-[8px] sm:text-xs font-mono text-slate-400 mt-0.5 sm:mt-1 truncate">{p.barcode}</p>}
+                                                    </div>
+                                                )}
+                                                <div className="w-full flex items-end justify-between mt-auto pt-1">
+                                                    <div className="flex flex-row items-baseline gap-1 leading-none sm:flex-col sm:items-start sm:gap-0">
+                                                        {hasDiscount && <span className="text-[7px] sm:text-[10px] text-slate-400 line-through font-medium opacity-80 sm:mb-0.5">{formatCurrency(pricing.original)}</span>}
                                                         <span className={`font-black text-xs sm:text-xl tracking-tight ${hasDiscount ? 'text-rose-500' : 'text-slate-800'}`}>{formatCurrency(pricing.final)}</span>
                                                     </div>
                                                 </div>
@@ -493,7 +549,7 @@ export default function PaiOrderMasterPage({ setSidebarOpen }: any) {
                 {/* ================= RIGHT SIDE: BILL & PAYMENT ================= */}
                 <div className={`
                     fixed inset-0 z-[200] bg-white p-3 pt-12 transition-transform duration-300 ease-in-out
-                    lg:static lg:bg-transparent lg:p-0 lg:col-span-5 lg:flex lg:flex-col lg:h-full lg:gap-5 lg:overflow-hidden lg:z-auto lg:translate-y-0
+                    lg:static lg:bg-transparent lg:p-0 lg:col-span-4 lg:flex lg:flex-col lg:h-full lg:gap-5 lg:overflow-hidden lg:z-auto lg:translate-y-0
                     ${showMobileCart ? 'translate-y-0' : 'translate-y-[110%] lg:translate-y-0'}
                 `}> 
                     <button onClick={() => setShowMobileCart(false)} className="absolute top-3 right-3 w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 lg:hidden z-50 hover:bg-slate-200 transition-colors">
@@ -523,29 +579,36 @@ export default function PaiOrderMasterPage({ setSidebarOpen }: any) {
                                     <p className="font-medium text-xs md:text-sm">ยังไม่มีรายการ</p>
                                 </div>
                             ) : (
-                                cartItemsToRender?.map((item: any, idx: number) => (
-                                    <div key={`${idx}-${item.quantity}`} ref={(el) => { itemsRef.current[idx] = el; }} className="flex justify-between items-start py-2 px-3 md:py-3 md:px-4 bg-white rounded-xl md:rounded-2xl border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-md transition-all animate-pop-item">
-                                        <div className="flex gap-2 md:gap-4 items-start min-w-0 flex-1 pr-2">
-                                            <div className="bg-slate-50 min-w-[2rem] md:min-w-[2.5rem] h-8 md:h-10 rounded-md md:rounded-lg flex items-center justify-center border border-slate-100 mt-0.5 shadow-sm">
-                                                <span className="text-xs md:text-sm font-black text-slate-700">x{item.quantity}</span>
-                                            </div>
-                                            <div className="pt-0.5 min-w-0">
+                                cartItemsToRender?.map((item: any, idx: number) => {
+                                    const matchedProduct = allProducts.find((product: any) => product.id === (item.product_id || item.id));
+                                    const itemImage = item.image_url || matchedProduct?.image_url || matchedProduct?.image || matchedProduct?.image_name || matchedProduct?.thumbnail_url;
+                                    return (
+                                    <div key={`${idx}-${item.quantity}`} ref={(el) => { itemsRef.current[idx] = el; }} className="flex justify-between items-center py-2 px-2.5 md:py-3 md:px-4 bg-white rounded-xl md:rounded-2xl border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-md transition-all animate-pop-item">
+                                        <div className="flex gap-2 md:gap-3 items-center min-w-0 flex-1 pr-2">
+                                            {posSettings.showProductImages && (
+                                                <div className="flex h-11 w-11 md:h-14 md:w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg md:rounded-xl bg-slate-100 border border-slate-100">
+                                                    {itemImage ? <img src={getFullImageUrl(itemImage) || ''} alt="" className="h-full w-full object-cover" /> : <IconGrid size={16} />}
+                                                </div>
+                                            )}
+                                            <div className="min-w-0">
                                                 <p className="text-sm md:text-base font-bold text-slate-700 leading-tight truncate">{item.product_name || item.name}</p>
                                                 {item.barcode && <p className="text-[10px] md:text-xs font-mono text-slate-400 mt-0.5">{item.barcode}</p>}
                                                 {item.variant !== 'normal' && <span className="inline-block mt-1 text-[8px] md:text-[9px] font-bold text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded border border-orange-100 uppercase tracking-wider">{item.variant}</span>}
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2 md:gap-3 pt-0.5 shrink-0">
+                                        <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
                                             <div className="text-right leading-tight">
                                                 {item.originalPrice && item.price < item.originalPrice && <p className="text-[9px] md:text-[10px] text-slate-400 line-through font-medium">{formatCurrency(item.originalPrice * item.quantity)}</p>}
                                                 <p className={`font-bold text-sm md:text-lg ${item.price < item.originalPrice ? 'text-rose-500' : 'text-slate-800'}`}>{formatCurrency(item.price * item.quantity)}</p>
                                             </div>
+                                            <span className="flex h-7 min-w-7 md:h-8 md:min-w-8 items-center justify-center rounded-lg bg-slate-100 px-1.5 text-[11px] md:text-xs font-black text-slate-600">×{item.quantity}</span>
                                             {activeTab === 'pos' && (
                                                 <button onClick={() => removeFromCart(idx)} className="w-6 h-6 md:w-7 md:h-7 rounded-full bg-slate-50 text-slate-400 hover:bg-rose-50 hover:text-rose-500 flex items-center justify-center transition-all"><IconTrash size={12}/></button>
                                             )}
                                         </div>
                                     </div>
-                                ))
+                                    );
+                                })
                             )}
                         </div>
 

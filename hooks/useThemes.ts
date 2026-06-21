@@ -55,8 +55,6 @@ export function useThemes() {
                 setCurrentConfig(res.currentConfig || null); 
                 setBrandId(res.brandId || '');        
                 setIsOwner(res.isOwner || false);      
-            } else {
-                if (res.error === "Unauthorized") router.replace('/login');
             }
             setLoading(false);
         };

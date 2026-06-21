@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { getProfileDataAction, updateProfileAction } from '@/app/actions/profileActions';
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
 import { useGlobalAlert } from '@/components/providers/GlobalAlertProvider'; // 🌟 ดึง Alert พี่มาใช้
 
 const CDN_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://img.pos-foodscan.com";
@@ -18,7 +19,7 @@ export function useProfile() {
     const router = useRouter();
     const { showAlert } = useGlobalAlert(); // 🌟 เรียกใช้งาน Alert Provider
     const fileInputRef = useRef<HTMLInputElement>(null);
-
+    const [rawProfile, setRawProfile] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [userId, setUserId] = useState<string | null>(null);
@@ -37,13 +38,15 @@ export function useProfile() {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-    useEffect(() => {
+useEffect(() => {
         const init = async () => {
             const res = await getProfileDataAction();
+
             if (res.success && res.user) {
                 setUserId(res.user.id);
                 setEmail(res.user.email || '');
                 if (res.profile) {
+                    setRawProfile(res.profile);
                     setFormData({
                         full_name: res.profile.full_name || '',
                         phone: res.profile.phone || '',
@@ -52,7 +55,10 @@ export function useProfile() {
                     });
                 }
             } else {
-                router.replace('/login');
+                // 🟢 ถอดคำสั่งเตะกลับไป Login ทิ้งไปเลย! 
+                // เปลี่ยนมาโชว์ Alert แดงๆ ให้รู้ว่าดึงข้อมูลไม่มาเพราะอะไรแทนครับนาย
+                console.error("Profile Fetch Error:", res.error);
+                showAlert('error', 'โหลดข้อมูลไม่สำเร็จ', res.error || 'เกิดข้อผิดพลาดในการดึงข้อมูล');
             }
             setLoading(false);
         };
@@ -120,7 +126,7 @@ export function useProfile() {
         }
     };
 
-    const handleSave = async (e: React.FormEvent) => {
+const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!userId) return;
 
@@ -142,30 +148,67 @@ export function useProfile() {
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || 'Upload failed');
 
-                finalAvatarUrl = data.fileName;
+                // 🟢 แก้ไขจุดนี้: เอา URL โดเมนหลัก R2 ของนายไปสลักครอบชื่อไฟล์ให้เป็นลิงก์ยาวเต็มรูปแบบครับนาย!
+                // ผลลัพธ์: https://pub-248a1abeb706469aa94186e3a31cfa42.r2.dev/profiles/178203...webp
+                finalAvatarUrl = `https://pub-248a1abeb706469aa94186e3a31cfa42.r2.dev/${data.fileName}`;
+                
                 if (formData.avatar_url) oldAvatarToDelete = formData.avatar_url;
             }
 
-            const res = await updateProfileAction(userId, {
+            let res = await updateProfileAction(userId, {
                 full_name: formData.full_name,
                 phone: formData.phone,
-                avatar_url: finalAvatarUrl
+                avatar_url: finalAvatarUrl // 🚀 ส่งค่าลิงก์แบบยาวเต็มๆ ไปบันทึกลง Database
             });
+
+            if (!res.success && res.error === 'Unauthorized') {
+                const { error: updateError } = await supabase
+                    .from('profiles')
+                    .update({
+                        full_name: formData.full_name,
+                        phone: formData.phone,
+                        avatar_url: finalAvatarUrl,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', userId);
+
+                res = updateError
+                    ? { success: false, error: updateError.message }
+                    : { success: true };
+            }
 
             if (!res.success) throw new Error(res.error);
 
             if (oldAvatarToDelete) {
+                // ⚠️ เพิ่มลอจิกคัดแยก (กันเหนียวตอนลบ): ตัว API ลบมันต้องการแค่ชื่อไฟล์ย่อย 
+                // เราเลยต้องดึงเอาแค่พาร์ทหลังคำว่า .dev/ ออกมาส่งไปให้บอทลบครับนาย
+                const cleanFileNameForDelete = oldAvatarToDelete.includes('.dev/') 
+                    ? oldAvatarToDelete.split('.dev/')[1] 
+                    : oldAvatarToDelete;
+
                 fetch('/api/delete-image', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ fileName: oldAvatarToDelete })
+                    body: JSON.stringify({ fileName: cleanFileNameForDelete })
                 }).catch(err => console.error("Deletion failed:", err));
             }
 
             setFormData(prev => ({ ...prev, avatar_url: finalAvatarUrl }));
+            setRawProfile((prev: any) => ({
+                ...prev,
+                full_name: formData.full_name,
+                phone: formData.phone,
+                avatar_url: finalAvatarUrl
+            }));
             setSelectedFile(null);
+
+            window.dispatchEvent(new CustomEvent('profile-updated', {
+                detail: {
+                    full_name: formData.full_name,
+                    avatar_url: finalAvatarUrl
+                }
+            }));
             
-            // 🌟 แจ้งเตือนแบบพรีเมียมด้วย Alert พี่เอง
             showAlert('success', 'บันทึกสำเร็จ', 'ข้อมูลโปรไฟล์ของคุณได้รับการอัปเดตแล้ว');
 
         } catch (err: any) {
@@ -175,9 +218,10 @@ export function useProfile() {
         }
     };
 
-    return {
+return {
         loading, submitting, userId, email,
         formData, setFormData,
+        rawProfile, setRawProfile, // 🟢 เพิ่ม setRawProfile ออกมาให้หน้าจอสั่งเคลียร์ค่าได้
         fileInputRef, getImageUrl, 
         onFileChange, handleSave,
         imageToCrop, isCropModalOpen, setIsCropModalOpen,

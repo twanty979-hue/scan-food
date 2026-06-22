@@ -60,11 +60,36 @@ export async function GET(request: Request) {
         } else {
           deepLink.searchParams.set('type', 'verified')
         }
-        return NextResponse.redirect(deepLink.toString())
-      }
-      // ✅ ถ้าเป็นเคส Recovery (ลืมรหัสผ่าน) ให้บังคับไปหน้า reset-password
-      if (type === 'recovery') {
-        return NextResponse.redirect(`${origin}/auth/reset-password`)
+        
+        // 🟢 เปลี่ยนจากการใช้ NextResponse.redirect ธรรมดา เป็นพ่น HTML + JS
+        const html = `
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="utf-8" />
+              <meta name="viewport" content="width=device-width, initial-scale=1">
+              <title>กำลังกลับเข้าสู่แอป...</title>
+            </head>
+            <body style="display:flex; justify-content:center; align-items:center; height:100vh; font-family:sans-serif; background:#F2FBF4; margin:0;">
+              <div style="text-align:center;">
+                <div style="width:50px; height:50px; border:4px solid #B7E7C3; border-top-color:#15803D; border-radius:50%; animation:spin 1s linear infinite; margin: 0 auto 20px;"></div>
+                <h2 style="color:#15803D; margin:0;">กำลังกลับเข้าสู่แอป SuparPOS...</h2>
+                <p style="color:#64748B;">หากแอปไม่เปิดอัตโนมัติ <a href="${deepLink.toString()}" style="color:#2563EB;">คลิกที่นี่</a></p>
+              </div>
+              <style>@keyframes spin { 100% { transform:rotate(360deg); } }</style>
+              <script>
+                // บังคับดีดเข้าแอปด้วย JavaScript
+                setTimeout(() => {
+                  window.location.href = "${deepLink.toString()}";
+                }, 500); // หน่วง 0.5 วิให้หน้าเว็บโหลดเสร็จก่อนค่อยดีด
+              </script>
+            </body>
+          </html>
+        `;
+        
+        return new NextResponse(html, {
+          headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        });
       }
 
       // ถ้า Login ปกติ ให้ไปหน้าปลายทางที่ตั้งไว้

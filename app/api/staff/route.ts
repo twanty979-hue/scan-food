@@ -30,7 +30,23 @@ export async function GET(request: NextRequest) {
   for (const log of logs || []) if (!latest.has(log.employee_id)) latest.set(log.employee_id, log)
   const { data: users } = await db.auth.admin.listUsers()
   const emails = new Map((users?.users || []).map(user => [user.id, user.email]))
-  const data = (members || []).map(member => ({ ...member, name: member.full_name, email: emails.get(member.id) || '', invitation: latest.get(member.id) || null, status: member.brand_id === profile.brand_id && member.is_joined ? 'active' : latest.get(member.id)?.status || 'pending' }))
+  const data = (members || []).map(member => {
+    // brand_id คือสิทธิ์ร้านที่ใช้งานจริง ส่วน invited_brand_id ใช้เฉพาะตอนรอตอบรับ
+    // อย่าพึ่ง is_joined เพียงค่าเดียว เพราะข้อมูลสมาชิกเก่าอาจเป็น null/false ได้
+    const hasStoreAccess =
+      member.brand_id === profile.brand_id &&
+      member.invited_brand_id !== profile.brand_id
+    const invitation = latest.get(member.id) || null
+
+    return {
+      ...member,
+      name: member.full_name,
+      email: emails.get(member.id) || '',
+      invitation,
+      has_store_access: hasStoreAccess,
+      status: hasStoreAccess ? 'active' : invitation?.status || 'pending',
+    }
+  })
   return NextResponse.json({ success: true, data, history: logs || [] })
 }
 

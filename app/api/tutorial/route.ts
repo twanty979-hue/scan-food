@@ -1,13 +1,13 @@
-// app/api/setup/tutorial/route.ts
-import { createClient } from '@supabase/supabase-js';
-import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js'
+import { NextResponse } from 'next/server'
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const admin = () => createClient(
+  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { autoRefreshToken: false, persistSession: false } },
+)
 
-const generateRandomToken = () => Math.random().toString(36).substring(2, 10);
+const generateRandomToken = () => Math.random().toString(36).substring(2, 10)
 
 export async function OPTIONS() {
   return new NextResponse(null, {
@@ -17,68 +17,121 @@ export async function OPTIONS() {
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     },
-  });
+  })
 }
 
 export async function POST(request: Request) {
   try {
-    const { brandId, timezone } = await request.json();
-
+    const authorization = request.headers.get('authorization')
+    const token = authorization?.startsWith('Bearer ')
+      ? authorization.slice(7)
+      : null
+    if (!token) {
+      return NextResponse.json({ error: 'กรุณาเข้าสู่ระบบใหม่' }, { status: 401 })
+    }
+    const db = admin()
+    const { data: { user }, error: authError } = await db.auth.getUser(token)
+    if (authError || !user) {
+      return NextResponse.json({ error: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่' }, { status: 401 })
+    }
+    const { brandId, timezone } = await request.json()
     if (!brandId || !timezone) {
-      return NextResponse.json({ error: "ข้อมูลไม่ครบถ้วน" }, { status: 400 });
+      return NextResponse.json({ error: 'ข้อมูลไม่ครบถ้วน' }, { status: 400 })
+    }
+    const { data: profile, error: profileError } = await db
+      .from('profiles')
+      .select('brand_id')
+      .eq('id', user.id)
+      .maybeSingle()
+    if (profileError || profile?.brand_id !== brandId) {
+      return NextResponse.json({ error: 'ไม่มีสิทธิ์ตั้งค่าร้านนี้' }, { status: 403 })
     }
 
-    // 1. อัปเดต Timezone
-    await supabaseAdmin.from('brands').update({ timezone }).eq('id', brandId);
+    const { error: timezoneError } = await db
+      .from('brands')
+      .update({ timezone })
+      .eq('id', brandId)
+    if (timezoneError) throw timezoneError
 
-    // 2. สร้างโต๊ะเริ่มต้น (10 โต๊ะ)
-    const tablesData = Array.from({ length: 10 }, (_, i) => ({
-      brand_id: brandId,
-      label: `T-${i + 1}`,
-      capacity: 4,
-      status: 'available',
-      access_token: generateRandomToken()
-    }));
-    await supabaseAdmin.from('tables').insert(tablesData);
-
-    // 3. สร้าง Banner เริ่มต้น
-    await supabaseAdmin.from('banners').insert([{ 
-      brand_id: brandId, 
-      image_name: 'https://img.pos-foodscan.com/268dccbf-a568-4a90-b184-d23811937d9f/1772290694984-1772290692774.webp', 
-      title: 'Welcome', 
-      sort_order: 1 
-    }]);
-
-    // 4. ดึงข้อมูลสินค้าตัวอย่างและจัดการ Categories
-    const { data: sourceCats } = await supabaseAdmin.from('categoriesphotoadmin').select('*');
-    const { data: sourceImages } = await supabaseAdmin.from('images').select('*');
-
-    if (sourceCats && sourceImages) {
-      const catMap: Record<number, string> = {};
-      for (const cat of sourceCats) {
-        const { data: newCat } = await supabaseAdmin.from('categories')
-          .insert({ brand_id: brandId, name: cat.name, is_active: true })
-          .select().single();
-        if (newCat) catMap[cat.id] = newCat.id;
-      }
-
-      const productsToInsert = sourceImages.map((img, index) => ({
+    const { count: tableCount } = await db
+      .from('tables')
+      .select('id', { count: 'exact', head: true })
+      .eq('brand_id', brandId)
+    if (!tableCount) {
+      const tables = Array.from({ length: 10 }, (_, index) => ({
         brand_id: brandId,
-        name: img.name,
-        image_name: img.url,
-        price: img.price || 0,
-        category_id: img.category_id ? catMap[img.category_id] : null,
-        is_available: true,
-        is_recommended: index < 4 
-      }));
-      await supabaseAdmin.from('products').insert(productsToInsert);
+        label: `T-${index + 1}`,
+        capacity: 4,
+        status: 'available',
+        access_token: generateRandomToken(),
+      }))
+      const { error } = await db.from('tables').insert(tables)
+      if (error) throw error
     }
 
-    const response = NextResponse.json({ success: true, message: "System configured successfully" });
-    response.headers.set('Access-Control-Allow-Origin', '*');
-    return response;
+    const { count: bannerCount } = await db
+      .from('banners')
+      .select('id', { count: 'exact', head: true })
+      .eq('brand_id', brandId)
+    if (!bannerCount) {
+      const { error } = await db.from('banners').insert({
+        brand_id: brandId,
+        image_name: 'https://img.pos-foodscan.com/268dccbf-a568-4a90-b184-d23811937d9f/1772290694984-1772290692774.webp',
+        title: 'Welcome',
+        sort_order: 1,
+      })
+      if (error) throw error
+    }
 
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const { count: productCount } = await db
+      .from('products')
+      .select('id', { count: 'exact', head: true })
+      .eq('brand_id', brandId)
+    let seededProducts = false
+    if (!productCount) {
+      const [{ data: sourceCategories, error: categorySourceError }, { data: sourceImages, error: imageSourceError }] = await Promise.all([
+        db.from('categoriesphotoadmin').select('*'),
+        db.from('images').select('*'),
+      ])
+      if (categorySourceError) throw categorySourceError
+      if (imageSourceError) throw imageSourceError
+      const categoryMap: Record<string, string> = {}
+      for (const category of sourceCategories || []) {
+        const { data: createdCategory, error } = await db
+          .from('categories')
+          .insert({ brand_id: brandId, name: category.name, is_active: true })
+          .select('id')
+          .single()
+        if (error) throw error
+        categoryMap[String(category.id)] = createdCategory.id
+      }
+      const products = (sourceImages || []).map((image, index) => ({
+        brand_id: brandId,
+        name: image.name,
+        image_name: image.url,
+        price: image.price || 0,
+        category_id: image.category_id
+          ? categoryMap[String(image.category_id)] || null
+          : null,
+        is_available: true,
+        is_recommended: index < 4,
+      }))
+      if (products.length) {
+        const { error } = await db.from('products').insert(products)
+        if (error) throw error
+        seededProducts = true
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      seededProducts,
+      message: 'System configured successfully',
+    })
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Setup failed' },
+      { status: 500 },
+    )
   }
 }

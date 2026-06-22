@@ -21,12 +21,36 @@ async function authenticatedUser(request: NextRequest) {
 
 const unauthorized = () => NextResponse.json({ success: false, error: 'กรุณาเข้าสู่ระบบใหม่' }, { status: 401 })
 
+async function ensureProfile(
+  db: ReturnType<typeof admin>,
+  user: { id: string; user_metadata?: Record<string, unknown> },
+) {
+  const { data: existing, error } = await db.from('profiles').select('*').eq('id', user.id).maybeSingle()
+  if (error) throw error
+  if (existing) return existing
+  const metadata = user.user_metadata || {}
+  const fullName = String(metadata.full_name || metadata.name || '').trim() || null
+  const avatarUrl = String(metadata.avatar_url || metadata.picture || '').trim() || null
+  const { data: created, error: createError } = await db.from('profiles').insert({
+    id: user.id,
+    full_name: fullName,
+    avatar_url: avatarUrl,
+    updated_at: new Date().toISOString(),
+  }).select('*').single()
+  if (createError) throw createError
+  return created
+}
+
 export async function GET(request: NextRequest) {
   const user = await authenticatedUser(request)
   if (!user) return unauthorized()
   const db = admin()
-  const { data: profile, error } = await db.from('profiles').select('*').eq('id', user.id).maybeSingle()
-  if (error || !profile) return NextResponse.json({ success: false, error: error?.message || 'ไม่พบโปรไฟล์' }, { status: 404 })
+  let profile
+  try {
+    profile = await ensureProfile(db, user)
+  } catch (error) {
+    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Cannot create profile' }, { status: 500 })
+  }
 
   const brandIds = [profile.brand_id, profile.own_brand_id, profile.invited_brand_id].filter(Boolean)
   const { data: brands } = brandIds.length
@@ -56,8 +80,12 @@ export async function PATCH(request: NextRequest) {
   if (!user) return unauthorized()
   const body = await request.json().catch(() => ({}))
   const db = admin()
-  const { data: profile, error: profileError } = await db.from('profiles').select('*').eq('id', user.id).maybeSingle()
-  if (profileError || !profile) return NextResponse.json({ success: false, error: profileError?.message || 'ไม่พบโปรไฟล์' }, { status: 404 })
+  let profile
+  try {
+    profile = await ensureProfile(db, user)
+  } catch (error) {
+    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Cannot create profile' }, { status: 500 })
+  }
 
   if (!body.action || body.action === 'update') {
     const update = {

@@ -143,14 +143,19 @@ const handleStartSetup = async () => {
   setLoading(true);
 
   try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('กรุณาเข้าสู่ระบบใหม่');
     // ✅ เรียก API ตัวเดียวทำหน้าที่ทุกอย่าง (Timezone, Tables, Banners, Products)
     // เรายังสามารถจำลอง Progress bar (Fake Progress) ได้เพื่อให้ User รู้สึกว่าระบบกำลังทำงาน
     setProgress(30);
     setStatusText('Configuring database...');
 
-    const response = await fetch('/api/setup/tutorial', {
+    const response = await fetch('/api/tutorial', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
       body: JSON.stringify({
         brandId: brandId,
         timezone: selectedTz.value,

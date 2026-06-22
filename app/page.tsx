@@ -445,8 +445,8 @@ export default function LandingPage() {
 
             {/* 🟢 3D Layout (มือถือ 1 เครื่อง + เครื่อง POS ขนาดใหญ่) */}
             <div className="relative z-10 flex justify-center items-center order-1 lg:order-2 tilt-wrapper w-full h-[550px] md:h-[700px] mt-10 lg:mt-0" id="hero-tilt-wrapper">
-                <div className="hidden lg:block absolute inset-[7%] rounded-[4rem] border border-white/80 bg-gradient-to-br from-white/70 via-emerald-50/70 to-green-100/50 shadow-[0_35px_90px_-45px_rgba(21,128,61,0.45)] backdrop-blur-sm"></div>
-                
+                {/* <div className="hidden lg:block absolute inset-[7%] rounded-[4rem] border border-white/80 bg-gradient-to-br from-white/70 via-emerald-50/70 to-green-100/50 shadow-[0_35px_90px_-45px_rgba(21,128,61,0.45)] backdrop-blur-sm"></div>
+                 */}
                 {/* 🛒 เครื่อง POS การ์ตูนวาดด้วยโค้ด (ปรับขนาดใหญ่และวางซ้าย) */}
                 <div id="cartoon-pos" className="tilt-element absolute z-30 bottom-0 md:bottom-2 -left-8 md:-left-16 group hover:-translate-y-3 transition-transform duration-500">
                     <BrandPOSArtwork />

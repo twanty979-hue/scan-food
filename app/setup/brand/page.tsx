@@ -38,10 +38,15 @@ const handleCreate = async (e: React.FormEvent) => {
   setLoading(true);
   
   try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('กรุณาเข้าสู่ระบบใหม่');
     // ✅ เรียก API กลางตัวเดียว จบทั้งสร้างแบรนด์และอัปเดตโปรไฟล์
     const response = await fetch('/api/setup/brand', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
       body: JSON.stringify({
         userId: userId,
         shopName: shopName,

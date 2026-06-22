@@ -3,8 +3,8 @@ import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
 const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_ANON_KEY!
 );
 
 // ✅ 1. รองรับ OPTIONS สำหรับ Android/Flutter
@@ -23,8 +23,10 @@ export async function POST(request: Request) {
   try {
     const { email, password, source } = await request.json();
     const requestOrigin = new URL(request.url).origin;
+    // Email verification is completed on the trusted web callback. The app
+    // never receives Supabase codes or project keys directly.
     const emailRedirectTo = source === 'app'
-      ? 'com.suparpos.app://login-callback/?next=setup'
+      ? `${requestOrigin}/auth/callback?source=app&next=${encodeURIComponent('/login?verified=1')}`
       : `${requestOrigin}/auth/callback?next=/setup`;
 
     // 2. สั่งสมัครสมาชิกผ่าน Supabase

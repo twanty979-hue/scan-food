@@ -314,7 +314,7 @@ export const useShopLogic = (params: any) => {
               const orderDataToPrint = {
                   tableName: String(newOrder.table_label || tableLabel),
                   time: new Date().toLocaleString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-                  orderId: String(newOrder.id).slice(0, 8),
+                  orderId: String(newOrder.id),
                   items: newOrder.order_items.map((item: any) => ({
                       name: String(item.product_name),
                       qty: Number(item.quantity),

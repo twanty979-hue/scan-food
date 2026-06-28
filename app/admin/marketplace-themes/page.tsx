@@ -51,6 +51,8 @@ export default function AdminThemesPage() {
     const [filterCategory, setFilterCategory] = useState<string>('all');
     const [filterPlan, setFilterPlan] = useState<string>('all');
     const [searchQuery, setSearchQuery] = useState<string>('');
+    const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
     const [uploadingState, setUploadingState] = useState<'cover' | 'mobile' | 'ipad' | null>(null);
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -85,7 +87,12 @@ export default function AdminThemesPage() {
         const matchesCategory = filterCategory === 'all' || theme.category_id === filterCategory;
         const matchesPlan = filterPlan === 'all' || (theme.min_plan || 'ultimate') === filterPlan;
         const matchesSearch = theme.name.toLowerCase().includes(searchQuery.toLowerCase());
-        return matchesCategory && matchesPlan && matchesSearch;
+        const matchesStatus = filterStatus === 'all' 
+            ? true 
+            : filterStatus === 'active' 
+                ? theme.is_active === true 
+                : theme.is_active === false;
+        return matchesCategory && matchesPlan && matchesSearch && matchesStatus;
     });
 
     const getImageUrl = (fileName: string | null) => {
@@ -202,6 +209,49 @@ export default function AdminThemesPage() {
         setIsSubmitting(false);
     };
 
+    const handleToggleStatus = async (id: string, currentStatus: boolean) => {
+        setIsSubmitting(true);
+        const result = await supabase.from('marketplace_themes').update({ is_active: !currentStatus }).eq('id', id);
+        if (!result.error) {
+            await loadData();
+        } else {
+            alert('Error: ' + result.error.message);
+        }
+        setIsSubmitting(false);
+    };
+
+    const handleSelectTheme = (id: string, isChecked: boolean) => {
+        setSelectedIds(prev => 
+            isChecked ? [...prev, id] : prev.filter(x => x !== id)
+        );
+    };
+
+    const handleSelectAll = (isChecked: boolean) => {
+        if (isChecked) {
+            setSelectedIds(filteredThemes.map(t => t.id));
+        } else {
+            setSelectedIds([]);
+        }
+    };
+
+    const handleBatchStatus = async (status: boolean) => {
+        if (selectedIds.length === 0) return;
+        setIsSubmitting(true);
+        const result = await supabase
+            .from('marketplace_themes')
+            .update({ is_active: status })
+            .in('id', selectedIds);
+            
+        if (!result.error) {
+            await loadData();
+            setSelectedIds([]);
+            alert(`อัปเดตสถานะ ${selectedIds.length} ธีมเรียบร้อยแล้ว!`);
+        } else {
+            alert('Error: ' + result.error.message);
+        }
+        setIsSubmitting(false);
+    };
+
     return (
         <div className="p-8 max-w-[1600px] mx-auto font-sans text-slate-900 bg-slate-50/50 min-h-screen relative">
             {/* Header & Filter (คงเดิม) */}
@@ -219,6 +269,17 @@ export default function AdminThemesPage() {
             </header>
 
             <div className="mb-8 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4 items-center">
+                <div className="flex items-center gap-2">
+                    <input 
+                        type="checkbox" 
+                        id="selectAllThemes"
+                        checked={filteredThemes.length > 0 && filteredThemes.every(t => selectedIds.includes(t.id))}
+                        onChange={(e) => handleSelectAll(e.target.checked)}
+                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    />
+                    <label htmlFor="selectAllThemes" className="text-xs font-bold text-slate-500 uppercase cursor-pointer select-none">เลือกทั้งหมด</label>
+                </div>
+                <div className="h-6 w-px bg-slate-200 hidden md:block"></div>
                 <div className="relative w-full md:w-auto flex-grow md:flex-grow-0">
                     <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                     <input type="text" placeholder="Search themes..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10 pr-4 py-2 w-full md:w-64 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-blue-500" />
@@ -234,6 +295,26 @@ export default function AdminThemesPage() {
                         <button key={plan} onClick={() => setFilterPlan(plan)} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border ${filterPlan === plan ? 'bg-slate-800 text-white border-slate-800 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}>{plan}</button>
                     ))}
                 </div>
+                <div className="h-6 w-px bg-slate-200 hidden md:block"></div>
+                <div className="flex gap-1.5">
+                    {[
+                        { label: 'ทั้งหมด', value: 'all' },
+                        { label: 'เปิดขาย', value: 'active' },
+                        { label: 'ปิดขาย', value: 'inactive' }
+                    ].map(status => (
+                        <button 
+                            key={status.value} 
+                            onClick={() => setFilterStatus(status.value as any)} 
+                            className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-all ${
+                                filterStatus === status.value 
+                                ? 'bg-slate-900 text-white border-slate-900 shadow-md' 
+                                : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+                            }`}
+                        >
+                            {status.label}
+                        </button>
+                    ))}
+                </div>
                 <div className="ml-auto text-xs font-bold text-slate-400">Showing {filteredThemes.length} themes</div>
             </div>
 
@@ -241,10 +322,36 @@ export default function AdminThemesPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
                 {filteredThemes.map(t => (
                     <div key={t.id} className="bg-white p-5 rounded-[30px] shadow-sm border border-slate-100 hover:shadow-xl transition-all group flex flex-col relative overflow-hidden">
-                        <div className="absolute top-4 right-4 z-10">
-                             <span className={`text-[9px] font-black px-2 py-1 rounded-full uppercase mb-1 shadow-sm ${t.min_plan === 'free' ? 'bg-green-100 text-green-600' : t.min_plan === 'ultimate' ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-500'}`}>
+                        <div className="absolute top-4 left-4 z-10">
+                            <button 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleToggleStatus(t.id, t.is_active);
+                                }}
+                                disabled={isSubmitting}
+                                className={`text-[9px] font-black px-3 py-1 rounded-full uppercase mb-1 shadow-sm transition-all duration-200 active:scale-95 flex items-center gap-1 ${
+                                    t.is_active 
+                                    ? 'bg-emerald-500 hover:bg-emerald-600 text-white' 
+                                    : 'bg-rose-500 hover:bg-rose-600 text-white'
+                                }`}
+                                title="คลิกเพื่อเปลี่ยนสถานะเปิด/ปิดขาย"
+                            >
+                                <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></span>
+                                {t.is_active ? 'เปิดขาย' : 'ปิดขาย'}
+                            </button>
+                        </div>
+                        <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+                             <span className={`text-[9px] font-black px-2 py-1 rounded-full uppercase shadow-sm ${t.min_plan === 'free' ? 'bg-green-100 text-green-600' : t.min_plan === 'ultimate' ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-500'}`}>
                                 {t.min_plan || 'Ultimate'}
                             </span>
+                            <input 
+                                type="checkbox"
+                                checked={selectedIds.includes(t.id)}
+                                onChange={(e) => {
+                                    handleSelectTheme(t.id, e.target.checked);
+                                }}
+                                className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer transition-all active:scale-90"
+                            />
                         </div>
                         <div className="flex justify-between items-start mb-4">
                             <h3 className="font-black text-slate-800 uppercase text-sm truncate pr-2" title={t.name}>{t.name}</h3>
@@ -400,9 +507,15 @@ export default function AdminThemesPage() {
                                                     <option value="ultimate">Ultimate</option>
                                                 </select>
                                             </div>
-                                            <div className="flex items-center gap-3 mt-6">
-                                                 <input type="checkbox" id="freeWithPlan" className="w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500" checked={formData.is_free_with_plan} onChange={(e) => setFormData({...formData, is_free_with_plan: e.target.checked})} />
-                                                 <label htmlFor="freeWithPlan" className="text-sm font-bold text-slate-700 cursor-pointer">Free with Plan?</label>
+                                            <div className="flex flex-col justify-center gap-2 mt-4">
+                                                <div className="flex items-center gap-3">
+                                                     <input type="checkbox" id="freeWithPlan" className="w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500" checked={formData.is_free_with_plan} onChange={(e) => setFormData({...formData, is_free_with_plan: e.target.checked})} />
+                                                     <label htmlFor="freeWithPlan" className="text-sm font-bold text-slate-700 cursor-pointer">Free with Plan?</label>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                     <input type="checkbox" id="isActive" className="w-5 h-5 rounded border-slate-300 text-green-600 focus:ring-green-500" checked={formData.is_active} onChange={(e) => setFormData({...formData, is_active: e.target.checked})} />
+                                                     <label htmlFor="isActive" className="text-sm font-bold text-slate-700 cursor-pointer">เปิดขายสินค้า (Active)</label>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -492,6 +605,41 @@ export default function AdminThemesPage() {
         </div>
     </div>
 )}
+
+            {/* --- FLOATING BATCH ACTIONS TOOLBAR --- */}
+            {selectedIds.length > 0 && (
+                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-slate-900/95 backdrop-blur-md text-white px-6 py-4 rounded-3xl shadow-2xl flex items-center gap-6 border border-white/10 animate-in fade-in slide-in-from-bottom duration-300">
+                    <div className="text-sm font-bold">
+                        เลือกอยู่ <span className="text-blue-400 font-black text-base">{selectedIds.length}</span> รายการ
+                    </div>
+                    <div className="h-6 w-px bg-white/20"></div>
+                    <div className="flex gap-2">
+                        <button 
+                            onClick={() => handleBatchStatus(true)}
+                            disabled={isSubmitting}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
+                        >
+                            <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></span>
+                            เปิดขายทั้งหมด
+                        </button>
+                        <button 
+                            onClick={() => handleBatchStatus(false)}
+                            disabled={isSubmitting}
+                            className="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
+                        >
+                            <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></span>
+                            ปิดขายทั้งหมด
+                        </button>
+                    </div>
+                    <div className="h-6 w-px bg-white/20"></div>
+                    <button 
+                        onClick={() => setSelectedIds([])}
+                        className="text-xs font-bold text-slate-400 hover:text-white uppercase tracking-wider transition-colors"
+                    >
+                        ยกเลิก
+                    </button>
+                </div>
+            )}
         </div>
     );
 }

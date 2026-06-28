@@ -1,9 +1,28 @@
 // app/api/receipts/route.ts
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 // 🎯 เปลี่ยนมาตรฐานการแบ่งหน้าส่งข้อมูลทีละ 20 รายการตามใจนายครับ
 const PAGE_SIZE = 20;
+
+function calculateEffectivePlan(brand: any) {
+  const now = dayjs();
+  const isActive = (value: string | null) =>
+    value && dayjs(value.replace(' ', 'T')).isAfter(now);
+
+  if (brand?.plan === 'ultimate' && isActive(brand.expiry_ultimate)) {
+    return 'ultimate';
+  }
+  if (brand?.plan === 'pro' && isActive(brand.expiry_pro)) return 'pro';
+  if (brand?.plan === 'basic' && isActive(brand.expiry_basic)) return 'basic';
+  return 'free';
+}
 
 export async function OPTIONS() {
   return new NextResponse(null, {
@@ -28,23 +47,55 @@ const getSupabaseAndBrandId = async (request: Request) => {
   if (authError || !user) throw new Error('Unauthorized');
 
   const { data: profile } = await supabase
-    .from('profiles').select('brand_id').eq('id', user.id).single();
+    .from('profiles')
+    .select('brand_id, brands(timezone, plan, expiry_basic, expiry_pro, expiry_ultimate)')
+    .eq('id', user.id)
+    .single();
 
   if (!profile?.brand_id) throw new Error('No brand assigned');
-  return { supabase, brandId: profile.brand_id };
+  const brand = Array.isArray(profile.brands) ? profile.brands[0] : profile.brands;
+  return {
+    supabase,
+    brandId: profile.brand_id,
+    timezone: brand?.timezone || 'Asia/Bangkok',
+    effectivePlan: calculateEffectivePlan(brand),
+  };
 };
 
 export async function GET(request: Request) {
   try {
-    const { supabase, brandId } = await getSupabaseAndBrandId(request);
+    const {
+      supabase,
+      brandId,
+      timezone: brandTimezone,
+      effectivePlan,
+    } = await getSupabaseAndBrandId(request);
     const { searchParams } = new URL(request.url);
-    const startDate = searchParams.get('start_date');
-    const endDate = searchParams.get('end_date');
+    let startDate = searchParams.get('start_date');
+    const requestedEndDate = searchParams.get('end_date');
     const page = parseInt(searchParams.get('page') || '1', 10);
 
-    if (!startDate || !endDate) {
+    if (!startDate || !requestedEndDate) {
       return NextResponse.json({ success: false, error: 'กรุณาระบุ start_date และ end_date' }, { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } });
     }
+
+    let limitWarning = false;
+    const maxDays = effectivePlan === 'free' ? 6 : 29;
+    const allowedStartDate = dayjs()
+      .tz(brandTimezone)
+      .subtract(maxDays, 'day')
+      .startOf('day')
+      .utc()
+      .toISOString();
+
+    if (dayjs(startDate).isBefore(dayjs(allowedStartDate))) {
+      startDate = allowedStartDate;
+      limitWarning = true;
+    }
+    const nowIso = new Date().toISOString();
+    const endDate = dayjs(requestedEndDate).isAfter(dayjs(nowIso))
+      ? nowIso
+      : requestedEndDate;
 
     const from = (page - 1) * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
@@ -110,7 +161,29 @@ export async function GET(request: Request) {
       };
     });
 
+    const cancelledUserIds = Array.from(new Set(
+      (cancelledRes.data || []).map((o: any) => o.cancelled_by).filter(Boolean)
+    ));
+    
+    const profilesMap: Record<string, string> = {};
+    if (cancelledUserIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', cancelledUserIds);
+        
+      if (profiles) {
+        profiles.forEach((p: any) => {
+          profilesMap[p.id] = p.full_name;
+        });
+      }
+    }
+
     const cancelledData = (cancelledRes.data || []).map((order: any) => {
+      const cashierName = order.cancelled_by && profilesMap[order.cancelled_by] 
+        ? profilesMap[order.cancelled_by] 
+        : 'System (Void)';
+
       return {
         id: order.id, 
         brand_id: order.brand_id,
@@ -121,7 +194,7 @@ export async function GET(request: Request) {
         change_amount: 0,
         payment_method: 'CANCELLED',
         brand: order.brand,
-        cashier: { full_name: 'System (Void)' }, 
+        cashier: { full_name: cashierName }, 
         items: order.order_items,
         status: 'cancelled',
         orders: [order] 
@@ -134,7 +207,13 @@ export async function GET(request: Request) {
 
     const hasMore = (paidRes.count! > to + 1) || (cancelledRes.count! > to + 1);
 
-    return new NextResponse(JSON.stringify({ success: true, data: combinedData, hasMore }), {
+    return new NextResponse(JSON.stringify({
+      success: true,
+      data: combinedData,
+      hasMore,
+      effectivePlan,
+      limitWarning,
+    }), {
       status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
 

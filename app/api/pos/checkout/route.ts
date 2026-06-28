@@ -48,7 +48,7 @@ export async function POST(request: Request) {
   try {
     const { supabase, brandId } = await getSupabaseAndBrandId(request);
     const body = await request.json();
-    const { order_id, order_ids, table_id, table_label, used_tokens, now_iso } = body;
+    const { order_id, order_ids, payment_id, table_id, table_label, used_tokens, now_iso } = body;
     const checkoutOrderIds = Array.isArray(order_ids) && order_ids.length > 0 ? order_ids : [order_id].filter(Boolean);
 
     if (checkoutOrderIds.length === 0) {
@@ -58,7 +58,11 @@ export async function POST(request: Request) {
     const paidAt = now_iso || new Date().toISOString();
     const { error: orderError } = await supabase
       .from('orders')
-      .update({ status: 'paid', updated_at: paidAt })
+      .update({
+        status: 'paid',
+        payment_id: payment_id || null,
+        updated_at: paidAt
+      })
       .in('id', checkoutOrderIds)
       .eq('brand_id', brandId);
 

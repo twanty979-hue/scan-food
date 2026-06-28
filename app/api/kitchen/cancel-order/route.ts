@@ -48,6 +48,8 @@ export async function POST(request: Request) {
       .from('orders')
       .update({ 
         status: 'cancelled',
+        cancelled_by: user.id,
+        cancelled_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })
       .eq('id', orderId)
@@ -59,7 +61,9 @@ export async function POST(request: Request) {
     const { error: itemsError } = await supabase
       .from('order_items')
       .update({ 
-        status: 'cancelled'
+        status: 'cancelled',
+        cancelled_by: user.id,
+        cancelled_at: new Date().toISOString()
       })
       .eq('order_id', orderId);
 

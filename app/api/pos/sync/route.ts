@@ -1,6 +1,8 @@
 // app/api/pos/sync/route.ts
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { rebuildDashboardCashierStats } from '@/lib/dashboardCashierStats';
+import { rebuildDashboardDailyPaymentCount } from '@/lib/dashboardDailySales';
 
 // --- 🌐 จัดการ CORS Preflight รองรับการยิงจากโมบายล์แอป ---
 export async function OPTIONS() {
@@ -60,7 +62,96 @@ export async function POST(request: Request) {
     const payload = await request.json();
     console.log("📦 [DEBUG] โครงสร้างที่แอปส่งมา:", JSON.stringify(payload, null, 2));
 
-    let { newOrderData, itemsToSave, paiOrderData, syncPayload } = payload;
+    let { action, newOrderData, itemsToSave, paiOrderData, syncPayload, orderId, orderIds, itemId, itemIds, cancelledAt, cancelReason, isNewOffline } = payload;
+
+    if (action === 'cancel_order_item') {
+      const targetItemIds = Array.isArray(itemIds)
+        ? itemIds.filter(Boolean).map(String)
+        : itemId
+          ? [String(itemId)]
+          : [];
+
+      if (targetItemIds.length === 0) {
+        throw new Error('Missing itemId for item cancellation');
+      }
+      if (!orderId) {
+        throw new Error('Missing orderId for item cancellation');
+      }
+
+      const { data: orderData, error: orderFetchError } = await supabase
+        .from('orders')
+        .select('id')
+        .eq('id', orderId)
+        .eq('brand_id', brandId)
+        .maybeSingle();
+
+      if (orderFetchError) throw orderFetchError;
+      if (!orderData?.id) throw new Error('Order not found for this brand');
+
+      const cancelledAtValue = cancelledAt || new Date().toISOString();
+      const { error: itemUpdateError } = await supabase
+        .from('order_items')
+        .update({
+          status: 'cancelled',
+          cancelled_by: userId,
+          cancelled_at: cancelledAtValue,
+          cancel_reason: cancelReason || null
+        })
+        .in('id', targetItemIds)
+        .eq('order_id', orderData.id);
+
+      if (itemUpdateError) throw itemUpdateError;
+
+      const response = NextResponse.json({
+        success: true,
+        message: 'ยกเลิกรายการสำเร็จ',
+        itemIds: targetItemIds,
+      });
+      response.headers.set('Access-Control-Allow-Origin', '*');
+      return response;
+    }
+
+    if (action === 'cancel_order') {
+      const targetOrderIds = Array.isArray(orderIds)
+        ? orderIds.filter(Boolean).map(String)
+        : orderId
+          ? [String(orderId)]
+          : [];
+
+      if (targetOrderIds.length === 0) throw new Error('Missing orderId for cancellation');
+      
+      if (isNewOffline && newOrderData && itemsToSave) {
+        // ออเดอร์แบบ Walk-in ที่ยังไม่เคยขึ้น Cloud เลย แต่ถูกยกเลิกไปแล้ว
+        const { error: orderError } = await supabase.from('orders').upsert(newOrderData);
+        if (orderError) throw orderError;
+        
+        const { error: itemsError } = await supabase.from('order_items').upsert(itemsToSave);
+        if (itemsError) throw itemsError;
+      } else {
+        // ออเดอร์ที่มีอยู่บน Cloud อยู่แล้ว แค่อัปเดตสถานะ
+        const { error: orderError } = await supabase.from('orders').update({
+          status: 'cancelled',
+          cancelled_by: userId,
+          cancelled_at: cancelledAt || new Date().toISOString()
+        }).in('id', targetOrderIds).eq('brand_id', brandId);
+        if (orderError) throw orderError;
+        
+        const { error: itemsError } = await supabase.from('order_items').update({
+          status: 'cancelled',
+          cancelled_by: userId,
+          cancelled_at: cancelledAt || new Date().toISOString()
+        }).in('order_id', targetOrderIds);
+        if (itemsError) throw itemsError;
+      }
+
+      const response = NextResponse.json({
+        success: true,
+        message: 'ยกเลิกออเดอร์สำเร็จ',
+        orderIds: targetOrderIds,
+      });
+      response.headers.set('Access-Control-Allow-Origin', '*');
+      return response;
+    }
 
     if (!newOrderData || !itemsToSave || !paiOrderData) {
       throw new Error('รูปแบบโครงสร้างข้อมูลใน Payload ไม่ถูกต้องหรือไม่ครบถ้วน');
@@ -69,7 +160,30 @@ export async function POST(request: Request) {
     // 🛡️ ผูก brand_id และ cashier_id
     newOrderData.brand_id = brandId;
     paiOrderData.brand_id = brandId;
-    paiOrderData.cashier_id = userId; // 👈 2️⃣ ยัด ID พนักงานแคชเชียร์อัตโนมัติ ปลอดภัยกว่าให้แอปส่งมา
+
+    // Keep the cashier who made the offline sale, not the user who happens to
+    // press sync later. Only accept a cached cashier from the same brand.
+    const requestedCashierId = String(paiOrderData.cashier_id || '');
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestedCashierId);
+    let resolvedCashierId = userId;
+    const privilegedSupabase = process.env.SUPABASE_SERVICE_ROLE_KEY
+      ? createClient(
+          process.env.SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY,
+          { auth: { autoRefreshToken: false, persistSession: false } }
+        )
+      : supabase;
+
+    if (isUuid && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      const { data: cashierProfile } = await privilegedSupabase
+        .from('profiles')
+        .select('id')
+        .eq('id', requestedCashierId)
+        .eq('brand_id', brandId)
+        .maybeSingle();
+      if (cashierProfile?.id) resolvedCashierId = cashierProfile.id;
+    }
+    paiOrderData.cashier_id = resolvedCashierId;
 
     const processedItems = itemsToSave.map((item: any) => ({
       ...item,
@@ -92,13 +206,28 @@ export async function POST(request: Request) {
       .upsert(newOrderData);
     if (orderError) throw orderError;
 
-    // C. สร้าง order_items และ pai_orders ขนานกันได้เลย (เพราะ orders ถูกสร้างรอไว้แล้ว)
-    const [itemsRes, paiRes] = await Promise.all([
-      supabase.from('order_items').upsert(processedItems),
-      supabase.from('pai_orders').upsert(paiOrderData)
-    ]);
+    // C. บันทึกรายการสินค้า และสร้าง Pai เฉพาะเมื่อยังไม่มี
+    // ห้าม upsert Pai เดิม เพราะการ retry จะกลายเป็น UPDATE และอาจเรียก
+    // trigger ฝั่งฐานข้อมูลที่ไม่เกี่ยวกับการซิงค์ซ้ำ
+    const itemsRes = await supabase
+      .from('order_items')
+      .upsert(processedItems);
     if (itemsRes.error) throw itemsRes.error;
-    if (paiRes.error) throw paiRes.error;
+
+    const { data: existingPayment, error: existingPaymentError } =
+      await supabase
+        .from('pai_orders')
+        .select('id')
+        .eq('id', targetPaymentId)
+        .maybeSingle();
+    if (existingPaymentError) throw existingPaymentError;
+
+    if (!existingPayment) {
+      const { error: paiError } = await supabase
+        .from('pai_orders')
+        .insert(paiOrderData);
+      if (paiError) throw paiError;
+    }
 
     // D. ย้อนกลับไปอัปเดตใส่ payment_id ให้กับ orders เพื่อให้ Foreign Key สมบูรณ์
     if (targetPaymentId) {
@@ -108,6 +237,101 @@ export async function POST(request: Request) {
         .eq('id', newOrderData.id);
       if (updateError) throw updateError;
     }
+
+    // Dashboard summaries must never make a completed sale fail to sync.
+    // They are derived data and can be rebuilt later from pai_orders.
+    const paymentCreatedAt =
+      paiOrderData.created_at || new Date().toISOString();
+    const dashboardResults = await Promise.allSettled([
+      rebuildDashboardCashierStats(privilegedSupabase, {
+        brandId,
+        cashierId: resolvedCashierId,
+        paymentCreatedAt,
+      }),
+      rebuildDashboardDailyPaymentCount(privilegedSupabase, {
+        brandId,
+        paymentCreatedAt,
+      }),
+    ]);
+    dashboardResults.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        const summaryName = index === 0 ? 'cashier' : 'daily-payment';
+        console.error(
+          `[SYNC] Dashboard ${summaryName} summary failed:`,
+          result.reason,
+        );
+      }
+    });
+
+    // Cut stock only for active retail products that have a barcode.
+    // Reuse order_item.id as stock_logs.id so retrying an offline sync cannot
+    // deduct the same sold item more than once.
+    const stockCandidates = processedItems.filter((item: any) => {
+      const quantity = Number(item.quantity ?? item.qty ?? 0);
+      return (
+        item.id &&
+        item.product_id &&
+        item.status !== 'cancelled' &&
+        Number.isFinite(quantity) &&
+        quantity > 0
+      );
+    });
+
+    const stockProductIds = Array.from(
+      new Set(stockCandidates.map((item: any) => String(item.product_id)))
+    );
+
+    if (stockProductIds.length > 0) {
+      const { data: barcodeProducts, error: barcodeProductsError } = await supabase
+        .from('product_master')
+        .select('id, barcode')
+        .eq('brand_id', brandId)
+        .in('id', stockProductIds);
+
+      if (barcodeProductsError) throw barcodeProductsError;
+
+      const barcodeProductIds = new Set(
+        (barcodeProducts || [])
+          .filter((product: any) => String(product.barcode || '').trim().length > 0)
+          .map((product: any) => String(product.id))
+      );
+
+      const { data: cashierProfile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', resolvedCashierId)
+        .maybeSingle();
+
+      const saleStockLogs = stockCandidates
+        .filter((item: any) => barcodeProductIds.has(String(item.product_id)))
+        .map((item: any) => {
+          const quantity = Math.trunc(Number(item.quantity ?? item.qty));
+          return {
+            id: item.id,
+            product_id: item.product_id,
+            change_amount: -quantity,
+            action_type: 'SALE',
+            note: `ขาย ${item.product_name || 'สินค้า'} จำนวน ${quantity}`,
+            transaction_id: null,
+            source_event_id: item.id,
+            order_id: newOrderData.id,
+            performed_by: resolvedCashierId,
+            performed_by_name: cashierProfile?.full_name || null,
+          };
+        });
+
+      if (saleStockLogs.length > 0) {
+        const { error: stockLogsError } = await supabase
+          .from('stock_logs')
+          .upsert(saleStockLogs, {
+            onConflict: 'id',
+            ignoreDuplicates: true,
+          });
+
+        if (stockLogsError) throw stockLogsError;
+      }
+    }
+
     // ---------------------------------------------------------
     if (syncPayload?.type === 'tables' && syncPayload?.table_label && syncPayload.table_label !== 'Walk-in') {
       let tableQuery = supabase

@@ -29,15 +29,15 @@ const getSupabaseAndBrandId = async (request: Request) => {
     .from('profiles').select('brand_id').eq('id', user.id).single();
 
   if (!profile?.brand_id) throw new Error('No brand assigned');
-  return { brandId: profile.brand_id };
+  return { brandId: profile.brand_id, supabase };
 };
 
 export async function GET(request: Request) {
   try {
     // 🚀 ยืนยันตัวตนก่อนเรียกฟังก์ชัน limitGuard
-    const { brandId } = await getSupabaseAndBrandId(request);
+    const { brandId, supabase } = await getSupabaseAndBrandId(request);
 
-    const quotaData = await getOrderUsage(brandId);
+    const quotaData = await getOrderUsage(brandId, supabase);
 
     const response = NextResponse.json({ success: true, ...quotaData });
     response.headers.set('Access-Control-Allow-Origin', '*');

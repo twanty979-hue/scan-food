@@ -38,23 +38,39 @@ export async function checkOrderLimitOrThrow(brandId: string) {
     // ✅ ถ้าไม่ใช่ 'free' (จ่ายเงินแล้ว) -> ผ่านตลอด ไม่จำกัด
     if (effectivePlan !== 'free') return true; 
 
-    // 3. เริ่มนับยอดขาย "เดือนนี้"
-    const startOfMonth = now.startOf('month').toISOString();
-    const endOfMonth = now.endOf('month').toISOString();
+    // 3. เริ่มนับยอดขาย 30 วันย้อนหลัง
+    const startOfPeriod = now.subtract(30, 'day').startOf('day').toISOString();
+    const endOfPeriod = now.endOf('day').toISOString();
 
-    const { count, error } = await supabase
+    // ดึงออเดอร์ที่เป็นโต๊ะมาก่อน
+    const { data: tableOrders, error: orderErr } = await supabase
         .from('orders')
-        .select('*', { count: 'exact', head: true }) 
+        .select('id')
         .eq('brand_id', brandId)
-        .neq('status', 'cancelled') 
-        .gte('created_at', startOfMonth)
-        .lte('created_at', endOfMonth);
-
-    if (error) throw new Error("ระบบตรวจสอบโควต้าขัดข้อง");
+        .eq('type', 'table')
+        .not('table_id', 'is', null)
+        .gte('created_at', startOfPeriod);
+        
+    if (orderErr) throw new Error("ระบบตรวจสอบโควต้าขัดข้อง");
+    
+    const orderIds = tableOrders?.map(o => o.id) || [];
+    
+    let usage = 0;
+    if (orderIds.length > 0) {
+        const { count, error } = await supabase
+            .from('pai_orders')
+            .select('id', { count: 'exact', head: true })
+            .in('order_id', orderIds)
+            .gte('created_at', startOfPeriod)
+            .lte('created_at', endOfPeriod);
+            
+        if (error) throw new Error("ระบบตรวจสอบโควต้าขัดข้อง");
+        usage = count || 0;
+    }
 
     // 4. ตัดสิน: ถ้าเกิน Limit -> ระเบิด Error
-    if (count !== null && count >= MAX_FREE_ORDERS) {
-        throw new Error(`🚫 แพ็กเกจฟรีจำกัด ${MAX_FREE_ORDERS} ออเดอร์/เดือน (ใช้ไปแล้ว ${count}) กรุณาอัปเกรด!`);
+    if (usage >= MAX_FREE_ORDERS) {
+        throw new Error(`🚫 แพ็กเกจฟรีจำกัดบิล QR ${MAX_FREE_ORDERS} บิล/เดือน (ใช้ไปแล้ว ${usage}) กรุณาอัปเกรด!`);
     }
 
     return true; 
@@ -63,8 +79,8 @@ export async function checkOrderLimitOrThrow(brandId: string) {
 // ----------------------------------------------------------------------------
 // 📊 ฟังก์ชัน 2: ดึงข้อมูลสถานะไปโชว์ (ใช้แสดงผลที่ปุ่ม QR Code)
 // ----------------------------------------------------------------------------
-export async function getOrderUsage(brandId: string) {
-    const supabase = await getSupabase();
+export async function getOrderUsage(brandId: string, customSupabase?: any) {
+    const supabase = customSupabase || await getSupabase();
     const now = dayjs();
 
     const { data: brand } = await supabase.from('brands').select('plan, expiry_basic, expiry_pro, expiry_ultimate').eq('id', brandId).single();
@@ -78,26 +94,60 @@ export async function getOrderUsage(brandId: string) {
 
     // กรณีจ่ายเงิน (Infinity)
     if (effectivePlan !== 'free') {
-        return { usage: 0, limit: Infinity, isLocked: false, plan: effectivePlan };
+        return { usage: 0, limit: Infinity, isLocked: false, plan: effectivePlan, history: [] };
     }
 
-    // กรณีฟรี (Free) -> นับยอด
-    const startOfMonth = now.startOf('month').toISOString();
-    const endOfMonth = now.endOf('month').toISOString();
-    const { count } = await supabase
+    // กรณีฟรี (Free) -> นับยอด 30 วันย้อนหลัง
+    const startOfPeriod = now.subtract(30, 'day').startOf('day').toISOString();
+    const endOfPeriod = now.endOf('day').toISOString();
+    
+    // ดึงเฉพาะ order_id ของโต๊ะ
+    const { data: tableOrders } = await supabase
         .from('orders')
-        .select('*', { count: 'exact', head: true })
+        .select('id')
         .eq('brand_id', brandId)
-        .neq('status', 'cancelled')
-        .gte('created_at', startOfMonth)
-        .lte('created_at', endOfMonth);
+        .eq('type', 'table')
+        .not('table_id', 'is', null)
+        .gte('created_at', startOfPeriod);
+        
+    const orderIds = tableOrders?.map((o: any) => o.id) || [];
+    
+    let ordersData: any[] = [];
+    if (orderIds.length > 0) {
+        const { data } = await supabase
+            .from('pai_orders')
+            .select('created_at')
+            .in('order_id', orderIds)
+            .gte('created_at', startOfPeriod)
+            .lte('created_at', endOfPeriod);
+        ordersData = data || [];
+    }
 
-    const usage = count || 0;
+    const usage = ordersData.length;
+
+    const historyMap: Record<string, number> = {};
+    for (let i = 29; i >= 0; i--) {
+        historyMap[now.subtract(i, 'day').format('YYYY-MM-DD')] = 0;
+    }
+    
+    if (ordersData) {
+        for (const order of ordersData) {
+            if (order.created_at) {
+                const dateStr = dayjs(order.created_at).format('YYYY-MM-DD');
+                if (historyMap[dateStr] !== undefined) {
+                    historyMap[dateStr]++;
+                }
+            }
+        }
+    }
+
+    const history = Object.entries(historyMap).map(([date, count]) => ({ date, count }));
 
     return { 
         usage, 
         limit: MAX_FREE_ORDERS, 
-        isLocked: usage >= MAX_FREE_ORDERS, // ส่งค่า true ถ้าเกินลิมิต (เอาไปทำปุ่มแดง)
-        plan: 'free'
+        isLocked: usage >= MAX_FREE_ORDERS, 
+        plan: 'free',
+        history
     };
 }

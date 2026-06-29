@@ -1,8 +1,10 @@
 // app/actions/shop.ts
 'use server'
 
+import 'server-only';
 import { createClient } from '@supabase/supabase-js';
 import { checkOrderLimitOrThrow } from './limitGuard';
+import { sendBrandNotification } from '@/lib/brandNotifications';
 
 // 🌟 ตัวแปรดึง URL ของ Cloudflare จาก .env
 const CDN_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://img.pos-foodscan.com";
@@ -24,7 +26,8 @@ const STANDARD_BANNERS = [
 // ✅ สร้าง Client
 const supabaseServer = createClient(
   process.env.SUPABASE_URL!,
-  process.env.SUPABASE_ANON_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { autoRefreshToken: false, persistSession: false } }
 );
 
 type ShopParams = {
@@ -41,6 +44,53 @@ const isValidTableToken = (table: any, token: string) => {
   if (tokens.length > 0) return tokens.includes(token);
   return table?.access_token === token;
 };
+
+const roundToQuarter = (value: number) => Math.round(value * 4) / 4;
+const ALLOWED_VARIANTS = new Set(['normal', 'special', 'jumbo']);
+
+function productPrice(product: any, variant: string) {
+  if (variant === 'special') return Number(product.price_special ?? product.price ?? 0);
+  if (variant === 'jumbo') return Number(product.price_jumbo ?? product.price ?? 0);
+  return Number(product.price ?? 0);
+}
+
+function calculateServerPrice(
+  product: any,
+  variant: string,
+  discounts: any[],
+) {
+  const original = roundToQuarter(productPrice(product, variant));
+  const now = new Date();
+  const applicable = discounts.filter((discount) => {
+    if (discount.start_date && new Date(discount.start_date) > now) return false;
+    if (discount.end_date && new Date(discount.end_date) < now) return false;
+    if (variant === 'normal' && !discount.apply_normal) return false;
+    if (variant === 'special' && !discount.apply_special) return false;
+    if (variant === 'jumbo' && !discount.apply_jumbo) return false;
+    if (discount.apply_to === 'all') return true;
+    return (
+      discount.apply_to === 'specific' &&
+      discount.discount_products?.some(
+        (item: any) => String(item.product_id) === String(product.id),
+      )
+    );
+  });
+
+  const final = applicable.reduce((best, discount) => {
+    const candidate =
+      discount.type === 'percentage'
+        ? original - (original * Number(discount.value || 0)) / 100
+        : original - Number(discount.value || 0);
+    return Math.min(best, Math.max(0, candidate));
+  }, original);
+
+  const roundedFinal = roundToQuarter(final);
+  return {
+    original,
+    final: roundedFinal,
+    discount: Math.max(0, original - roundedFinal),
+  };
+}
 
 // Helper Function: แปลงชื่อรูปเป็น Cloudflare URL เต็มๆ
 const getImageUrl = (imageName: string | null) => {
@@ -188,6 +238,48 @@ export async function fetchShopData(params: ShopParams) {
 }
 
 // --- Action 2: สั่งซื้อสินค้า (Checkout) - คงเดิม ---
+export async function fetchShopOrderStatus(params: ShopParams) {
+  const { brandId, combinedId } = params;
+  const realTableId = combinedId?.substring(0, 36);
+  const providedCode = combinedId?.substring(36);
+
+  try {
+    const { data: table } = await supabaseServer
+      .from('tables')
+      .select(
+        'access_token, access_tokens, brand_id, brands!inner(config, table_qr_mode)',
+      )
+      .eq('id', realTableId)
+      .eq('brand_id', brandId)
+      .single();
+
+    const brand = (table as any)?.brands;
+    if (
+      !table ||
+      (shouldRequireTableToken(brand) &&
+        !isValidTableToken(table, providedCode))
+    ) {
+      return { success: false, error: 'Invalid Table or Access Code' };
+    }
+
+    const { data: orders, error } = await supabaseServer
+      .from('orders')
+      .select('*, order_items(*)')
+      .eq('brand_id', brandId)
+      .eq('table_id', realTableId)
+      .neq('status', 'paid')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return { success: true, orders: orders || [] };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error?.message || 'Unable to refresh orders',
+    };
+  }
+}
+
 export async function submitOrder(payload: {
   brandId: string;
   combinedId: string;
@@ -195,11 +287,15 @@ export async function submitOrder(payload: {
   totalPrice: number;
   cart: any[];
 }) {
-  const { brandId, combinedId, tableLabel, totalPrice, cart } = payload;
+  const { brandId, combinedId, tableLabel, cart } = payload;
   const realTableId = combinedId?.substring(0, 36);
   const providedCode = combinedId?.substring(36);
 
   try {
+    if (!Array.isArray(cart) || cart.length === 0 || cart.length > 100) {
+      return { success: false, error: 'Invalid cart' };
+    }
+
     const { data: checkTable } = await supabaseServer
       .from('tables')
       .select('access_token, access_tokens, brand_id, brands!inner(config, table_qr_mode)')
@@ -222,13 +318,69 @@ export async function submitOrder(payload: {
       };
     }
 
+    const productIds = [...new Set(cart.map((item) => String(item.id || '')))]
+      .filter(Boolean);
+    const [{ data: productRows, error: productError }, { data: discountRows, error: discountError }] =
+      await Promise.all([
+        supabaseServer
+          .from('products')
+          .select('id,name,price,price_special,price_jumbo,is_available')
+          .eq('brand_id', brandId)
+          .eq('is_available', true)
+          .in('id', productIds),
+        supabaseServer
+          .from('discounts')
+          .select('*, discount_products(product_id)')
+          .eq('brand_id', brandId)
+          .eq('is_active', true),
+      ]);
+
+    if (productError || discountError) {
+      throw productError || discountError;
+    }
+
+    const productsById = new Map(
+      (productRows || []).map((product) => [String(product.id), product]),
+    );
+    const securedItems = cart.map((item) => {
+      const product = productsById.get(String(item.id));
+      const quantity = Number(item.quantity);
+      const variant = String(item.variant || 'normal');
+      const note = String(item.note || '').trim().slice(0, 300);
+
+      if (
+        !product ||
+        !Number.isInteger(quantity) ||
+        quantity < 1 ||
+        quantity > 99 ||
+        !ALLOWED_VARIANTS.has(variant)
+      ) {
+        throw new Error('Invalid product, quantity, or variant');
+      }
+
+      const pricing = calculateServerPrice(product, variant, discountRows || []);
+      return {
+        product,
+        quantity,
+        variant,
+        note: note || null,
+        pricing,
+      };
+    });
+    const serverTotal = roundToQuarter(
+      securedItems.reduce(
+        (sum, item) => sum + item.pricing.final * item.quantity,
+        0,
+      ),
+    );
+
     const { data: order, error: orderErr } = await supabaseServer
       .from('orders')
       .insert([{
         brand_id: brandId,
         table_id: realTableId,
         table_label: tableLabel,
-        total_price: totalPrice,
+        total_price: serverTotal,
         status: 'pending',
         table_access_token: requiresToken ? providedCode : null
       }])
@@ -237,20 +389,20 @@ export async function submitOrder(payload: {
 
     if (orderErr) throw orderErr;
 
-    const orderItemsPayload = cart.map(item => ({
+    const orderItemsPayload = securedItems.map((item) => ({
       order_id: order.id,
-      product_id: item.id,
-      product_name: item.name || item.product_name,
+      product_id: item.product.id,
+      product_name: item.product.name,
       quantity: item.quantity,
-      price: item.price,
+      price: item.pricing.final,
       variant: item.variant,
-      note: item.note || null,
-      original_price: item.original_price,
-      discount: item.discount,
+      note: item.note,
+      original_price: item.pricing.original,
+      discount: item.pricing.discount,
       promotion_snapshot: {
-        base_price: item.original_price,
-        final_price: item.price,
-        discount_amount: item.discount,
+        base_price: item.pricing.original,
+        final_price: item.pricing.final,
+        discount_amount: item.pricing.discount,
         applied_at: new Date().toISOString()
       }
     }));
@@ -268,6 +420,27 @@ export async function submitOrder(payload: {
       .eq('table_id', realTableId)
       .neq('status', 'paid')
       .order('created_at', { ascending: false });
+
+    await sendBrandNotification({
+      brandId,
+      title: 'มีออเดอร์ใหม่!',
+      message: `โต๊ะ ${tableLabel} สั่งอาหาร`,
+      type: 'NEW_ORDER',
+      orderData: {
+        tableName: String(tableLabel),
+        time: new Date().toLocaleString('th-TH'),
+        orderId: String(order.id),
+        items: securedItems.map((item) => ({
+          name: String(item.product.name),
+          qty: item.quantity,
+          variant: item.variant,
+          note: item.note || '',
+          isCancelled: false,
+        })),
+      },
+    }).catch((error) => {
+      console.error('Order notification failed:', error);
+    });
 
     return { success: true, orders: updatedOrders || [] };
 

@@ -1,8 +1,8 @@
 // app/actions/limitGuard.ts
 'use server'
 
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import 'server-only';
+import { createClient } from '@supabase/supabase-js';
 import dayjs from 'dayjs';
 
 // 🔧 CONFIG: ตั้งค่าจำนวนออเดอร์ฟรีตรงนี้ที่เดียว (แก้เป็น 30 เมื่อเทสเสร็จนะครับ)
@@ -10,11 +10,10 @@ const MAX_FREE_ORDERS = 220;
 
 // Helper สร้าง Supabase
 async function getSupabase() {
-  const cookieStore = await cookies();
-  return createServerClient(
+  return createClient(
     process.env.SUPABASE_URL!,
-    process.env.SUPABASE_ANON_KEY!,
-    { cookies: { get(name) { return cookieStore.get(name)?.value } } }
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
   );
 }
 

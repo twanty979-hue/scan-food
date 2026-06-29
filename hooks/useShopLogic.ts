@@ -1,8 +1,10 @@
 // hooks/useShopLogic.ts
 import { useState, useEffect, useMemo, useCallback, use } from "react";
-import { supabase } from "@/lib/supabase"; 
-import { useRouter } from "next/navigation";
-import { fetchShopData, submitOrder } from "@/app/actions/shop";
+import {
+  fetchShopData,
+  fetchShopOrderStatus,
+  submitOrder,
+} from "@/app/actions/shop";
 
 // 🔥 1. แก้ไข URL รูปภาพให้ดึงจาก Cloudflare (R2) แทน Supabase
 const CDN_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://img.pos-foodscan.com";
@@ -10,8 +12,6 @@ const CDN_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://img.pos-foodsc
 const roundToQuarter = (value: number) => Math.round(value * 4) / 4;
 
 export const useShopLogic = (params: any) => {
-  const router = useRouter();
-  
   const resolvedParams = params instanceof Promise ? use(params) : params;
   const { slug: currentSlug, brandId, tableId: combinedId } = resolvedParams || {};
 
@@ -38,8 +38,6 @@ export const useShopLogic = (params: any) => {
 
   // --- Computed ---
   const realTableId = useMemo(() => combinedId?.substring(0, 36), [combinedId]);
-  const providedCode = useMemo(() => combinedId?.substring(36), [combinedId]);
-  const requiresTableToken = useMemo(() => !!brand && (brand.table_qr_mode || brand.config?.qr_mode) !== 'static', [brand]);
 
   const kickOut = useCallback((reason: string) => {
     console.warn(`🚫 Kickout triggered: ${reason}`);
@@ -186,44 +184,46 @@ export const useShopLogic = (params: any) => {
     return () => clearInterval(interval);
   }, [banners]);
 
-  // --- Realtime 1: Table Security Watcher ---
+  // Poll through a token-validating server action. Public clients never receive
+  // direct database SELECT or Realtime permissions.
   useEffect(() => {
-    if (!realTableId || !requiresTableToken) return;
-    const channel = supabase.channel(`table_guard_${realTableId}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tables', filter: `id=eq.${realTableId}` }, (payload) => {
-        const tokens = Array.isArray(payload.new.access_tokens) ? payload.new.access_tokens.map(String) : [];
-        const tokenStillValid = tokens.length > 0 ? tokens.includes(String(providedCode)) : payload.new.access_token === providedCode;
-        if (!tokenStillValid) {
-            window.location.href = "https://google.com";
-        }
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [realTableId, providedCode, requiresTableToken]);
-
-  // --- Realtime 2: Order Status Watcher ---
-  useEffect(() => {
-    if (!realTableId || !brandId) return;
+    if (!realTableId || !brandId || !combinedId) return;
+    let active = true;
+    let refreshing = false;
 
     const refreshOrders = async () => {
-        const res = await fetchShopData({ 
-            brandId, 
-            combinedId, 
-            slug: decodeURIComponent(currentSlug || '') 
+      if (refreshing) return;
+      refreshing = true;
+      try {
+        const result = await fetchShopOrderStatus({
+          brandId,
+          combinedId,
+          slug: decodeURIComponent(currentSlug || ''),
         });
-        
-        if (res.success && res.data) {
-            setOrdersList(transformOrdersForDisplay(res.data.orders || []));
+        if (!active) return;
+        if (!result.success) {
+          kickOut(result.error || 'Table session expired');
+          return;
         }
+        setOrdersList(transformOrdersForDisplay(result.orders || []));
+      } finally {
+        refreshing = false;
+      }
     };
 
-    const channel = supabase.channel(`customer_order_watch_${realTableId}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders', filter: `brand_id=eq.${brandId}` }, () => refreshOrders())
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'order_items' }, () => refreshOrders())
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [realTableId, brandId, combinedId, currentSlug, transformOrdersForDisplay]); 
+    const interval = window.setInterval(refreshOrders, 5000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [
+    realTableId,
+    brandId,
+    combinedId,
+    currentSlug,
+    kickOut,
+    transformOrdersForDisplay,
+  ]);
 
   // --- Cart Actions ---
   const handleAddToCart = (product: any, variant: any, note: string = "") => {
@@ -303,47 +303,6 @@ export const useShopLogic = (params: any) => {
       setCart([]);
       setActiveTab('status');
       setOrdersList(transformOrdersForDisplay(result.orders || [])); 
-
-      // 🚨🚨🚨 [แทรกตรงนี้!] ยิงแจ้งเตือนไปหาพนักงาน (FCM) พร้อมสั่งปริ้นออโต้ 🚨🚨🚨
-      try {
-          // 🌟 ดึงออเดอร์ล่าสุดที่เพิ่งถูกบันทึกลง Database (มักจะอยู่ Index 0 เพราะ Order by created_at desc)
-          const newOrder = result.orders?.[0]; 
-
-          if (newOrder) {
-              // 🌟 เตรียมข้อมูล orderData ให้ตรงสเปกที่ Android ต้องการ
-              const orderDataToPrint = {
-                  tableName: String(newOrder.table_label || tableLabel),
-                  time: new Date().toLocaleString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-                  orderId: String(newOrder.id),
-                  items: newOrder.order_items.map((item: any) => ({
-                      name: String(item.product_name),
-                      qty: Number(item.quantity),
-                      variant: String(item.variant || ""),
-                      note: String(item.note || ""),
-                      isCancelled: false
-                  }))
-              };
-
-              // ยิง API แจ้งเตือน พร้อมแนบ orderData
-              await fetch('/api/send-notification', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ 
-                      brandId: brandId, 
-                      title: "มีออเดอร์ใหม่!",
-                      message: `โต๊ะ ${tableLabel} สั่งอาหาร`,
-                      type: "NEW_ORDER",
-                      orderData: orderDataToPrint // 🌟 ยัดใส่ตรงนี้!
-                  }),
-              });
-              console.log("📢 ส่งแจ้งเตือนและส่งข้อมูลเข้าเครื่องปริ้นเบื้องหลังสำเร็จ!");
-          }
-      } catch (notifErr) {
-          console.error("⚠️ ไม่สามารถส่งแจ้งเตือนได้:", notifErr);
-          // ไม่ต้อง throw error ออกไป เพราะถึงแจ้งเตือนไม่ไป แต่ออเดอร์ก็เข้า DB แล้ว
-      }
-      // ====================================================
-
     } catch (err: any) { 
         const message = err?.message || 'Order failed';
         if (message.includes('ขีดจำกัด') || message.includes('แพ็กเกจ') || message.includes('สมัครสมาชิก') || message.includes('อัปเกรด')) {

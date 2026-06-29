@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.suparpos.app",
+      "sha256_cert_fingerprints": [
+        "80:91:72:78:8C:C7:26:D9:01:B6:8C:FB:2C:BB:53:A4:B5:D4:41:6C:F7:36:55:DF:52:69:9A:1D:6C:22:C4:1F"
+      ]
+    }
+  }
+]

@@ -56,6 +56,26 @@ export async function middleware(request: NextRequest) {
 
   // ดึง User (User จะถูก Refresh Token อัตโนมัติถ้าจำเป็น)
   const { data: { user } } = await supabase.auth.getUser()
+  const isAdminPath = request.nextUrl.pathname.startsWith('/admin')
+
+  if (isAdminPath) {
+    if (!user) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      return NextResponse.redirect(url)
+    }
+
+    const allowedAdmins = (process.env.ADMIN_EMAILS || '')
+      .split(',')
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean)
+
+    if (!user.email || !allowedAdmins.includes(user.email.toLowerCase())) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/dashboard'
+      return NextResponse.redirect(url)
+    }
+  }
 
   // -----------------------------------------------------------
   // 🚫 Logic 1: ยังไม่ล็อกอิน -> ดีดไปหน้า Login

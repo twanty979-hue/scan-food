@@ -70,7 +70,7 @@ export async function GET(request: Request) {
 
   // 🟢 ถ้าเข้าเงื่อนไขนี้ แสดงว่าล็อกอิน/กู้รหัสสำเร็จ 100%
   if (source === 'app' && sessionData?.user) {
-    const deepLink = new URL('com.suparpos.app://login-callback')
+    const deepLink = new URL('/mobile/auth/callback', origin)
     
     if (type === 'recovery') {
       deepLink.searchParams.set('type', 'recovery')

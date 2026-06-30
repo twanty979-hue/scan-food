@@ -41,11 +41,16 @@ export async function getProfileDataAction() {
         invitation_logs(role, created_at, status)
       `)
       .eq('id', user.id)
-      .single();
+      .maybeSingle();
 
     if (error) throw error;
+    
+    // ถ้าไม่มีข้อมูล Profile ให้โยน Error แจ้งเตือน หรือจะสร้างใหม่ก็ได้
+    if (!profile) {
+        throw new Error("Profile not found");
+    }
 
-    const pendingLog = Array.isArray(profile?.invitation_logs)
+    const pendingLog = Array.isArray(profile.invitation_logs)
       ? profile.invitation_logs.find((log: any) => log.status === 'pending')
       : null;
 

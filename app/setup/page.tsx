@@ -31,7 +31,7 @@ export default function ProfileSetupPage() {
       setUserId(user.id);
 
       // เช็คว่ามี Profile อยู่แล้วไหม (เผื่อกลับมาแก้ไข)
-      const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+      const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
       if (data) {
         setFormData({
           fullName: data.full_name || '',
@@ -74,10 +74,16 @@ const handleSave = async (e: React.FormEvent) => {
 
   setLoading(true);
   try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+
     // ✅ ยิงไปที่ API กลางที่เราเพิ่งสร้าง
     const response = await fetch('/api/setup/profile', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
       body: JSON.stringify({
         userId: userId,
         fullName: formData.fullName,

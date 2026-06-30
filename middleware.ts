@@ -96,9 +96,16 @@ export async function middleware(request: NextRequest) {
       .from('profiles')
       .select('role, brand_id, brands(plan)') 
       .eq('id', user.id)
-      .single();
+      .maybeSingle();
 
-    const role = profile?.role;
+    // 🟢 ถ้าไม่มีโปรไฟล์ ให้บังคับไปหน้าตั้งค่า/สมัครโปรไฟล์ก่อน
+    if (!profile) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/setup';
+      return NextResponse.redirect(url);
+    }
+
+    const role = profile.role;
     
     let brandPlan = 'free';
     const brandsData = (profile as any)?.brands;

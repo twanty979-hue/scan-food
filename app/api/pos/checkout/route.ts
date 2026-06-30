@@ -2,6 +2,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
+import { checkOrderLimitOrThrow } from '@/app/actions/limitGuard';
+
 export async function OPTIONS() {
   return new NextResponse(null, {
     status: 204,
@@ -47,6 +49,10 @@ const getSupabaseAndBrandId = async (request: Request) => {
 export async function POST(request: Request) {
   try {
     const { supabase, brandId } = await getSupabaseAndBrandId(request);
+    
+    // 🛡️ เช็คโควต้าก่อน
+    await checkOrderLimitOrThrow(brandId);
+
     const body = await request.json();
     const { order_id, order_ids, payment_id, table_id, table_label, used_tokens, now_iso } = body;
     const checkoutOrderIds = Array.isArray(order_ids) && order_ids.length > 0 ? order_ids : [order_id].filter(Boolean);

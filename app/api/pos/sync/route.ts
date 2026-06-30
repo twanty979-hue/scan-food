@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { rebuildDashboardCashierStats } from '@/lib/dashboardCashierStats';
 import { rebuildDashboardDailyPaymentCount } from '@/lib/dashboardDailySales';
+import { checkOrderLimitOrThrow } from '@/app/actions/limitGuard';
 
 // --- 🌐 จัดการ CORS Preflight รองรับการยิงจากโมบายล์แอป ---
 export async function OPTIONS() {
@@ -63,6 +64,11 @@ export async function POST(request: Request) {
     console.log("📦 [DEBUG] โครงสร้างที่แอปส่งมา:", JSON.stringify(payload, null, 2));
 
     let { action, newOrderData, itemsToSave, paiOrderData, syncPayload, orderId, orderIds, itemId, itemIds, cancelledAt, cancelReason, isNewOffline } = payload;
+
+    // 🛡️ เช็คโควต้าก่อนทำการบันทึกข้อมูล (ไม่เช็คกรณียกเลิกออเดอร์)
+    if (action !== 'cancel_order' && action !== 'cancel_order_item') {
+      await checkOrderLimitOrThrow(brandId);
+    }
 
     if (action === 'cancel_order_item') {
       const targetItemIds = Array.isArray(itemIds)

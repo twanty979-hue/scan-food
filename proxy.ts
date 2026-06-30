@@ -19,7 +19,7 @@ const PREMIUM_STAFF_PATHS = [
   '/dashboard/receipts',  
 ];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   // สร้าง response เริ่มต้น
   let response = NextResponse.next({
     request: {

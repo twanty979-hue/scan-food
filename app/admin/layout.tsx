@@ -12,6 +12,7 @@ export default function AdminLayout({
     { name: 'brands', href: '/admin/brands' },
     { name: 'marketplace-categories', href: '/admin/marketplace-categories' },
     { name: 'marketplace-themes', href: '/admin/marketplace-themes' },
+    { name: 'admin-products', href: '/admin/products' },
   ];
 
   return (

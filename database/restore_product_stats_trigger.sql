@@ -61,9 +61,10 @@ BEGIN
   
   IF v_order_type IS NOT NULL THEN
     INSERT INTO public.dashboard_table_stats (brand_id, report_date, order_type, table_label, total_revenue, total_payments, updated_at) 
-    VALUES (NEW.brand_id, v_report_date, v_order_type, COALESCE(v_table_label, ''), 0, 1, now())
+    VALUES (NEW.brand_id, v_report_date, v_order_type, COALESCE(v_table_label, ''), NEW.total_amount, 1, now())
     ON CONFLICT (brand_id, report_date, order_type, table_label)
     DO UPDATE SET
+      total_revenue = dashboard_table_stats.total_revenue + EXCLUDED.total_revenue,
       total_payments = dashboard_table_stats.total_payments + 1,
       updated_at = now();
   END IF;
